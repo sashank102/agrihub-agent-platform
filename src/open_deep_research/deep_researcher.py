@@ -1,7 +1,8 @@
 """Main LangGraph implementation for the Deep Research agent."""
 
 import asyncio
-from typing import Literal
+from functools import partial
+from typing import Any, Literal
 
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import (
@@ -19,15 +20,7 @@ from langgraph.types import Command
 from open_deep_research.configuration import (
     Configuration,
 )
-from open_deep_research.prompts import (
-    clarify_with_user_instructions,
-    compress_research_simple_human_message,
-    compress_research_system_prompt,
-    final_report_generation_prompt,
-    lead_researcher_prompt,
-    research_system_prompt,
-    transform_messages_into_research_topic_prompt,
-)
+from open_deep_research.prompts import DEFAULT_PROMPT_PACK, PromptPack
 from open_deep_research.state import (
     AgentInputState,
     AgentState,
@@ -57,7 +50,12 @@ configurable_model = init_chat_model(
     configurable_fields=("model", "max_tokens", "api_key"),
 )
 
-async def clarify_with_user(state: AgentState, config: RunnableConfig) -> Command[Literal["write_research_brief", "__end__"]]:
+async def clarify_with_user(
+    state: AgentState,
+    config: RunnableConfig,
+    *,
+    prompt_pack: PromptPack = DEFAULT_PROMPT_PACK,
+) -> Command[Literal["write_research_brief", "__end__"]]:
     """Analyze user messages and ask clarifying questions if the research scope is unclear.
     
     This function determines whether the user's request needs clarification before proceeding
@@ -94,7 +92,7 @@ async def clarify_with_user(state: AgentState, config: RunnableConfig) -> Comman
     )
     
     # Step 3: Analyze whether clarification is needed
-    prompt_content = clarify_with_user_instructions.format(
+    prompt_content = prompt_pack.clarify_with_user_instructions.format(
         messages=get_buffer_string(messages), 
         date=get_today_str()
     )
@@ -115,7 +113,12 @@ async def clarify_with_user(state: AgentState, config: RunnableConfig) -> Comman
         )
 
 
-async def write_research_brief(state: AgentState, config: RunnableConfig) -> Command[Literal["research_supervisor"]]:
+async def write_research_brief(
+    state: AgentState,
+    config: RunnableConfig,
+    *,
+    prompt_pack: PromptPack = DEFAULT_PROMPT_PACK,
+) -> Command[Literal["research_supervisor"]]:
     """Transform user messages into a structured research brief and initialize supervisor.
     
     This function analyzes the user's messages and generates a focused research brief
@@ -147,14 +150,14 @@ async def write_research_brief(state: AgentState, config: RunnableConfig) -> Com
     )
     
     # Step 2: Generate structured research brief from user messages
-    prompt_content = transform_messages_into_research_topic_prompt.format(
+    prompt_content = prompt_pack.transform_messages_into_research_topic_prompt.format(
         messages=get_buffer_string(state.get("messages", [])),
         date=get_today_str()
     )
     response = await research_model.ainvoke([HumanMessage(content=prompt_content)])
     
     # Step 3: Initialize supervisor with research brief and instructions
-    supervisor_system_prompt = lead_researcher_prompt.format(
+    supervisor_system_prompt = prompt_pack.lead_researcher_prompt.format(
         date=get_today_str(),
         max_concurrent_research_units=configurable.max_concurrent_research_units,
         max_researcher_iterations=configurable.max_researcher_iterations
@@ -222,7 +225,12 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) -> Command[
         }
     )
 
-async def supervisor_tools(state: SupervisorState, config: RunnableConfig) -> Command[Literal["supervisor", "__end__"]]:
+async def supervisor_tools(
+    state: SupervisorState,
+    config: RunnableConfig,
+    *,
+    researcher_graph: Any = None,
+) -> Command[Literal["supervisor", "__end__"]]:
     """Execute tools called by the supervisor, including research delegation and strategic thinking.
     
     This function handles three types of supervisor tool calls:
@@ -292,8 +300,13 @@ async def supervisor_tools(state: SupervisorState, config: RunnableConfig) -> Co
             overflow_conduct_research_calls = conduct_research_calls[configurable.max_concurrent_research_units:]
             
             # Execute research tasks in parallel
+            active_researcher_graph = (
+                researcher_graph
+                if researcher_graph is not None
+                else researcher_subgraph
+            )
             research_tasks = [
-                researcher_subgraph.ainvoke({
+                active_researcher_graph.ainvoke({
                     "researcher_messages": [
                         HumanMessage(content=tool_call["args"]["research_topic"])
                     ],
@@ -329,10 +342,9 @@ async def supervisor_tools(state: SupervisorState, config: RunnableConfig) -> Co
             if raw_notes_concat:
                 update_payload["raw_notes"] = [raw_notes_concat]
                 
-        except Exception as e:
-            # Handle research execution errors
-            if is_token_limit_exceeded(e, configurable.research_model) or True:
-                # Token limit exceeded or other error - end research phase
+        except Exception as exc:
+            if is_token_limit_exceeded(exc, configurable.research_model):
+                # Preserve partial findings when the model context is exhausted.
                 return Command(
                     goto=END,
                     update={
@@ -340,6 +352,11 @@ async def supervisor_tools(state: SupervisorState, config: RunnableConfig) -> Co
                         "research_brief": state.get("research_brief", "")
                     }
                 )
+            raise RuntimeError(
+                "Supervisor failed while executing "
+                f"{len(allowed_conduct_research_calls)} delegated research task(s) "
+                f"with model {configurable.research_model}: {exc}"
+            ) from exc
     
     # Step 3: Return command with all tool results
     update_payload["supervisor_messages"] = all_tool_messages
@@ -348,21 +365,12 @@ async def supervisor_tools(state: SupervisorState, config: RunnableConfig) -> Co
         update=update_payload
     ) 
 
-# Supervisor Subgraph Construction
-# Creates the supervisor workflow that manages research delegation and coordination
-supervisor_builder = StateGraph(SupervisorState, config_schema=Configuration)
-
-# Add supervisor nodes for research management
-supervisor_builder.add_node("supervisor", supervisor)           # Main supervisor logic
-supervisor_builder.add_node("supervisor_tools", supervisor_tools)  # Tool execution handler
-
-# Define supervisor workflow edges
-supervisor_builder.add_edge(START, "supervisor")  # Entry point to supervisor
-
-# Compile supervisor subgraph for use in main workflow
-supervisor_subgraph = supervisor_builder.compile()
-
-async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[Literal["researcher_tools"]]:
+async def researcher(
+    state: ResearcherState,
+    config: RunnableConfig,
+    *,
+    prompt_pack: PromptPack = DEFAULT_PROMPT_PACK,
+) -> Command[Literal["researcher_tools"]]:
     """Individual researcher that conducts focused research on specific topics.
     
     This researcher is given a specific research topic by the supervisor and uses
@@ -397,7 +405,7 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
     }
     
     # Prepare system prompt with MCP context if available
-    researcher_prompt = research_system_prompt.format(
+    researcher_prompt = prompt_pack.research_system_prompt.format(
         mcp_prompt=configurable.mcp_prompt or "", 
         date=get_today_str()
     )
@@ -508,7 +516,12 @@ async def researcher_tools(state: ResearcherState, config: RunnableConfig) -> Co
         update={"researcher_messages": tool_outputs}
     )
 
-async def compress_research(state: ResearcherState, config: RunnableConfig):
+async def compress_research(
+    state: ResearcherState,
+    config: RunnableConfig,
+    *,
+    prompt_pack: PromptPack = DEFAULT_PROMPT_PACK,
+):
     """Compress and synthesize research findings into a concise, structured summary.
     
     This function takes all the research findings, tool outputs, and AI messages from
@@ -535,7 +548,9 @@ async def compress_research(state: ResearcherState, config: RunnableConfig):
     researcher_messages = state.get("researcher_messages", [])
     
     # Add instruction to switch from research mode to compression mode
-    researcher_messages.append(HumanMessage(content=compress_research_simple_human_message))
+    researcher_messages.append(
+        HumanMessage(content=prompt_pack.compress_research_simple_human_message)
+    )
     
     # Step 3: Attempt compression with retry logic for token limit issues
     synthesis_attempts = 0
@@ -544,7 +559,9 @@ async def compress_research(state: ResearcherState, config: RunnableConfig):
     while synthesis_attempts < max_attempts:
         try:
             # Create system prompt focused on compression task
-            compression_prompt = compress_research_system_prompt.format(date=get_today_str())
+            compression_prompt = prompt_pack.compress_research_system_prompt.format(
+                date=get_today_str()
+            )
             messages = [SystemMessage(content=compression_prompt)] + researcher_messages
             
             # Execute compression
@@ -584,27 +601,12 @@ async def compress_research(state: ResearcherState, config: RunnableConfig):
         "raw_notes": [raw_notes_content]
     }
 
-# Researcher Subgraph Construction
-# Creates individual researcher workflow for conducting focused research on specific topics
-researcher_builder = StateGraph(
-    ResearcherState, 
-    output=ResearcherOutputState, 
-    config_schema=Configuration
-)
-
-# Add researcher nodes for research execution and compression
-researcher_builder.add_node("researcher", researcher)                 # Main researcher logic
-researcher_builder.add_node("researcher_tools", researcher_tools)     # Tool execution handler
-researcher_builder.add_node("compress_research", compress_research)   # Research compression
-
-# Define researcher workflow edges
-researcher_builder.add_edge(START, "researcher")           # Entry point to researcher
-researcher_builder.add_edge("compress_research", END)      # Exit point after compression
-
-# Compile researcher subgraph for parallel execution by supervisor
-researcher_subgraph = researcher_builder.compile()
-
-async def final_report_generation(state: AgentState, config: RunnableConfig):
+async def final_report_generation(
+    state: AgentState,
+    config: RunnableConfig,
+    *,
+    prompt_pack: PromptPack = DEFAULT_PROMPT_PACK,
+):
     """Generate the final comprehensive research report with retry logic for token limits.
     
     This function takes all collected research findings and synthesizes them into a 
@@ -639,7 +641,7 @@ async def final_report_generation(state: AgentState, config: RunnableConfig):
     while current_retry <= max_retries:
         try:
             # Create comprehensive prompt with all research context
-            final_report_prompt = final_report_generation_prompt.format(
+            final_report_prompt = prompt_pack.final_report_generation_prompt.format(
                 research_brief=state.get("research_brief", ""),
                 messages=get_buffer_string(state.get("messages", [])),
                 findings=findings,
@@ -696,24 +698,98 @@ async def final_report_generation(state: AgentState, config: RunnableConfig):
         **cleared_state
     }
 
-# Main Deep Researcher Graph Construction
-# Creates the complete deep research workflow from user input to final report
-deep_researcher_builder = StateGraph(
-    AgentState, 
-    input=AgentInputState, 
-    config_schema=Configuration
+def _create_researcher_builder(prompt_pack: PromptPack) -> StateGraph:
+    """Create the researcher subgraph builder for a prompt pack."""
+    builder = StateGraph(
+        ResearcherState,
+        output=ResearcherOutputState,
+        config_schema=Configuration,
+    )
+    builder.add_node(
+        "researcher",
+        partial(researcher, prompt_pack=prompt_pack),
+    )
+    builder.add_node("researcher_tools", researcher_tools)
+    builder.add_node(
+        "compress_research",
+        partial(compress_research, prompt_pack=prompt_pack),
+    )
+    builder.add_edge(START, "researcher")
+    builder.add_edge("compress_research", END)
+    return builder
+
+
+def _create_supervisor_builder(researcher_graph: Any) -> StateGraph:
+    """Create the supervisor subgraph builder for a researcher graph."""
+    builder = StateGraph(SupervisorState, config_schema=Configuration)
+    builder.add_node("supervisor", supervisor)
+    builder.add_node(
+        "supervisor_tools",
+        partial(supervisor_tools, researcher_graph=researcher_graph),
+    )
+    builder.add_edge(START, "supervisor")
+    return builder
+
+
+def _create_deep_researcher_builder(
+    prompt_pack: PromptPack,
+    supervisor_graph: Any,
+) -> StateGraph:
+    """Create the main workflow builder with injected graph dependencies."""
+    builder = StateGraph(
+        AgentState,
+        input=AgentInputState,
+        config_schema=Configuration,
+    )
+    builder.add_node(
+        "clarify_with_user",
+        partial(clarify_with_user, prompt_pack=prompt_pack),
+    )
+    builder.add_node(
+        "write_research_brief",
+        partial(write_research_brief, prompt_pack=prompt_pack),
+    )
+    builder.add_node("research_supervisor", supervisor_graph)
+    builder.add_node(
+        "final_report_generation",
+        partial(final_report_generation, prompt_pack=prompt_pack),
+    )
+    builder.add_edge(START, "clarify_with_user")
+    builder.add_edge("research_supervisor", "final_report_generation")
+    builder.add_edge("final_report_generation", END)
+    return builder
+
+
+def build_graph(
+    checkpointer=None,
+    store=None,
+    *,
+    prompt_pack: PromptPack | None = None,
+):
+    """Build the workflow with optional persistence and prompt dependencies."""
+    active_prompt_pack = prompt_pack or DEFAULT_PROMPT_PACK
+    active_researcher_subgraph = _create_researcher_builder(
+        active_prompt_pack
+    ).compile()
+    active_supervisor_subgraph = _create_supervisor_builder(
+        active_researcher_subgraph
+    ).compile()
+    builder = _create_deep_researcher_builder(
+        active_prompt_pack,
+        active_supervisor_subgraph,
+    )
+    return builder.compile(checkpointer=checkpointer, store=store)
+
+
+# Keep builders and compiled subgraphs available for existing evaluation scripts.
+researcher_builder = _create_researcher_builder(DEFAULT_PROMPT_PACK)
+researcher_subgraph = researcher_builder.compile()
+supervisor_builder = _create_supervisor_builder(researcher_subgraph)
+supervisor_subgraph = supervisor_builder.compile()
+deep_researcher_builder = _create_deep_researcher_builder(
+    DEFAULT_PROMPT_PACK,
+    supervisor_subgraph,
 )
 
-# Add main workflow nodes for the complete research process
-deep_researcher_builder.add_node("clarify_with_user", clarify_with_user)           # User clarification phase
-deep_researcher_builder.add_node("write_research_brief", write_research_brief)     # Research planning phase
-deep_researcher_builder.add_node("research_supervisor", supervisor_subgraph)       # Research execution phase
-deep_researcher_builder.add_node("final_report_generation", final_report_generation)  # Report generation phase
-
-# Define main workflow edges for sequential execution
-deep_researcher_builder.add_edge(START, "clarify_with_user")                       # Entry point
-deep_researcher_builder.add_edge("research_supervisor", "final_report_generation") # Research to report
-deep_researcher_builder.add_edge("final_report_generation", END)                   # Final exit point
-
-# Compile the complete deep researcher workflow
-deep_researcher = deep_researcher_builder.compile()
+# LangGraph configuration imports this stable module-level graph export.
+deep_researcher = build_graph()

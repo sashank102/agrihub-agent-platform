@@ -1,5 +1,21 @@
 """System prompts and prompt templates for the Deep Research agent."""
 
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class PromptPack:
+    """Prompts used to specialize a deep-research graph."""
+
+    clarify_with_user_instructions: str
+    transform_messages_into_research_topic_prompt: str
+    lead_researcher_prompt: str
+    research_system_prompt: str
+    compress_research_system_prompt: str
+    compress_research_simple_human_message: str
+    final_report_generation_prompt: str
+
+
 clarify_with_user_instructions="""
 These are the messages that have been exchanged so far from the user asking for the report:
 <Messages>
@@ -389,3 +405,18 @@ Remember, your goal is to create a summary that can be easily understood and uti
 
 Today's date is {date}.
 """
+
+
+CROP_PROMPT_PACK = PromptPack(
+    clarify_with_user_instructions=clarify_with_user_instructions,
+    transform_messages_into_research_topic_prompt=transform_messages_into_research_topic_prompt,
+    lead_researcher_prompt=lead_researcher_prompt,
+    research_system_prompt=research_system_prompt,
+    compress_research_system_prompt=compress_research_system_prompt,
+    compress_research_simple_human_message=compress_research_simple_human_message,
+    final_report_generation_prompt=final_report_generation_prompt,
+)
+"""Sample prompt pack for the AgriHub crop candidate-gene agent."""
+
+DEFAULT_PROMPT_PACK = CROP_PROMPT_PACK
+"""Prompt pack used when callers do not inject a specialization."""
