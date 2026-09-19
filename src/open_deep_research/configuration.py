@@ -14,6 +14,7 @@ class SearchAPI(Enum):
     ANTHROPIC = "anthropic"
     OPENAI = "openai"
     TAVILY = "tavily"
+    DUCKDUCKGO = "duckduckgo"
     NONE = "none"
 
 class MCPConfig(BaseModel):
@@ -86,6 +87,7 @@ class Configuration(BaseModel):
                     {"label": "Tavily", "value": SearchAPI.TAVILY.value},
                     {"label": "OpenAI Native Web Search", "value": SearchAPI.OPENAI.value},
                     {"label": "Anthropic Native Web Search", "value": SearchAPI.ANTHROPIC.value},
+                    {"label": "DuckDuckGo (no key)", "value": SearchAPI.DUCKDUCKGO.value},
                     {"label": "None", "value": SearchAPI.NONE.value}
                 ]
             }
@@ -240,8 +242,17 @@ class Configuration(BaseModel):
         """Create a Configuration instance from a RunnableConfig."""
         configurable = config.get("configurable", {}) if config else {}
         field_names = list(cls.model_fields.keys())
+        shared_model = os.environ.get("MODEL")
+        model_fields = {
+            "summarization_model",
+            "research_model",
+            "compression_model",
+            "final_report_model",
+        }
         values: dict[str, Any] = {
-            field_name: os.environ.get(field_name.upper(), configurable.get(field_name))
+            field_name: os.environ.get(field_name.upper())
+            or configurable.get(field_name)
+            or (shared_model if field_name in model_fields else None)
             for field_name in field_names
         }
         return cls(**{k: v for k, v in values.items() if v is not None})

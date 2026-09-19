@@ -37,9 +37,9 @@ BACKEND_PID=$!
 ) &
 FRONTEND_PID=$!
 
-echo "AgriHub UI:       http://localhost:3000"
-echo "LangGraph API:    http://localhost:2024"
-echo "LangGraph docs:   http://localhost:2024/docs"
+echo "AgriHub UI:       http://127.0.0.1:3000"
+echo "LangGraph API:    http://127.0.0.1:2024"
+echo "LangGraph docs:   http://127.0.0.1:2024/docs"
 echo "Press Ctrl+C to stop both services."
 
 wait -n "$BACKEND_PID" "$FRONTEND_PID"

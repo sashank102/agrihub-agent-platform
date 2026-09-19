@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any, Dict, List, Literal, Optional
 
 import aiohttp
+from duckduckgo_search import DDGS
 from langchain.chat_models import init_chat_model
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import (
@@ -171,6 +172,48 @@ async def tavily_search_async(
     # Execute all search queries in parallel and return results
     search_results = await asyncio.gather(*search_tasks)
     return search_results
+
+@tool(description="Search the public web with DuckDuckGo. No API key is required.")
+async def duckduckgo_search(
+    queries: List[str],
+    max_results: Annotated[int, InjectedToolArg] = 5,
+) -> str:
+    """Search DuckDuckGo for one or more queries without an API key."""
+
+    def run_query(query: str) -> tuple[str, list[dict[str, Any]], Optional[str]]:
+        try:
+            with DDGS() as client:
+                results = list(client.text(query, max_results=max_results))
+            return query, results, None
+        except Exception as exc:
+            logging.warning("DuckDuckGo search failed for %r: %s", query, exc)
+            return query, [], str(exc)
+
+    query_results = await asyncio.gather(
+        *(asyncio.to_thread(run_query, query) for query in queries)
+    )
+
+    sections: list[str] = []
+    for query, results, error in query_results:
+        sections.append(f"## Search query: {query}")
+        if error:
+            sections.append(
+                "Search was temporarily unavailable. Continue with other tools "
+                f"or retry later. Provider message: {error}"
+            )
+            continue
+        if not results:
+            sections.append("No results found.")
+            continue
+        for index, result in enumerate(results, start=1):
+            title = result.get("title", "Untitled result")
+            url = result.get("href") or result.get("url", "")
+            snippet = result.get("body") or result.get("content", "")
+            sections.append(
+                f"### Result {index}: {title}\nURL: {url}\nSnippet: {snippet}"
+            )
+
+    return "\n\n".join(sections)
 
 async def summarize_webpage(model: BaseChatModel, webpage_content: str) -> str:
     """Summarize webpage content using AI model with timeout protection.
@@ -532,7 +575,7 @@ async def get_search_tool(search_api: SearchAPI):
     """Configure and return search tools based on the specified API provider.
     
     Args:
-        search_api: The search API provider to use (Anthropic, OpenAI, Tavily, or None)
+        search_api: The search provider to use.
         
     Returns:
         List of configured search tool objects for the specified provider
@@ -556,6 +599,15 @@ async def get_search_tool(search_api: SearchAPI):
             **(search_tool.metadata or {}), 
             "type": "search", 
             "name": "web_search"
+        }
+        return [search_tool]
+
+    elif search_api == SearchAPI.DUCKDUCKGO:
+        search_tool = duckduckgo_search
+        search_tool.metadata = {
+            **(search_tool.metadata or {}),
+            "type": "search",
+            "name": "duckduckgo",
         }
         return [search_tool]
         
@@ -805,6 +857,7 @@ MODEL_TOKEN_LIMITS = {
     "google:gemini-1.5-pro": 2097152,
     "google:gemini-1.5-flash": 1048576,
     "google:gemini-pro": 32768,
+    "groq:openai/gpt-oss-120b": 131072,
     "cohere:command-r-plus": 128000,
     "cohere:command-r": 128000,
     "cohere:command-light": 4096,
@@ -893,25 +946,20 @@ def get_api_key_for_model(model_name: str, config: RunnableConfig):
     """Get API key for a specific model from environment or config."""
     should_get_from_config = os.getenv("GET_API_KEYS_FROM_CONFIG", "false")
     model_name = model_name.lower()
+    provider = model_name.split(":", 1)[0].replace("-", "_")
+    api_key_name = {
+        "google": "GOOGLE_API_KEY",
+        "google_genai": "GOOGLE_API_KEY",
+        "google_vertexai": "GOOGLE_API_KEY",
+    }.get(provider, f"{provider.upper()}_API_KEY")
+
     if should_get_from_config.lower() == "true":
         api_keys = config.get("configurable", {}).get("apiKeys", {})
         if not api_keys:
             return None
-        if model_name.startswith("openai:"):
-            return api_keys.get("OPENAI_API_KEY")
-        elif model_name.startswith("anthropic:"):
-            return api_keys.get("ANTHROPIC_API_KEY")
-        elif model_name.startswith("google"):
-            return api_keys.get("GOOGLE_API_KEY")
-        return None
-    else:
-        if model_name.startswith("openai:"): 
-            return os.getenv("OPENAI_API_KEY")
-        elif model_name.startswith("anthropic:"):
-            return os.getenv("ANTHROPIC_API_KEY")
-        elif model_name.startswith("google"):
-            return os.getenv("GOOGLE_API_KEY")
-        return None
+        return api_keys.get(api_key_name)
+
+    return os.getenv(api_key_name)
 
 def get_tavily_api_key(config: RunnableConfig):
     """Get Tavily API key from environment or config."""
