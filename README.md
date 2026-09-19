@@ -57,6 +57,14 @@ This will open the LangGraph Studio UI in your browser.
 
 Ask a question in the `messages` input field and click `Submit`. Select different configuration in the "Manage Assistants" tab.
 
+### PostgreSQL persistence
+
+The optional platform runtime persists complete LangGraph checkpoints and
+store data in PostgreSQL while leaving the `langgraph dev` graph export
+in-memory. See [PostgreSQL graph persistence](docs/postgres-persistence.md) for
+database startup, table initialization, testing, retention, backup, and
+sensitive-data guidance.
+
 ### ⚙️ Configurations
 
 #### LLM :brain:
