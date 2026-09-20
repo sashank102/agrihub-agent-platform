@@ -68,11 +68,14 @@ class ArtifactRepository:
         artifact_id: uuid.UUID,
         owner_user_id: uuid.UUID,
     ) -> Artifact | None:
-        """Return an artifact only when the owner matches."""
+        """Return an artifact only through its consistently owned thread."""
         return await self.session.scalar(
-            select(Artifact).where(
+            select(Artifact)
+            .join(Thread, Thread.id == Artifact.thread_id)
+            .where(
                 Artifact.id == artifact_id,
                 Artifact.owner_user_id == owner_user_id,
+                Thread.owner_user_id == owner_user_id,
             )
         )
 
@@ -84,9 +87,11 @@ class ArtifactRepository:
         """List artifacts for one owned thread."""
         statement = (
             select(Artifact)
+            .join(Thread, Thread.id == Artifact.thread_id)
             .where(
                 Artifact.thread_id == thread_id,
                 Artifact.owner_user_id == owner_user_id,
+                Thread.owner_user_id == owner_user_id,
             )
             .order_by(Artifact.created_at, Artifact.id)
         )

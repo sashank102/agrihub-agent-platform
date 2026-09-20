@@ -11,10 +11,10 @@ LangGraph, PostgreSQL, and a Next.js chat interface.
 - `frontend/` — Next.js chat client using the LangGraph SDK
 - `compose.yaml` — local PostgreSQL service
 
-The current `start-dev.sh` path still uses the in-memory LangGraph development
-server. PostgreSQL graph persistence and the platform metadata schema are
-available as libraries; the self-managed FastAPI control plane is the next
-migration phase.
+The existing `start-dev.sh` path still uses the in-memory LangGraph development
+server on port `2024`. A minimal, unauthenticated local-development FastAPI
+server is also available on port `8000`; the frontend remains on the original
+path until Plan 07.
 
 ## Local setup
 
@@ -46,6 +46,7 @@ See:
 
 - [PostgreSQL graph persistence](docs/postgres-persistence.md)
 - [Platform metadata schema](docs/platform-schema.md)
+- [Local FastAPI chat server](docs/local-fastapi.md)
 - [Project-specific setup and extension points](AGRIHUB.md)
 
 ## Verification

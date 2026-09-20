@@ -24,6 +24,7 @@ class ThreadRepository:
         agent_id: uuid.UUID,
         title: str | None = None,
         metadata: dict[str, Any] | None = None,
+        thread_id: uuid.UUID | None = None,
     ) -> Thread:
         """Add a thread for an owned or global agent."""
         visible_agent_id = await self.session.scalar(
@@ -39,6 +40,7 @@ class ThreadRepository:
             raise LookupError("agent is not visible to the thread owner")
 
         thread = Thread(
+            id=thread_id or uuid.uuid4(),
             owner_user_id=owner_user_id,
             agent_id=agent_id,
             title=title,
@@ -66,12 +68,24 @@ class ThreadRepository:
         owner_user_id: uuid.UUID,
         *,
         status: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        ids: list[uuid.UUID] | None = None,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> list[Thread]:
         """List an owner's threads by most recent activity."""
         statement = select(Thread).where(Thread.owner_user_id == owner_user_id)
         if status is not None:
             statement = statement.where(Thread.status == status)
-        statement = statement.order_by(Thread.last_activity_at.desc())
+        if metadata:
+            statement = statement.where(Thread.metadata_.contains(metadata))
+        if ids is not None:
+            statement = statement.where(Thread.id.in_(ids))
+        statement = statement.order_by(Thread.last_activity_at.desc(), Thread.id)
+        if offset:
+            statement = statement.offset(offset)
+        if limit is not None:
+            statement = statement.limit(limit)
         return list((await self.session.scalars(statement)).all())
 
     async def update(

@@ -3,7 +3,7 @@
 import uuid
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent_platform.db.models import Agent
@@ -26,9 +26,11 @@ class AgentRepository:
         configuration: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
         active: bool = True,
+        agent_id: uuid.UUID | None = None,
     ) -> Agent:
         """Add and flush an agent version."""
         agent = Agent(
+            id=agent_id or uuid.uuid4(),
             owner_user_id=owner_user_id,
             graph_id=graph_id,
             name=name,
@@ -73,23 +75,65 @@ class AgentRepository:
         statement = statement.order_by(Agent.graph_id, Agent.version)
         return list((await self.session.scalars(statement)).all())
 
-    async def update(
+    async def update_for_owner(
         self,
-        agent: Agent,
+        agent_id: uuid.UUID,
+        owner_user_id: uuid.UUID,
         *,
         name: str | None = None,
         configuration: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
         active: bool | None = None,
-    ) -> Agent:
-        """Update mutable agent fields and flush."""
+    ) -> Agent | None:
+        """Update an agent only when it is owned by the requesting user."""
+        return await self._update_scoped(
+            Agent.id == agent_id,
+            Agent.owner_user_id == owner_user_id,
+            name=name,
+            configuration=configuration,
+            metadata=metadata,
+            active=active,
+        )
+
+    async def update_global(
+        self,
+        agent_id: uuid.UUID,
+        *,
+        name: str | None = None,
+        configuration: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
+        active: bool | None = None,
+    ) -> Agent | None:
+        """Explicitly update a global agent from a trusted system/admin path."""
+        return await self._update_scoped(
+            Agent.id == agent_id,
+            Agent.owner_user_id.is_(None),
+            name=name,
+            configuration=configuration,
+            metadata=metadata,
+            active=active,
+        )
+
+    async def _update_scoped(
+        self,
+        *scope: object,
+        name: str | None,
+        configuration: dict[str, Any] | None,
+        metadata: dict[str, Any] | None,
+        active: bool | None,
+    ) -> Agent | None:
+        """Apply fields with ownership enforced in the UPDATE statement."""
+        values: dict[str, Any] = {}
         if name is not None:
-            agent.name = name
+            values["name"] = name
         if configuration is not None:
-            agent.configuration = configuration
+            values["configuration"] = configuration
         if metadata is not None:
-            agent.metadata_ = metadata
+            values["metadata_"] = metadata
         if active is not None:
-            agent.active = active
-        await self.session.flush()
-        return agent
+            values["active"] = active
+
+        if not values:
+            return await self.session.scalar(select(Agent).where(*scope))
+        statement = update(Agent).where(*scope).values(**values).returning(Agent)
+        return (await self.session.execute(statement)).scalar_one_or_none()

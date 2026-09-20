@@ -1,5 +1,6 @@
 """Validated settings for platform-owned infrastructure."""
 
+import uuid
 from typing import Literal
 from urllib.parse import urlsplit
 
@@ -16,6 +17,21 @@ class Settings(BaseSettings):
 
     ENVIRONMENT: Literal["development", "test", "production"] = "development"
     DATABASE_URI: str | None = Field(default=None, repr=False)
+    API_HOST: str = "127.0.0.1"
+    API_PORT: int = Field(default=8000, ge=1, le=65535)
+    API_ALLOWED_ORIGINS: list[str] = Field(
+        default_factory=lambda: ["http://127.0.0.1:3000"]
+    )
+    API_MAX_REQUEST_BODY_BYTES: int = Field(default=1_048_576, ge=1)
+    API_MAX_CONCURRENT_RUNS: int = Field(default=4, ge=1)
+    DEVELOPMENT_USER_ID: uuid.UUID = uuid.UUID(
+        "00000000-0000-4000-8000-000000000001"
+    )
+    DEVELOPMENT_USER_EMAIL: str = "developer@agrihub.local"
+    DEVELOPMENT_AGENT_ID: uuid.UUID = uuid.UUID(
+        "00000000-0000-4000-8000-000000000002"
+    )
+    DEVELOPMENT_GRAPH_ID: str = "agrihub"
 
     model_config = SettingsConfigDict(
         env_file=".env",

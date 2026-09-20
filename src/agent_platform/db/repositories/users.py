@@ -22,9 +22,15 @@ class UserRepository:
         display_name: str,
         email: str | None = None,
         status: str = "active",
+        user_id: uuid.UUID | None = None,
     ) -> User:
         """Add and flush a user."""
-        user = User(display_name=display_name, email=email, status=status)
+        user = User(
+            id=user_id or uuid.uuid4(),
+            display_name=display_name,
+            email=email,
+            status=status,
+        )
         self.session.add(user)
         await self.session.flush()
         return user

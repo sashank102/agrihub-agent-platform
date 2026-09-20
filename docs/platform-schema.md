@@ -1,7 +1,8 @@
 # Platform metadata schema
 
 The application owns only the `platform` PostgreSQL schema. Alembic revision
-`20260920_0001` creates these tables:
+`20260920_0001` creates these tables, and revision `20260920_0002` aligns the
+initial check-constraint names with SQLAlchemy's naming convention:
 
 - `users`: identity profile and soft-disable/soft-delete timestamps
 - `api_keys`: visible prefixes and one-way secret hashes; never plaintext keys
@@ -16,6 +17,16 @@ The repositories under `agent_platform.db.repositories` accept an existing
 `AsyncSession`, flush changes, and never commit. Callers own transaction
 boundaries. `session_scope()` is available to scripts and other
 dependency-free callers.
+
+Ownership checks for runs and artifacts are resolved through their referenced
+thread. Repository write paths also require a run's agent to match its thread,
+an artifact owner to match its thread owner, and an artifact's optional run to
+belong to that same thread. Global agents are readable by development users,
+but only the explicit system/admin update path can mutate them.
+
+Disabled and deleted users are retained in this schema, but requests are not
+yet rejected based on those states. That enforcement belongs to Plan 06
+authentication, where the authenticated principal is established.
 
 ## LangGraph ownership
 
@@ -32,6 +43,10 @@ introduce two sources of truth with different transaction and retention
 semantics.
 
 ## Migrations
+
+The files under `alembic/` are repository deployment assets. They must be
+shipped and applied in revision order; metadata declarations alone do not
+upgrade an existing database.
 
 Set the validated `DATABASE_URI`, then run:
 
@@ -82,3 +97,8 @@ policy-specific pruning for platform rows, LangGraph checkpoint history,
 LangGraph store namespaces, external artifact targets, database backups, and
 replicas. Deleting platform thread metadata does not automatically identify or
 delete serialized LangGraph checkpoints; coordinated cleanup is required.
+
+`updated_at` is maintained by SQLAlchemy's ORM/Core update behavior. SQL
+executed directly outside SQLAlchemy does not trigger that client-side
+`onupdate` behavior; direct writers must set the column themselves when
+appropriate.

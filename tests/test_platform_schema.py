@@ -10,7 +10,6 @@ from urllib.parse import urlsplit, urlunsplit
 
 import psycopg
 import pytest
-from alembic.config import Config
 from psycopg import sql
 from sqlalchemy import delete, select, text
 from sqlalchemy.exc import DBAPIError, IntegrityError
@@ -40,6 +39,7 @@ from agent_platform.db.session import (
 )
 from agent_platform.persistence import open_postgres_persistence
 from alembic import command
+from alembic.config import Config
 
 pytestmark = pytest.mark.postgres
 
@@ -126,6 +126,18 @@ PLATFORM_CONSTRAINTS = {
     "pk_users",
     "uq_api_keys_key_prefix",
     "uq_users_email",
+}
+LEGACY_CHECK_CONSTRAINTS = {
+    "agent_version_positive",
+    "run_event_sequence_positive",
+    "run_status",
+    "thread_status",
+    "user_status",
+}
+NAMED_CHECK_CONSTRAINTS = {
+    constraint
+    for constraint in PLATFORM_CONSTRAINTS
+    if constraint.startswith("ck_")
 }
 
 
@@ -252,6 +264,17 @@ def test_migration_upgrade_downgrade_upgrade_and_schema_boundaries(
     assert indexes == PLATFORM_INDEXES
     assert constraints == PLATFORM_CONSTRAINTS
 
+    with patch.dict(os.environ, {"DATABASE_URI": postgres_database_uri}):
+        command.downgrade(_alembic_config(), "20260920_0001")
+    _, downgraded_constraints = _platform_catalog(postgres_database_uri)
+    assert LEGACY_CHECK_CONSTRAINTS <= downgraded_constraints
+    assert NAMED_CHECK_CONSTRAINTS.isdisjoint(downgraded_constraints)
+    _migrate(postgres_database_uri, "head")
+    assert _platform_catalog(postgres_database_uri) == (
+        PLATFORM_INDEXES,
+        PLATFORM_CONSTRAINTS,
+    )
+
     async def initialize_langgraph() -> None:
         async with open_postgres_persistence(postgres_database_uri):
             pass
@@ -350,7 +373,13 @@ def test_repository_flows_ownership_idempotency_and_replay(
                 assert await agents.get_for_owner(agent.id, stranger.id) is None
 
                 await users.update_profile(owner, display_name="Updated Owner")
-                await agents.update(agent, active=False)
+                assert (
+                    await agents.update_for_owner(
+                        agent.id,
+                        owner.id,
+                        active=False,
+                    )
+                ) is not None
                 await threads.update(thread, title="Updated title", touch=True)
                 await artifacts.update(
                     artifact,
@@ -390,6 +419,154 @@ def test_repository_flows_ownership_idempotency_and_replay(
                 ).metadata_ == {"retention": "short"}
                 assert await artifacts.get_for_owner(artifact_id, stranger_id) is None
                 assert (await session.get(Agent, agent_id)).active is False
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_repository_ownership_and_cross_resource_consistency(
+    migrated_database_uri: str,
+):
+    async def scenario() -> None:
+        engine = create_platform_engine(migrated_database_uri)
+        factory = create_session_factory(engine)
+        try:
+            async with session_scope(factory) as session:
+                users = UserRepository(session)
+                agents = AgentRepository(session)
+                threads = ThreadRepository(session)
+                runs = RunRepository(session)
+                artifacts = ArtifactRepository(session)
+
+                owner = await users.create(display_name="Owner")
+                stranger = await users.create(display_name="Stranger")
+                owned_agent = await agents.create(
+                    owner_user_id=owner.id,
+                    graph_id="owned",
+                    name="Owned",
+                )
+                other_agent = await agents.create(
+                    owner_user_id=owner.id,
+                    graph_id="other",
+                    name="Other",
+                )
+                global_agent = await agents.create(
+                    graph_id="global",
+                    name="Global",
+                )
+                owner_thread = await threads.create(
+                    owner_user_id=owner.id,
+                    agent_id=owned_agent.id,
+                )
+                stranger_thread = await threads.create(
+                    owner_user_id=stranger.id,
+                    agent_id=global_agent.id,
+                )
+                owner_run, _ = await runs.create_idempotent(
+                    owner_user_id=owner.id,
+                    thread_id=owner_thread.id,
+                    agent_id=owned_agent.id,
+                )
+                stranger_run, _ = await runs.create_idempotent(
+                    owner_user_id=stranger.id,
+                    thread_id=stranger_thread.id,
+                    agent_id=global_agent.id,
+                )
+
+                visible_global = await agents.get_for_owner(
+                    global_agent.id,
+                    owner.id,
+                )
+                assert visible_global is not None
+                assert (
+                    await agents.update_for_owner(
+                        visible_global.id,
+                        owner.id,
+                        name="Owner must not mutate this",
+                    )
+                    is None
+                )
+                assert (
+                    await agents.update_global(
+                        global_agent.id,
+                        name="System-updated global",
+                    )
+                ) is not None
+
+                with pytest.raises(
+                    LookupError,
+                    match="thread is not owned by the user and agent",
+                ):
+                    await runs.create_idempotent(
+                        owner_user_id=owner.id,
+                        thread_id=owner_thread.id,
+                        agent_id=other_agent.id,
+                    )
+                with pytest.raises(
+                    LookupError,
+                    match="thread is not owned",
+                ):
+                    await artifacts.create(
+                        owner_user_id=stranger.id,
+                        thread_id=owner_thread.id,
+                        kind="invalid-owner",
+                        media_type="text/plain",
+                    )
+                with pytest.raises(
+                    LookupError,
+                    match="run does not belong",
+                ):
+                    await artifacts.create(
+                        owner_user_id=owner.id,
+                        thread_id=owner_thread.id,
+                        run_id=stranger_run.id,
+                        kind="invalid-run",
+                        media_type="text/plain",
+                    )
+
+                mismatched = Artifact(
+                    owner_user_id=owner.id,
+                    thread_id=stranger_thread.id,
+                    run_id=None,
+                    kind="legacy-mismatch",
+                    media_type="text/plain",
+                )
+                session.add(mismatched)
+                await session.flush()
+                mismatched_id = mismatched.id
+                owner_id = owner.id
+                stranger_id = stranger.id
+                stranger_thread_id = stranger_thread.id
+                global_agent_id = global_agent.id
+
+            async with session_scope(factory) as session:
+                artifacts = ArtifactRepository(session)
+                assert (
+                    await artifacts.get_for_owner(mismatched_id, owner_id)
+                    is None
+                )
+                assert (
+                    await artifacts.get_for_owner(mismatched_id, stranger_id)
+                    is None
+                )
+                assert (
+                    await artifacts.list_for_thread(
+                        stranger_thread_id,
+                        owner_id,
+                    )
+                    == []
+                )
+                assert (
+                    await artifacts.list_for_thread(
+                        stranger_thread_id,
+                        stranger_id,
+                    )
+                    == []
+                )
+                assert (
+                    await session.get(Agent, global_agent_id)
+                ).name == "System-updated global"
         finally:
             await engine.dispose()
 
@@ -558,12 +735,15 @@ def test_foreign_keys_deletion_and_immutable_audit_log(
                         await session.execute(
                             delete(User).where(User.id == audit_actor_id)
                         )
-                await session.execute(delete(AuditLog).where(AuditLog.id == audit_id))
+                with pytest.raises(DBAPIError, match="immutable"):
+                    async with session.begin_nested():
+                        await session.execute(
+                            delete(AuditLog).where(AuditLog.id == audit_id)
+                        )
         finally:
             await engine.dispose()
 
-    with pytest.raises(DBAPIError, match="immutable"):
-        asyncio.run(scenario())
+    asyncio.run(scenario())
 
 
 def test_failed_transaction_rolls_back_repository_flushes(
