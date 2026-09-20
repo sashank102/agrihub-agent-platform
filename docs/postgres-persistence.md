@@ -38,12 +38,17 @@ asyncio.run(initialize())
 PY
 ```
 
-No platform-owned schema or migration framework is used. With vector indexing
-disabled, the library setup methods create these tables:
+LangGraph does not use the platform's Alembic migration framework. With vector
+indexing disabled, the library setup methods independently create these
+public-schema tables:
 
 - Checkpointer: `checkpoint_migrations`, `checkpoints`, `checkpoint_blobs`,
   and `checkpoint_writes`
 - Store: `store_migrations` and `store`
+
+Application metadata is separate in the Alembic-owned `platform` schema. See
+[Platform metadata schema](platform-schema.md) for its tables, migrations,
+deletion behavior, and retention responsibilities.
 
 ## Run persistence tests
 
@@ -88,5 +93,5 @@ ad hoc deletion of only one table.
 
 Checkpoint persistence is not model prompt or response caching. Continuing a
 thread restores graph state, but any node executed again may call its model
-again. Model caching, API services, authentication, platform-owned tables,
-workers, and frontend integration are outside this persistence layer.
+again. Model caching, API services, authentication behavior, workers, and
+frontend integration are outside this persistence layer.

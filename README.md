@@ -65,6 +65,11 @@ in-memory. See [PostgreSQL graph persistence](docs/postgres-persistence.md) for
 database startup, table initialization, testing, retention, backup, and
 sensitive-data guidance.
 
+Generic users, agents, threads, runs, events, artifacts, API-key hashes, and
+audit metadata live separately in the Alembic-owned `platform` schema. See
+[Platform metadata schema](docs/platform-schema.md) for migration commands,
+ownership boundaries, deletion behavior, and integration tests.
+
 ### ⚙️ Configurations
 
 #### LLM :brain:
