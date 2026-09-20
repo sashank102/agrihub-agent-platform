@@ -1,5 +1,4 @@
 import { useStreamContext } from "@/providers/Stream";
-import { END } from "@langchain/langgraph/web";
 import { Interrupt } from "@langchain/langgraph-sdk";
 import { toast } from "sonner";
 import {
@@ -192,7 +191,7 @@ export default function useInterruptedActions({
         {},
         {
           command: {
-            goto: END,
+            goto: "__end__",
           },
         },
       );

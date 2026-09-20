@@ -18,7 +18,6 @@ import { useQueryState } from "nuqs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { ArrowRight, Sprout } from "lucide-react";
 import { PasswordInput } from "@/components/ui/password-input";
 import { getApiKey } from "@/lib/api-key";
@@ -49,12 +48,10 @@ async function sleep(ms = 4000) {
 async function checkGraphStatus(
   apiUrl: string,
   apiKey: string | null,
-  authScheme?: string,
 ): Promise<boolean> {
   try {
     const headers = new Headers();
     if (apiKey) headers.set("X-Api-Key", apiKey);
-    if (authScheme) headers.set("X-Auth-Scheme", authScheme);
 
     const res = await fetch(`${apiUrl}/info`, {
       headers,
@@ -72,13 +69,11 @@ const StreamSession = ({
   apiKey,
   apiUrl,
   assistantId,
-  authScheme,
 }: {
   children: ReactNode;
   apiKey: string | null;
   apiUrl: string;
   assistantId: string;
-  authScheme?: string;
 }) => {
   const [threadId, setThreadId] = useQueryState("threadId");
   const { getThreads, setThreads } = useThreads();
@@ -86,11 +81,6 @@ const StreamSession = ({
     apiUrl,
     apiKey: apiKey ?? undefined,
     assistantId,
-    ...(authScheme && {
-      defaultHeaders: {
-        "X-Auth-Scheme": authScheme,
-      },
-    }),
     threadId: threadId ?? null,
     fetchStateHistory: true,
     onCustomEvent: (event, options) => {
@@ -110,7 +100,7 @@ const StreamSession = ({
   });
 
   useEffect(() => {
-    checkGraphStatus(apiUrl, apiKey, authScheme).then((ok) => {
+    checkGraphStatus(apiUrl, apiKey).then((ok) => {
       if (!ok) {
         toast.error("Failed to connect to the AgriHub server", {
           description: () => (
@@ -125,7 +115,7 @@ const StreamSession = ({
         });
       }
     });
-  }, [apiKey, apiUrl, authScheme]);
+  }, [apiKey, apiUrl]);
 
   return (
     <StreamContext.Provider value={streamValue}>
@@ -137,7 +127,6 @@ const StreamSession = ({
 // Default values for the form
 const DEFAULT_API_URL = "http://127.0.0.1:2024";
 const DEFAULT_ASSISTANT_ID = "agent";
-const AGENT_BUILDER_AUTH_SCHEME = "langsmith-api-key";
 
 export const StreamProvider: React.FC<{ children: ReactNode }> = ({
   children,
@@ -146,7 +135,6 @@ export const StreamProvider: React.FC<{ children: ReactNode }> = ({
   const envApiUrl: string | undefined = process.env.NEXT_PUBLIC_API_URL;
   const envAssistantId: string | undefined =
     process.env.NEXT_PUBLIC_ASSISTANT_ID;
-  const envAuthScheme: string | undefined = process.env.NEXT_PUBLIC_AUTH_SCHEME;
 
   // Use URL params with env var fallbacks
   const [apiUrl, setApiUrl] = useQueryState("apiUrl", {
@@ -155,15 +143,6 @@ export const StreamProvider: React.FC<{ children: ReactNode }> = ({
   const [assistantId, setAssistantId] = useQueryState("assistantId", {
     defaultValue: envAssistantId || "",
   });
-  const [authScheme, setAuthScheme] = useQueryState("authScheme", {
-    defaultValue: envAuthScheme || "",
-  });
-  const [isAgentBuilder, setIsAgentBuilder] = useState(
-    () =>
-      (authScheme || envAuthScheme || "").toLowerCase() ===
-      AGENT_BUILDER_AUTH_SCHEME,
-  );
-
   // For API key, use localStorage with env var fallback
   const [apiKey, _setApiKey] = useState(() => {
     const storedKey = getApiKey();
@@ -178,7 +157,6 @@ export const StreamProvider: React.FC<{ children: ReactNode }> = ({
   // Determine final values to use, prioritizing URL params then env vars
   const finalApiUrl = apiUrl || envApiUrl;
   const finalAssistantId = assistantId || envAssistantId;
-  const finalAuthScheme = authScheme || envAuthScheme || "";
 
   // Show the form if we: don't have an API URL, or don't have an assistant ID
   if (!finalApiUrl || !finalAssistantId) {
@@ -209,7 +187,6 @@ export const StreamProvider: React.FC<{ children: ReactNode }> = ({
               setApiUrl(apiUrl);
               setApiKey(apiKey);
               setAssistantId(assistantId);
-              setAuthScheme(isAgentBuilder ? AGENT_BUILDER_AUTH_SCHEME : "");
 
               form.reset();
             }}
@@ -261,26 +238,8 @@ export const StreamProvider: React.FC<{ children: ReactNode }> = ({
                 name="apiKey"
                 defaultValue={apiKey ?? ""}
                 className="bg-background"
-                placeholder="lsv2_pt_..."
+                placeholder="Platform API key"
               />
-            </div>
-
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex flex-col gap-1">
-                  <Label htmlFor="agentBuilderEnabled">
-                    Built with Agent Builder
-                  </Label>
-                  <p className="text-muted-foreground text-sm">
-                    Enable this for Agent Builder deployments.
-                  </p>
-                </div>
-                <Switch
-                  id="agentBuilderEnabled"
-                  checked={isAgentBuilder}
-                  onCheckedChange={setIsAgentBuilder}
-                />
-              </div>
             </div>
 
             <div className="mt-2 flex justify-end">
@@ -303,7 +262,6 @@ export const StreamProvider: React.FC<{ children: ReactNode }> = ({
       apiKey={apiKey}
       apiUrl={finalApiUrl}
       assistantId={finalAssistantId}
-      authScheme={finalAuthScheme || undefined}
     >
       {children}
     </StreamSession>

@@ -1,247 +1,62 @@
-"""Configuration management for the Open Deep Research system."""
+"""Configuration management for the research agent."""
 
 import os
 from enum import Enum
-from typing import Any, List, Optional
+from typing import Any
 
 from langchain_core.runnables import RunnableConfig
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict
 
 
-class SearchAPI(Enum):
-    """Enumeration of available search API providers."""
-    
+class SearchAPI(str, Enum):
+    """Available web-search providers."""
+
     ANTHROPIC = "anthropic"
     OPENAI = "openai"
     TAVILY = "tavily"
     DUCKDUCKGO = "duckduckgo"
     NONE = "none"
 
+
 class MCPConfig(BaseModel):
-    """Configuration for Model Context Protocol (MCP) servers."""
-    
-    url: Optional[str] = Field(
-        default=None,
-        optional=True,
-    )
-    """The URL of the MCP server"""
-    tools: Optional[List[str]] = Field(
-        default=None,
-        optional=True,
-    )
-    """The tools to make available to the LLM"""
-    auth_required: Optional[bool] = Field(
-        default=False,
-        optional=True,
-    )
-    """Whether the MCP server requires authentication"""
+    """One streamable-HTTP MCP server and its allowed tools."""
+
+    url: str | None = None
+    tools: list[str] | None = None
+
 
 class Configuration(BaseModel):
-    """Main configuration class for the Deep Research agent."""
-    
-    # General Configuration
-    max_structured_output_retries: int = Field(
-        default=3,
-        metadata={
-            "x_oap_ui_config": {
-                "type": "number",
-                "default": 3,
-                "min": 1,
-                "max": 10,
-                "description": "Maximum number of retries for structured output calls from models"
-            }
-        }
-    )
-    allow_clarification: bool = Field(
-        default=True,
-        metadata={
-            "x_oap_ui_config": {
-                "type": "boolean",
-                "default": True,
-                "description": "Whether to allow the researcher to ask the user clarifying questions before starting research"
-            }
-        }
-    )
-    max_concurrent_research_units: int = Field(
-        default=5,
-        metadata={
-            "x_oap_ui_config": {
-                "type": "slider",
-                "default": 5,
-                "min": 1,
-                "max": 20,
-                "step": 1,
-                "description": "Maximum number of research units to run concurrently. This will allow the researcher to use multiple sub-agents to conduct research. Note: with more concurrency, you may run into rate limits."
-            }
-        }
-    )
-    # Research Configuration
-    search_api: SearchAPI = Field(
-        default=SearchAPI.ANTHROPIC,
-        metadata={
-            "x_oap_ui_config": {
-                "type": "select",
-                "default": "anthropic",
-                "description": "Search API to use for research. NOTE: Make sure your Researcher Model supports the selected search API.",
-                "options": [
-                    {"label": "Tavily", "value": SearchAPI.TAVILY.value},
-                    {"label": "OpenAI Native Web Search", "value": SearchAPI.OPENAI.value},
-                    {"label": "Anthropic Native Web Search", "value": SearchAPI.ANTHROPIC.value},
-                    {"label": "DuckDuckGo (no key)", "value": SearchAPI.DUCKDUCKGO.value},
-                    {"label": "None", "value": SearchAPI.NONE.value}
-                ]
-            }
-        }
-    )
-    max_researcher_iterations: int = Field(
-        default=6,
-        metadata={
-            "x_oap_ui_config": {
-                "type": "slider",
-                "default": 6,
-                "min": 1,
-                "max": 10,
-                "step": 1,
-                "description": "Maximum number of research iterations for the Research Supervisor. This is the number of times the Research Supervisor will reflect on the research and ask follow-up questions."
-            }
-        }
-    )
-    max_react_tool_calls: int = Field(
-        default=10,
-        metadata={
-            "x_oap_ui_config": {
-                "type": "slider",
-                "default": 10,
-                "min": 1,
-                "max": 30,
-                "step": 1,
-                "description": "Maximum number of tool calling iterations to make in a single researcher step."
-            }
-        }
-    )
-    # Model Configuration
-    summarization_model: str = Field(
-        default="anthropic:claude-sonnet-4-20250514",
-        metadata={
-            "x_oap_ui_config": {
-                "type": "text",
-                "default": "anthropic:claude-sonnet-4-20250514",
-                "description": "Model for summarizing research results from Tavily search results"
-            }
-        }
-    )
-    summarization_model_max_tokens: int = Field(
-        default=8192,
-        metadata={
-            "x_oap_ui_config": {
-                "type": "number",
-                "default": 8192,
-                "description": "Maximum output tokens for summarization model"
-            }
-        }
-    )
-    max_content_length: int = Field(
-        default=50000,
-        metadata={
-            "x_oap_ui_config": {
-                "type": "number",
-                "default": 50000,
-                "min": 1000,
-                "max": 200000,
-                "description": "Maximum character length for webpage content before summarization"
-            }
-        }
-    )
-    research_model: str = Field(
-        default="anthropic:claude-sonnet-4-20250514",
-        metadata={
-            "x_oap_ui_config": {
-                "type": "text",
-                "default": "anthropic:claude-sonnet-4-20250514",
-                "description": "Model for conducting research. NOTE: Make sure your Researcher Model supports the selected search API."
-            }
-        }
-    )
-    research_model_max_tokens: int = Field(
-        default=10000,
-        metadata={
-            "x_oap_ui_config": {
-                "type": "number",
-                "default": 10000,
-                "description": "Maximum output tokens for research model"
-            }
-        }
-    )
-    compression_model: str = Field(
-        default="anthropic:claude-sonnet-4-20250514",
-        metadata={
-            "x_oap_ui_config": {
-                "type": "text",
-                "default": "anthropic:claude-sonnet-4-20250514",
-                "description": "Model for compressing research findings from sub-agents. NOTE: Make sure your Compression Model supports the selected search API."
-            }
-        }
-    )
-    compression_model_max_tokens: int = Field(
-        default=8192,
-        metadata={
-            "x_oap_ui_config": {
-                "type": "number",
-                "default": 8192,
-                "description": "Maximum output tokens for compression model"
-            }
-        }
-    )
-    final_report_model: str = Field(
-        default="anthropic:claude-sonnet-4-20250514",
-        metadata={
-            "x_oap_ui_config": {
-                "type": "text",
-                "default": "anthropic:claude-sonnet-4-20250514",
-                "description": "Model for writing the final report from all research findings"
-            }
-        }
-    )
-    final_report_model_max_tokens: int = Field(
-        default=10000,
-        metadata={
-            "x_oap_ui_config": {
-                "type": "number",
-                "default": 10000,
-                "description": "Maximum output tokens for final report model"
-            }
-        }
-    )
-    # MCP server configuration
-    mcp_config: Optional[MCPConfig] = Field(
-        default=None,
-        optional=True,
-        metadata={
-            "x_oap_ui_config": {
-                "type": "mcp",
-                "description": "MCP server configuration"
-            }
-        }
-    )
-    mcp_prompt: Optional[str] = Field(
-        default=None,
-        optional=True,
-        metadata={
-            "x_oap_ui_config": {
-                "type": "text",
-                "description": "Any additional instructions to pass along to the Agent regarding the MCP tools that are available to it."
-            }
-        }
-    )
+    """Runtime configuration for the research graph."""
 
+    max_structured_output_retries: int = 3
+    allow_clarification: bool = True
+    max_concurrent_research_units: int = 5
+    search_api: SearchAPI = SearchAPI.ANTHROPIC
+    max_researcher_iterations: int = 6
+    max_react_tool_calls: int = 10
+
+    summarization_model: str = "anthropic:claude-sonnet-4-20250514"
+    summarization_model_max_tokens: int = 8192
+    max_content_length: int = 50000
+    research_model: str = "anthropic:claude-sonnet-4-20250514"
+    research_model_max_tokens: int = 10000
+    compression_model: str = "anthropic:claude-sonnet-4-20250514"
+    compression_model_max_tokens: int = 8192
+    final_report_model: str = "anthropic:claude-sonnet-4-20250514"
+    final_report_model_max_tokens: int = 10000
+
+    mcp_config: MCPConfig | None = None
+    mcp_prompt: str | None = None
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @classmethod
     def from_runnable_config(
-        cls, config: Optional[RunnableConfig] = None
+        cls,
+        config: RunnableConfig | None = None,
     ) -> "Configuration":
-        """Create a Configuration instance from a RunnableConfig."""
+        """Build configuration from environment and run-level overrides."""
         configurable = config.get("configurable", {}) if config else {}
-        field_names = list(cls.model_fields.keys())
         shared_model = os.environ.get("MODEL")
         model_fields = {
             "summarization_model",
@@ -253,11 +68,6 @@ class Configuration(BaseModel):
             field_name: os.environ.get(field_name.upper())
             or configurable.get(field_name)
             or (shared_model if field_name in model_fields else None)
-            for field_name in field_names
+            for field_name in cls.model_fields
         }
-        return cls(**{k: v for k, v in values.items() if v is not None})
-
-    class Config:
-        """Pydantic configuration."""
-        
-        arbitrary_types_allowed = True
+        return cls(**{key: value for key, value in values.items() if value is not None})
