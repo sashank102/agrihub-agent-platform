@@ -12,7 +12,8 @@ async def info(request: Request) -> dict[str, object]:
     return {
         "version": "0.1.0",
         "graph_id": settings.DEVELOPMENT_GRAPH_ID,
-        "authentication": False,
+        "authentication": settings.AUTH_MODE == "api_key",
+        "auth_mode": settings.AUTH_MODE,
         "capabilities": {
             "threads": ["create", "search", "get", "state", "history"],
             "runs": ["stream", "join_stream", "cancel"],

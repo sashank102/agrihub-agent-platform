@@ -28,9 +28,9 @@ from agent_platform.services.snapshots import (
 )
 
 CHECKPOINT_READ_CONCURRENCY = 4
-SEARCH_STATUS_SCAN_LIMIT = 1000
 PROTOCOL_STATUSES = {"idle", "busy", "interrupted", "error"}
 PLATFORM_STATUSES = {"active", "archived"}
+_UNTRUSTED_METADATA_KEYS = {"owner_user_id", "user_id", "owner_id"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,12 +68,14 @@ class ThreadService:
         registry: GraphRegistry,
         owner_user_id: uuid.UUID,
         default_graph_id: str,
+        auditor: Any | None = None,
     ) -> None:
         """Bind application-scoped dependencies for one principal."""
         self.session_factory = session_factory
         self.registry = registry
         self.owner_user_id = owner_user_id
         self.default_graph_id = default_graph_id
+        self.auditor = auditor
 
     async def create(self, request: ThreadCreateRequest) -> ThreadResponse:
         """Create one owner-scoped thread with trusted graph identity tags."""
@@ -83,7 +85,14 @@ class ThreadService:
             or self.default_graph_id
         )
         registered = self._resolve_graph(identifier)
-        view = await self._insert_thread(request, registered)
+        view, created = await self._insert_thread(request, registered)
+        if created:
+            await self._audit(
+                "thread.created",
+                "thread",
+                str(view.id),
+                {"graph_id": registered.graph_id},
+            )
         signal = await self._signal_for(view.id)
         snapshot = await self._read_snapshot(view)
         return self._response(view, signal, snapshot)
@@ -101,39 +110,35 @@ class ThreadService:
         if request.status is not None and protocol_status is None and platform_status is None:
             return []
 
-        fetch_limit: int | None
-        fetch_offset: int
-        if protocol_status is None:
-            fetch_limit = request.limit
-            fetch_offset = request.offset
-        else:
-            fetch_limit = SEARCH_STATUS_SCAN_LIMIT
-            fetch_offset = 0
-
+        await self._audit_foreign_search_ids(request.ids)
         async with session_scope(self.session_factory) as session:
-            threads = await ThreadRepository(session).list_for_owner(
-                self.owner_user_id,
-                status=platform_status,
-                metadata=request.metadata,
-                ids=request.ids,
-                limit=fetch_limit,
-                offset=fetch_offset,
-            )
+            repository = ThreadRepository(session)
+            if protocol_status is None:
+                threads = await repository.list_for_owner(
+                    self.owner_user_id,
+                    status=platform_status,
+                    metadata=request.metadata,
+                    ids=request.ids,
+                    limit=request.limit,
+                    offset=request.offset,
+                )
+            else:
+                threads = await repository.list_for_owner_by_protocol_status(
+                    self.owner_user_id,
+                    protocol_status,
+                    metadata=request.metadata,
+                    ids=request.ids,
+                    platform_status=platform_status,
+                    limit=request.limit,
+                    offset=request.offset,
+                )
             views = [ThreadView.from_thread(thread) for thread in threads]
             signals = await RunRepository(session).summarize_for_owner(
                 [view.id for view in views],
                 self.owner_user_id,
             )
 
-        responses = await self._hydrate(views, signals)
-        if protocol_status is None:
-            return responses
-        matched = [
-            response
-            for response in responses
-            if response.status == protocol_status
-        ]
-        return matched[request.offset : request.offset + request.limit]
+        return await self._hydrate(views, signals)
 
     async def get(self, thread_id: uuid.UUID) -> ThreadResponse:
         """Get an accessible thread or fail without leaking its existence."""
@@ -172,9 +177,14 @@ class ThreadService:
         self,
         request: ThreadCreateRequest,
         registered: RegisteredGraph,
-    ) -> ThreadView:
+    ) -> tuple[ThreadView, bool]:
+        supplied = {
+            key: value
+            for key, value in request.metadata.items()
+            if key not in _UNTRUSTED_METADATA_KEYS
+        }
         metadata = {
-            **request.metadata,
+            **supplied,
             "graph_id": registered.graph_id,
             "assistant_id": str(registered.agent_id),
         }
@@ -183,7 +193,7 @@ class ThreadService:
             if request.thread_id is not None:
                 existing = await repository.get_by_id(request.thread_id)
                 if existing is not None:
-                    return await self._existing_thread(existing, request, repository)
+                    return await self._existing_thread(existing, request, repository), False
 
             duplicate = False
             thread: Thread | None = None
@@ -205,10 +215,10 @@ class ThreadService:
                 existing = await repository.get_by_id(request.thread_id)
                 if existing is None:
                     raise FileExistsError("thread already exists")
-                return await self._existing_thread(existing, request, repository)
+                return await self._existing_thread(existing, request, repository), False
             if thread is None:
                 raise RuntimeError("thread insert did not return a row")
-            return ThreadView.from_thread(thread)
+            return ThreadView.from_thread(thread), True
 
     async def _existing_thread(
         self,
@@ -223,14 +233,63 @@ class ThreadService:
         raise FileExistsError("thread already exists")
 
     async def _require_thread(self, thread_id: uuid.UUID) -> ThreadView:
+        foreign = False
         async with session_scope(self.session_factory) as session:
-            thread = await ThreadRepository(session).get_for_owner(
-                thread_id,
-                self.owner_user_id,
-            )
-            if thread is None or thread.status == "deleted":
+            thread = await ThreadRepository(session).get_by_id(thread_id)
+            if thread is None:
                 raise LookupError("thread not found")
-            return ThreadView.from_thread(thread)
+            if thread.owner_user_id != self.owner_user_id:
+                foreign = True
+            elif thread.status == "deleted":
+                raise LookupError("thread not found")
+            else:
+                return ThreadView.from_thread(thread)
+        if foreign:
+            await self._audit(
+                "access.denied",
+                "thread",
+                str(thread_id),
+                {"scope": "thread"},
+            )
+        raise LookupError("thread not found")
+
+    async def _audit_foreign_search_ids(
+        self,
+        ids: list[uuid.UUID] | None,
+    ) -> None:
+        if not ids:
+            return
+        async with session_scope(self.session_factory) as session:
+            repository = ThreadRepository(session)
+            foreign_ids = []
+            for thread_id in ids:
+                thread = await repository.get_by_id(thread_id)
+                if thread is not None and thread.owner_user_id != self.owner_user_id:
+                    foreign_ids.append(str(thread_id))
+        for thread_id in foreign_ids:
+            await self._audit(
+                "access.denied",
+                "thread",
+                thread_id,
+                {"scope": "search"},
+            )
+
+    async def _audit(
+        self,
+        action: str,
+        resource_type: str,
+        resource_id: str,
+        metadata: dict[str, Any],
+    ) -> None:
+        if self.auditor is None:
+            return
+        await self.auditor.record(
+            action=action,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            actor_user_id=self.owner_user_id,
+            metadata=metadata,
+        )
 
     async def _signal_for(self, thread_id: uuid.UUID) -> tuple[bool, str | None]:
         async with session_scope(self.session_factory) as session:

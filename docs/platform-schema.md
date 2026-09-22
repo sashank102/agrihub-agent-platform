@@ -24,9 +24,9 @@ an artifact owner to match its thread owner, and an artifact's optional run to
 belong to that same thread. Global agents are readable by development users,
 but only the explicit system/admin update path can mutate them.
 
-Disabled and deleted users are retained in this schema, but requests are not
-yet rejected based on those states. That enforcement belongs to Plan 06
-authentication, where the authenticated principal is established.
+Disabled and deleted users are retained. API-key authentication rejects them.
+Ordinary users can read and run the global agent, and only the admin CLI can
+mutate it.
 
 ## LangGraph ownership
 

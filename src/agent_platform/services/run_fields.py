@@ -12,6 +12,10 @@ from agent_platform.services.errors import (
     ThreadNotInterrupted,
     UnsupportedRunOption,
 )
+from agent_platform.services.redaction import strip_client_secrets
+from agent_platform.services.tenant_context import TenantIdentity
+
+_IDENTITY_KEYS = ("user_id", "owner_user_id", "owner_id", "run_id")
 
 SUPPORTED_STREAM_MODES = frozenset({"values"})
 IMPLEMENTED_DURABILITY = frozenset({"sync", "async", "exit"})
@@ -92,8 +96,17 @@ def disconnect_policy(request: RunStreamRequest) -> str:
 
 def run_configuration(request: RunStreamRequest) -> dict[str, Any]:
     """Persist the client config and metadata without treating them as authority."""
-    stored = dict(request.config or {})
-    stored["metadata"] = dict(request.metadata or {})
+    stored = strip_client_secrets(dict(request.config or {}))
+    stored.pop("configurable", None)
+    configurable = strip_client_secrets(dict((request.config or {}).get("configurable") or {}))
+    for key in _IDENTITY_KEYS:
+        configurable.pop(key, None)
+    if configurable:
+        stored["configurable"] = configurable
+    metadata = strip_client_secrets(dict(request.metadata or {}))
+    for key in _IDENTITY_KEYS:
+        metadata.pop(key, None)
+    stored["metadata"] = metadata
     if request.command is not None:
         stored["command"] = request.command
     if request.checkpoint is not None:
@@ -104,10 +117,13 @@ def run_configuration(request: RunStreamRequest) -> dict[str, Any]:
 def execution_config(
     thread_id: uuid.UUID,
     request: RunStreamRequest,
+    identity: TenantIdentity | None = None,
 ) -> dict[str, Any]:
     """Build a graph config whose thread id cannot be redirected by the client."""
-    config = dict(request.config or {})
-    configurable = dict(config.get("configurable") or {})
+    config = strip_client_secrets(dict(request.config or {}))
+    configurable = strip_client_secrets(dict(config.get("configurable") or {}))
+    for key in _IDENTITY_KEYS:
+        configurable.pop(key, None)
     checkpoint = dict(request.checkpoint or {})
     configurable["thread_id"] = str(thread_id)
     configurable["checkpoint_ns"] = str(
@@ -125,8 +141,32 @@ def execution_config(
         configurable["checkpoint_map"] = checkpoint_map
     else:
         configurable.pop("checkpoint_map", None)
+    if identity is not None:
+        configurable["user_id"] = identity.user_id
+        configurable["thread_id"] = identity.thread_id
+        configurable["run_id"] = identity.run_id
     config["configurable"] = configurable
+    metadata = strip_client_secrets(dict(config.get("metadata") or {}))
+    metadata.update(strip_client_secrets(dict(request.metadata or {})))
+    for key in _IDENTITY_KEYS:
+        metadata.pop(key, None)
+    if identity is not None:
+        metadata.update(identity.as_dict())
+        config["run_id"] = identity.run_id
+    config["metadata"] = metadata
     return config
+
+
+def graph_context(
+    request: RunStreamRequest,
+    identity: TenantIdentity,
+) -> dict[str, Any]:
+    """Build LangGraph runtime context that the client cannot retarget."""
+    context = strip_client_secrets(dict(request.context or {}))
+    for key in (*_IDENTITY_KEYS, "thread_id"):
+        context.pop(key, None)
+    context.update(identity.as_dict())
+    return context
 
 
 def checkpoint_reference(
@@ -197,8 +237,6 @@ def astream_options(request: RunStreamRequest) -> dict[str, Any]:
         "subgraphs": bool(request.stream_subgraphs),
         "durability": request.durability or "sync",
     }
-    if request.context is not None:
-        options["context"] = request.context
     if request.interrupt_before is not None:
         options["interrupt_before"] = _interrupt_argument(request.interrupt_before)
     if request.interrupt_after is not None:

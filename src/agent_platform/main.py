@@ -1,5 +1,6 @@
-"""Local-development FastAPI server for the single-process chat protocol."""
+"""FastAPI server for the single-process chat protocol."""
 
+import logging
 import os
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
@@ -9,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 
+from agent_platform.api.middleware import RequestContextMiddleware, install_redaction
 from agent_platform.api.request_limit import RequestSizeLimitMiddleware
 from agent_platform.api.routes import health, info, runs, threads
 from agent_platform.core.settings import Settings, get_settings
@@ -20,9 +22,14 @@ from agent_platform.db.session import (
     session_scope,
 )
 from agent_platform.persistence import open_postgres_persistence
+from agent_platform.process_lock import ApiProcessLock
+from agent_platform.services.accounts import AccountService
 from agent_platform.services.graph_registry import GraphRegistry
 from agent_platform.services.run_manager import RunManager
+from agent_platform.services.tenant_store import TenantStore
 from open_deep_research.deep_researcher import build_graph
+
+logger = logging.getLogger(__name__)
 
 GraphBuilder = Callable[..., Any]
 
@@ -49,7 +56,7 @@ async def _seed_development_principal(app: FastAPI) -> None:
         if agent is None:
             conflicting = await session.scalar(
                 select(Agent).where(
-                    Agent.owner_user_id == user.id,
+                    Agent.owner_user_id.is_(None),
                     Agent.graph_id == settings.DEVELOPMENT_GRAPH_ID,
                     Agent.version == 1,
                 )
@@ -60,12 +67,12 @@ async def _seed_development_principal(app: FastAPI) -> None:
                 )
             agent = await AgentRepository(session).create(
                 agent_id=settings.DEVELOPMENT_AGENT_ID,
-                owner_user_id=user.id,
+                owner_user_id=None,
                 graph_id=settings.DEVELOPMENT_GRAPH_ID,
                 name="AgriHub Research Agent",
-                metadata={"development_seed": True},
+                metadata={"development_seed": True, "global": True},
             )
-        if agent.owner_user_id != user.id:
+        if agent.owner_user_id not in {None, user.id}:
             raise RuntimeError("configured development agent has an unexpected owner")
         if agent.graph_id != settings.DEVELOPMENT_GRAPH_ID:
             raise RuntimeError("configured development agent has an unexpected graph ID")
@@ -83,17 +90,27 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
-        if active_settings.ENVIRONMENT == "production":
-            raise RuntimeError(
-                "the unauthenticated development API cannot run in production"
+        if active_settings.AUTH_MODE == "disabled":
+            logger.warning(
+                "AUTH_MODE=disabled; every request uses development user %s. "
+                "This mode is refused when ENVIRONMENT=production.",
+                active_settings.DEVELOPMENT_USER_ID,
             )
-
+        if active_settings.DATABASE_URI is None:
+            raise RuntimeError("DATABASE_URI is not configured")
+        process_lock = ApiProcessLock(active_settings.DATABASE_URI)
+        await process_lock.acquire()
         engine = engine_factory(active_settings.DATABASE_URI)
         application.state.settings = active_settings
         application.state.engine = engine
         application.state.session_factory = create_session_factory(engine)
+        application.state.accounts = AccountService(
+            application.state.session_factory,
+            active_settings,
+        )
         application.state.ready = False
         application.state.run_manager = None
+        manager: RunManager | None = None
         try:
             async with persistence_factory(
                 active_settings.DATABASE_URI
@@ -102,7 +119,7 @@ def create_app(
                 await _seed_development_principal(application)
                 graph = graph_builder(
                     checkpointer=persistence.checkpointer,
-                    store=persistence.store,
+                    store=TenantStore(persistence.store),
                 )
                 registry = GraphRegistry()
                 registry.register(
@@ -120,6 +137,7 @@ def create_app(
                     ),
                 )
                 await manager.reconcile_orphaned_runs(reason="process_restart")
+                await manager.reconcile_pending()
                 application.state.run_manager = manager
                 application.state.ready = True
                 try:
@@ -129,6 +147,7 @@ def create_app(
                     await manager.shutdown()
         finally:
             application.state.ready = False
+            await process_lock.release()
             await engine.dispose()
 
     application = FastAPI(
@@ -138,6 +157,7 @@ def create_app(
     )
     application.state.settings = active_settings
     application.state.ready = False
+    install_redaction()
     application.add_middleware(
         RequestSizeLimitMiddleware,
         max_bytes=active_settings.API_MAX_REQUEST_BODY_BYTES,
@@ -148,8 +168,14 @@ def create_app(
         allow_credentials=False,
         allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["*"],
-        expose_headers=["Content-Location", "X-Run-ID", "X-Thread-ID"],
+        expose_headers=[
+            "Content-Location",
+            "X-Run-ID",
+            "X-Thread-ID",
+            "X-Request-ID",
+        ],
     )
+    application.add_middleware(RequestContextMiddleware)
 
     application.include_router(health.router)
     application.include_router(info.router)
@@ -159,10 +185,12 @@ def create_app(
 
 
 def run() -> None:
-    """Run the development API on one Uvicorn worker.
+    """Run the API on one Uvicorn worker.
 
     Run tasks and subscriber queues live in this process. ``WEB_CONCURRENCY``
-    greater than 1 is rejected because another worker would not share them.
+    greater than 1 is rejected here. Lifespan also takes a PostgreSQL advisory
+    lock, so ``uvicorn agent_platform.main:app --workers 2`` cannot start a
+    second independent RunManager.
     """
     import uvicorn
 

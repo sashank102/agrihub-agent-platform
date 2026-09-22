@@ -770,10 +770,10 @@ def build_graph(
     active_prompt_pack = prompt_pack or DEFAULT_PROMPT_PACK
     active_researcher_subgraph = _create_researcher_builder(
         active_prompt_pack
-    ).compile()
+    ).compile(store=store)
     active_supervisor_subgraph = _create_supervisor_builder(
         active_researcher_subgraph
-    ).compile()
+    ).compile(store=store)
     builder = _create_deep_researcher_builder(
         active_prompt_pack,
         active_supervisor_subgraph,

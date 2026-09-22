@@ -4,10 +4,11 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent_platform.db.models import Agent, Thread
+from agent_platform.db.models import Agent, Run, Thread
+from agent_platform.db.models.run import ACTIVE_RUN_STATUSES
 
 
 class ThreadRepository:
@@ -89,6 +90,69 @@ class ThreadRepository:
             statement = statement.offset(offset)
         if limit is not None:
             statement = statement.limit(limit)
+        return list((await self.session.scalars(statement)).all())
+
+    async def list_for_owner_by_protocol_status(
+        self,
+        owner_user_id: uuid.UUID,
+        protocol_status: str,
+        *,
+        metadata: dict[str, Any] | None = None,
+        ids: list[uuid.UUID] | None = None,
+        platform_status: str | None = None,
+        limit: int,
+        offset: int = 0,
+    ) -> list[Thread]:
+        """Page threads by durable run status without loading checkpoint rows.
+
+        ``busy``, ``error``, and ``interrupted`` come from run rows. Every other
+        accessible thread is ``idle``. Ordering matches ``list_for_owner``.
+        """
+        active_run = exists(
+            select(Run.id).where(
+                Run.thread_id == Thread.id,
+                Run.status.in_(ACTIVE_RUN_STATUSES),
+            )
+        )
+        latest_status = (
+            select(Run.status)
+            .where(Run.thread_id == Thread.id)
+            .order_by(Run.created_at.desc(), Run.id.desc())
+            .limit(1)
+            .scalar_subquery()
+        )
+        if protocol_status == "busy":
+            status_clause = active_run
+        elif protocol_status == "error":
+            status_clause = and_(~active_run, latest_status == "failed")
+        elif protocol_status == "interrupted":
+            status_clause = and_(~active_run, latest_status == "interrupted")
+        elif protocol_status == "idle":
+            status_clause = and_(
+                ~active_run,
+                or_(
+                    latest_status.is_(None),
+                    latest_status.notin_(("failed", "interrupted")),
+                ),
+            )
+        else:
+            raise ValueError("unsupported protocol status")
+
+        statement = select(Thread).where(
+            Thread.owner_user_id == owner_user_id,
+            Thread.status != "deleted",
+            status_clause,
+        )
+        if platform_status is not None:
+            statement = statement.where(Thread.status == platform_status)
+        if metadata:
+            statement = statement.where(Thread.metadata_.contains(metadata))
+        if ids is not None:
+            statement = statement.where(Thread.id.in_(ids))
+        statement = statement.order_by(Thread.last_activity_at.desc(), Thread.id)
+        if offset:
+            statement = statement.offset(offset)
+        statement = statement.limit(limit)
         return list((await self.session.scalars(statement)).all())
 
     async def get_by_id(self, thread_id: uuid.UUID) -> Thread | None:

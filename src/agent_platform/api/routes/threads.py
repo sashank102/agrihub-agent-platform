@@ -5,10 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from agent_platform.api.dependencies import (
-    get_development_principal,
-    require_ready,
-)
+from agent_platform.api.dependencies import get_principal, require_ready
 from agent_platform.api.schemas import (
     ThreadCreateRequest,
     ThreadHistoryRequest,
@@ -16,6 +13,7 @@ from agent_platform.api.schemas import (
     ThreadSearchRequest,
     ThreadStateResponse,
 )
+from agent_platform.services.accounts import AuthenticatedPrincipal
 from agent_platform.services.errors import CheckpointReferenceError
 from agent_platform.services.thread_service import ThreadService
 
@@ -23,15 +21,16 @@ router = APIRouter(
     prefix="/threads",
     dependencies=[Depends(require_ready)],
 )
-PrincipalDependency = Annotated[uuid.UUID, Depends(get_development_principal)]
+PrincipalDependency = Annotated[AuthenticatedPrincipal, Depends(get_principal)]
 
 
-def _service(request: Request, principal: uuid.UUID) -> ThreadService:
+def _service(request: Request, principal: AuthenticatedPrincipal) -> ThreadService:
     return ThreadService(
         session_factory=request.app.state.session_factory,
         registry=request.app.state.graph_registry,
-        owner_user_id=principal,
+        owner_user_id=principal.user_id,
         default_graph_id=request.app.state.settings.DEVELOPMENT_GRAPH_ID,
+        auditor=request.app.state.accounts,
     )
 
 
@@ -41,7 +40,7 @@ async def create_thread(
     request: Request,
     principal: PrincipalDependency,
 ) -> ThreadResponse:
-    """Create one local-principal thread."""
+    """Create one thread owned by the authenticated principal."""
     try:
         return await _service(request, principal).create(body)
     except KeyError as exc:
@@ -58,7 +57,7 @@ async def search_threads(
     request: Request,
     principal: PrincipalDependency,
 ) -> list[ThreadResponse]:
-    """Search local-principal thread metadata."""
+    """Search thread metadata owned by the authenticated principal."""
     return await _service(request, principal).search(body)
 
 

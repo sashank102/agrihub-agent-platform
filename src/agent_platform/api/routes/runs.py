@@ -6,8 +6,9 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
-from agent_platform.api.dependencies import require_ready
+from agent_platform.api.dependencies import get_principal, require_ready
 from agent_platform.api.schemas import RunStreamRequest
+from agent_platform.services.accounts import AuthenticatedPrincipal
 from agent_platform.services.errors import (
     ActiveRunConflict,
     CheckpointReferenceError,
@@ -48,10 +49,11 @@ async def stream_run(
     thread_id: uuid.UUID,
     body: RunStreamRequest,
     request: Request,
+    principal: Annotated[AuthenticatedPrincipal, Depends(get_principal)],
 ) -> StreamingResponse:
     """Start a durable run and stream its committed events."""
     manager = request.app.state.run_manager
-    owner_user_id = request.app.state.settings.DEVELOPMENT_USER_ID
+    owner_user_id = principal.user_id
     try:
         run = await manager.start_run(thread_id, body, owner_user_id)
     except Exception as exc:
@@ -82,6 +84,7 @@ async def join_run_stream(
     thread_id: uuid.UUID,
     run_id: uuid.UUID,
     request: Request,
+    principal: Annotated[AuthenticatedPrincipal, Depends(get_principal)],
     last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None,
     last_event_id_query: Annotated[str | None, Query(alias="last_event_id")] = None,
     cancel_on_disconnect: Annotated[str | None, Query()] = None,
@@ -99,7 +102,7 @@ async def join_run_stream(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     manager = request.app.state.run_manager
-    owner_user_id = request.app.state.settings.DEVELOPMENT_USER_ID
+    owner_user_id = principal.user_id
     disconnect = cancel_on_disconnect in {"1", "true", "True"}
     location = f"/threads/{thread_id}/runs/{run_id}"
     try:
@@ -130,6 +133,7 @@ async def cancel_run(
     thread_id: uuid.UUID,
     run_id: uuid.UUID,
     request: Request,
+    principal: Annotated[AuthenticatedPrincipal, Depends(get_principal)],
     wait: Annotated[str | None, Query()] = None,
     action: Annotated[str, Query()] = "interrupt",
 ) -> dict[str, object]:
@@ -143,7 +147,7 @@ async def cancel_run(
     if wait not in _ACCEPTED_WAIT:
         raise HTTPException(status_code=422, detail="wait must be 0 or 1")
     manager = request.app.state.run_manager
-    owner_user_id = request.app.state.settings.DEVELOPMENT_USER_ID
+    owner_user_id = principal.user_id
     try:
         return await manager.cancel_run(
             thread_id,

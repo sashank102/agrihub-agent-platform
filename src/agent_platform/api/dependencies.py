@@ -1,6 +1,5 @@
 """FastAPI dependencies for application-owned resources."""
 
-import uuid
 from collections.abc import AsyncIterator
 
 from fastapi import HTTPException, Request
@@ -8,6 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent_platform.core.settings import Settings
 from agent_platform.db.session import session_scope
+from agent_platform.services.accounts import (
+    AUTH_FAILURE_DETAIL,
+    AccountService,
+    AuthenticatedPrincipal,
+    AuthenticationFailure,
+)
 
 _READY_ATTRIBUTES = (
     "session_factory",
@@ -37,6 +42,52 @@ def get_runtime_settings(request: Request) -> Settings:
     return request.app.state.settings
 
 
-def get_development_principal(request: Request) -> uuid.UUID:
-    """Return the fixed local principal; authentication arrives in Plan 06."""
-    return request.app.state.settings.DEVELOPMENT_USER_ID
+async def get_principal(request: Request) -> AuthenticatedPrincipal:
+    """Authenticate the caller or, only in local development, use the seeded user."""
+    settings = request.app.state.settings
+    if settings.AUTH_MODE == "disabled":
+        if settings.ENVIRONMENT == "production":
+            raise HTTPException(status_code=503, detail="service is not ready")
+        principal = AuthenticatedPrincipal(
+            user_id=settings.DEVELOPMENT_USER_ID,
+            api_key_id=None,
+            auth_mode="disabled",
+        )
+        request.state.principal = principal
+        return principal
+
+    accounts: AccountService = request.app.state.accounts
+    presented = _presented_credential(request)
+    if isinstance(presented, AuthenticationFailure):
+        await accounts.record_auth_failure(presented.reason)
+        raise _unauthorized()
+    result = await accounts.authenticate(presented)
+    if isinstance(result, AuthenticationFailure):
+        raise _unauthorized()
+    request.state.principal = result
+    return result
+
+
+def _presented_credential(request: Request) -> str | AuthenticationFailure:
+    header_key = request.headers.get("x-api-key")
+    authorization = request.headers.get("authorization")
+    bearer: str | None = None
+    if authorization is not None:
+        scheme, _, remainder = authorization.partition(" ")
+        if scheme.lower() != "bearer" or not remainder.strip():
+            return AuthenticationFailure("malformed")
+        bearer = remainder.strip()
+    if header_key is not None and bearer is not None and header_key != bearer:
+        return AuthenticationFailure("conflicting")
+    token = header_key or bearer
+    if token is None or not token.strip():
+        return AuthenticationFailure("missing")
+    return token.strip()
+
+
+def _unauthorized() -> HTTPException:
+    return HTTPException(
+        status_code=401,
+        detail=AUTH_FAILURE_DETAIL,
+        headers={"WWW-Authenticate": "Bearer"},
+    )

@@ -1082,7 +1082,8 @@ def test_slow_subscriber_queue_stays_bounded(
                     await entry.task
                 except asyncio.CancelledError:
                     pass
-            assert subscriber.dropped
+            assert subscriber.lagging
+            assert entry.task.cancelled() is False
             assert subscriber.queue.qsize() <= 1
             async with session_scope(app.state.session_factory) as session:
                 rows = await RunEventRepository(session).replay(

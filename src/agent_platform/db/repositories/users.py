@@ -58,6 +58,15 @@ class UserRepository:
         await self.session.flush()
         return user
 
+    async def enable(self, user: User) -> User:
+        """Re-enable a disabled user. Deleted users stay deleted."""
+        if user.status == "deleted":
+            raise ValueError("deleted users cannot be enabled")
+        user.status = "active"
+        user.disabled_at = None
+        await self.session.flush()
+        return user
+
     async def disable(self, user: User) -> User:
         """Soft-disable a user while preserving owned data."""
         user.status = "disabled"

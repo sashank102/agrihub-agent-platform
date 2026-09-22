@@ -12,9 +12,10 @@ LangGraph, PostgreSQL, and a Next.js chat interface.
 - `compose.yaml` — local PostgreSQL service
 
 The existing `start-dev.sh` path still uses the in-memory LangGraph development
-server on port `2024`. An unauthenticated local-development FastAPI server on
-port `8000` runs durable runs in one process, with PostgreSQL event replay.
-The frontend remains on the original path until Plan 07.
+server on port `2024`. The FastAPI server on port `8000` runs durable runs in
+one process, with PostgreSQL event replay. Local development can set
+`AUTH_MODE=disabled`; production requires API keys. The frontend remains on
+the original path until Plan 07.
 
 ## Local setup
 

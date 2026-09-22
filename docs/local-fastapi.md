@@ -1,12 +1,12 @@
 # Local FastAPI chat server
 
-The FastAPI server is an unauthenticated local-development bridge for the
-current LangGraph SDK chat flow. It always acts as the explicitly configured
-development user and never accepts owner identity from request metadata. Do
-not bind it to a public interface or present it as production-safe.
-`ENVIRONMENT=production` prevents this server from starting; Plan 06 adds
-authentication and disabled/deleted-user enforcement. The frontend stays on
-`langgraph dev` until Plan 07.
+The FastAPI server is the single-process chat protocol API. With
+`AUTH_MODE=disabled` it is an explicit local-development bridge and every
+request acts as `DEVELOPMENT_USER_ID`. That mode cannot start when
+`ENVIRONMENT=production`. Production requires `AUTH_MODE=api_key` and an
+`API_KEY_PEPPER` of at least 16 characters. There is no default pepper.
+The server never accepts owner identity from request metadata. The frontend
+stays on `langgraph dev` until Plan 07.
 
 ## Start
 
@@ -22,12 +22,35 @@ The API listens on <http://127.0.0.1:8000> by default. The existing
 `./start-dev.sh` and `langgraph dev` path remains unchanged on port `2024`.
 
 Exactly one Uvicorn worker is required. `start-api.sh` starts Uvicorn with
-`workers=1` and refuses `WEB_CONCURRENCY` greater than 1. Run tasks and SSE
-subscriber queues live in that process. PostgreSQL stores the ordered event
-log, so a client can disconnect and reconnect to this same process. A second
-worker or a new process after a crash cannot see those queues. Startup marks
-leftover `pending` and `running` rows `interrupted` and does not resume model
-or tool calls. Retry or resume is an explicit new run from the last checkpoint.
+`workers=1` and refuses `WEB_CONCURRENCY` greater than 1. Lifespan also holds
+PostgreSQL advisory lock classid `1095914057` and objid `1214579201` on a
+dedicated connection, so `uvicorn agent_platform.main:app --workers 2` cannot
+start a second RunManager. Run tasks and SSE subscriber queues live in that
+process. PostgreSQL stores the ordered event log, so a client can disconnect
+and reconnect to this same process. A second worker or a new process after a
+crash cannot see those queues. Startup marks leftover `pending` and `running`
+rows `interrupted` unless a terminal write is still queued for reconciliation,
+and does not resume model or tool calls. Retry or resume is an explicit new
+run from the last checkpoint.
+
+## API keys
+
+Create users and keys with the admin CLI. The plaintext key is printed once
+on stdout. Do not pass it as an argument.
+
+```bash
+python -m agent_platform create-user --display-name "Service"
+python -m agent_platform issue-key --user-id "<user-id>" --label "local"
+python -m agent_platform list-keys --user-id "<user-id>"
+python -m agent_platform revoke-key --key-id "<key-id>"
+python -m agent_platform rotate-key --key-id "<key-id>"
+```
+
+Keys look like `aghub_` plus a short lookup prefix plus at least 256 bits of
+secret. Only the prefix and an HMAC-SHA256 of the secret are stored. Send the
+key as `X-Api-Key` or `Authorization: Bearer`. Missing, invalid, revoked,
+expired, conflicting, and inactive-user credentials all return 401 with
+`invalid authentication credentials`.
 
 ## Supported protocol subset
 
