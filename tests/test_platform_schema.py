@@ -380,11 +380,54 @@ def test_repository_flows_ownership_idempotency_and_replay(
                         active=False,
                     )
                 ) is not None
-                await threads.update(thread, title="Updated title", touch=True)
-                await artifacts.update(
-                    artifact,
-                    metadata={"retention": "short"},
-                )
+                assert (
+                    await threads.update_for_owner(
+                        thread.id,
+                        owner.id,
+                        title="Updated title",
+                        touch=True,
+                    )
+                ) is not None
+                assert (
+                    await threads.update_for_owner(
+                        thread.id,
+                        stranger.id,
+                        title="Foreign update",
+                    )
+                ) is None
+                assert (
+                    await artifacts.update_for_owner(
+                        artifact.id,
+                        owner.id,
+                        metadata={"retention": "short"},
+                    )
+                ) is not None
+                assert (
+                    await artifacts.update_for_owner(
+                        artifact.id,
+                        stranger.id,
+                        text_content="foreign",
+                    )
+                ) is None
+                assert (
+                    await runs.set_status_for_owner(
+                        run.id,
+                        stranger.id,
+                        "completed",
+                    )
+                ) is None
+                assert (
+                    await runs.request_cancellation_for_owner(
+                        run.id,
+                        stranger.id,
+                    )
+                ) is None
+                assert (
+                    await runs.set_status_internal(
+                        run.id,
+                        "running",
+                    )
+                ) is not None
 
                 owner_id = owner.id
                 stranger_id = stranger.id

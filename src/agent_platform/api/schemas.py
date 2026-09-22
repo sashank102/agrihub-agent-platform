@@ -66,6 +66,15 @@ class ThreadResponse(BaseModel):
     interrupts: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
 
 
+class ThreadHistoryRequest(BaseModel):
+    """History query used by ``threads.getHistory``."""
+
+    limit: int = Field(default=10, ge=1, le=1000)
+    before: dict[str, Any] | None = None
+    metadata: dict[str, Any] | None = None
+    checkpoint: dict[str, Any] | None = None
+
+
 class RunStreamRequest(BaseModel):
     """Run fields sent by current LangGraph SDK clients."""
 

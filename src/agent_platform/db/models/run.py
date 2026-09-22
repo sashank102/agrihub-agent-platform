@@ -28,6 +28,8 @@ RUN_STATUSES = (
     "cancelled",
     "interrupted",
 )
+ACTIVE_RUN_STATUSES = ("pending", "running")
+TERMINAL_RUN_STATUSES = ("completed", "failed", "cancelled", "interrupted")
 
 
 class Run(CreatedAtMixin, Base):

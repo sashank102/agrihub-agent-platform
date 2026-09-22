@@ -1,21 +1,62 @@
 """Thread ownership, metadata, and checkpoint state orchestration."""
 
+import asyncio
 import uuid
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
-from fastapi.encoders import jsonable_encoder
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 
 from agent_platform.api.schemas import (
-    CheckpointResponse,
     ThreadCreateRequest,
+    ThreadHistoryRequest,
     ThreadResponse,
     ThreadSearchRequest,
     ThreadStateResponse,
 )
 from agent_platform.db.models import Thread
-from agent_platform.db.repositories import ThreadRepository
+from agent_platform.db.repositories import RunRepository, ThreadRepository
+from agent_platform.db.session import AsyncSessionFactory, session_scope
+from agent_platform.services.errors import CheckpointReferenceError
 from agent_platform.services.graph_registry import GraphRegistry, RegisteredGraph
+from agent_platform.services.snapshots import (
+    agent_protocol_status,
+    interrupt_map,
+    snapshot_interrupted,
+    snapshot_to_state,
+)
+
+CHECKPOINT_READ_CONCURRENCY = 4
+SEARCH_STATUS_SCAN_LIMIT = 1000
+PROTOCOL_STATUSES = {"idle", "busy", "interrupted", "error"}
+PLATFORM_STATUSES = {"active", "archived"}
+
+
+@dataclass(frozen=True, slots=True)
+class ThreadView:
+    """Detached thread fields safe to use after the session closes."""
+
+    id: uuid.UUID
+    agent_id: uuid.UUID
+    created_at: datetime
+    updated_at: datetime
+    last_activity_at: datetime
+    metadata: dict[str, Any]
+    platform_status: str
+
+    @classmethod
+    def from_thread(cls, thread: Thread) -> "ThreadView":
+        """Copy loaded columns before the transaction ends."""
+        return cls(
+            id=thread.id,
+            agent_id=thread.agent_id,
+            created_at=thread.created_at,
+            updated_at=thread.updated_at,
+            last_activity_at=thread.last_activity_at,
+            metadata=dict(thread.metadata_ or {}),
+            platform_status=thread.status,
+        )
 
 
 class ThreadService:
@@ -23,17 +64,16 @@ class ThreadService:
 
     def __init__(
         self,
-        session: AsyncSession,
+        session_factory: AsyncSessionFactory,
         registry: GraphRegistry,
         owner_user_id: uuid.UUID,
         default_graph_id: str,
     ) -> None:
-        """Bind one request-scoped service."""
-        self.session = session
+        """Bind application-scoped dependencies for one principal."""
+        self.session_factory = session_factory
         self.registry = registry
         self.owner_user_id = owner_user_id
         self.default_graph_id = default_graph_id
-        self.repository = ThreadRepository(session)
 
     async def create(self, request: ThreadCreateRequest) -> ThreadResponse:
         """Create one owner-scoped thread with trusted graph identity tags."""
@@ -43,89 +83,210 @@ class ThreadService:
             or self.default_graph_id
         )
         registered = self._resolve_graph(identifier)
+        view = await self._insert_thread(request, registered)
+        signal = await self._signal_for(view.id)
+        snapshot = await self._read_snapshot(view)
+        return self._response(view, signal, snapshot)
 
-        if request.thread_id is not None:
-            existing = await self.repository.get_for_owner(
-                request.thread_id,
+    async def search(self, request: ThreadSearchRequest) -> list[ThreadResponse]:
+        """Search the caller's threads and hydrate checkpoints with a bounded fan-out."""
+        if request.status == "deleted":
+            return []
+        protocol_status = (
+            request.status if request.status in PROTOCOL_STATUSES else None
+        )
+        platform_status = (
+            request.status if request.status in PLATFORM_STATUSES else None
+        )
+        if request.status is not None and protocol_status is None and platform_status is None:
+            return []
+
+        fetch_limit: int | None
+        fetch_offset: int
+        if protocol_status is None:
+            fetch_limit = request.limit
+            fetch_offset = request.offset
+        else:
+            fetch_limit = SEARCH_STATUS_SCAN_LIMIT
+            fetch_offset = 0
+
+        async with session_scope(self.session_factory) as session:
+            threads = await ThreadRepository(session).list_for_owner(
+                self.owner_user_id,
+                status=platform_status,
+                metadata=request.metadata,
+                ids=request.ids,
+                limit=fetch_limit,
+                offset=fetch_offset,
+            )
+            views = [ThreadView.from_thread(thread) for thread in threads]
+            signals = await RunRepository(session).summarize_for_owner(
+                [view.id for view in views],
                 self.owner_user_id,
             )
-            if existing is not None:
-                if request.if_exists in {"do_nothing", "return"}:
-                    return await self.to_response(existing)
-                raise FileExistsError("thread already exists")
 
+        responses = await self._hydrate(views, signals)
+        if protocol_status is None:
+            return responses
+        matched = [
+            response
+            for response in responses
+            if response.status == protocol_status
+        ]
+        return matched[request.offset : request.offset + request.limit]
+
+    async def get(self, thread_id: uuid.UUID) -> ThreadResponse:
+        """Get an accessible thread or fail without leaking its existence."""
+        view = await self._require_thread(thread_id)
+        signal = await self._signal_for(view.id)
+        snapshot = await self._read_snapshot(view)
+        return self._response(view, signal, snapshot)
+
+    async def get_state(self, thread_id: uuid.UUID) -> ThreadStateResponse:
+        """Load current values after the metadata transaction has closed."""
+        view = await self._require_thread(thread_id)
+        snapshot = await self._read_snapshot(view)
+        return snapshot_to_state(view.id, snapshot)
+
+    async def history(
+        self,
+        thread_id: uuid.UUID,
+        request: ThreadHistoryRequest,
+    ) -> list[ThreadStateResponse]:
+        """Return checkpoint history in the shape used by the LangGraph SDK."""
+        view = await self._require_thread(thread_id)
+        registered = self._resolve_graph(str(view.agent_id))
+        config = self._history_config(view.id, request.checkpoint)
+        before = self._history_config(view.id, request.before) if request.before else None
+        states: list[ThreadStateResponse] = []
+        async for snapshot in registered.graph.aget_state_history(
+            config,
+            filter=request.metadata,
+            before=before,
+            limit=request.limit,
+        ):
+            states.append(snapshot_to_state(view.id, snapshot))
+        return states
+
+    async def _insert_thread(
+        self,
+        request: ThreadCreateRequest,
+        registered: RegisteredGraph,
+    ) -> ThreadView:
         metadata = {
             **request.metadata,
             "graph_id": registered.graph_id,
             "assistant_id": str(registered.agent_id),
         }
-        thread = await self.repository.create(
-            thread_id=request.thread_id,
-            owner_user_id=self.owner_user_id,
-            agent_id=registered.agent_id,
-            metadata=metadata,
-        )
-        return await self.to_response(thread)
+        async with session_scope(self.session_factory) as session:
+            repository = ThreadRepository(session)
+            if request.thread_id is not None:
+                existing = await repository.get_by_id(request.thread_id)
+                if existing is not None:
+                    return await self._existing_thread(existing, request, repository)
 
-    async def search(
+            duplicate = False
+            thread: Thread | None = None
+            try:
+                async with session.begin_nested():
+                    thread = await repository.create(
+                        thread_id=request.thread_id,
+                        owner_user_id=self.owner_user_id,
+                        agent_id=registered.agent_id,
+                        metadata=metadata,
+                    )
+            except IntegrityError as exc:
+                if not _is_unique_violation(exc):
+                    raise
+                duplicate = True
+            if duplicate:
+                if request.thread_id is None:
+                    raise FileExistsError("thread already exists")
+                existing = await repository.get_by_id(request.thread_id)
+                if existing is None:
+                    raise FileExistsError("thread already exists")
+                return await self._existing_thread(existing, request, repository)
+            if thread is None:
+                raise RuntimeError("thread insert did not return a row")
+            return ThreadView.from_thread(thread)
+
+    async def _existing_thread(
         self,
-        request: ThreadSearchRequest,
-    ) -> list[ThreadResponse]:
-        """Search only the development principal's threads."""
-        platform_status = None
-        if request.status is not None:
-            if request.status == "idle":
-                platform_status = "active"
-            elif request.status not in {"busy", "interrupted", "error"}:
-                platform_status = request.status
-            else:
-                return []
-        threads = await self.repository.list_for_owner(
-            self.owner_user_id,
-            status=platform_status,
-            metadata=request.metadata,
-            ids=request.ids,
-            limit=request.limit,
-            offset=request.offset,
-        )
-        return [await self.to_response(thread) for thread in threads]
-
-    async def get(self, thread_id: uuid.UUID) -> ThreadResponse:
-        """Get an accessible thread or fail without leaking its existence."""
-        thread = await self._get_model(thread_id)
-        return await self.to_response(thread)
-
-    async def get_state(self, thread_id: uuid.UUID) -> ThreadStateResponse:
-        """Load current values from the thread's LangGraph checkpoint."""
-        thread = await self._get_model(thread_id)
-        registered = self._resolve_graph(str(thread.agent_id))
-        snapshot = await registered.graph.aget_state(self._config(thread.id))
-        return self._state_response(thread.id, snapshot)
-
-    async def to_response(self, thread: Thread) -> ThreadResponse:
-        """Convert relational metadata plus latest checkpoint values."""
-        registered = self._resolve_graph(str(thread.agent_id))
-        snapshot = await registered.graph.aget_state(self._config(thread.id))
-        values = jsonable_encoder(getattr(snapshot, "values", {}) or {})
-        return ThreadResponse(
-            thread_id=str(thread.id),
-            created_at=thread.created_at,
-            updated_at=thread.updated_at,
-            state_updated_at=thread.last_activity_at,
-            metadata=dict(thread.metadata_),
-            status="idle",
-            values=values,
-            interrupts={},
-        )
-
-    async def _get_model(self, thread_id: uuid.UUID) -> Thread:
-        thread = await self.repository.get_for_owner(
-            thread_id,
-            self.owner_user_id,
-        )
-        if thread is None or thread.status == "deleted":
+        existing: Thread,
+        request: ThreadCreateRequest,
+        repository: ThreadRepository,
+    ) -> ThreadView:
+        if existing.owner_user_id != self.owner_user_id or existing.status == "deleted":
             raise LookupError("thread not found")
-        return thread
+        if request.if_exists in {"do_nothing", "return"}:
+            return ThreadView.from_thread(existing)
+        raise FileExistsError("thread already exists")
+
+    async def _require_thread(self, thread_id: uuid.UUID) -> ThreadView:
+        async with session_scope(self.session_factory) as session:
+            thread = await ThreadRepository(session).get_for_owner(
+                thread_id,
+                self.owner_user_id,
+            )
+            if thread is None or thread.status == "deleted":
+                raise LookupError("thread not found")
+            return ThreadView.from_thread(thread)
+
+    async def _signal_for(self, thread_id: uuid.UUID) -> tuple[bool, str | None]:
+        async with session_scope(self.session_factory) as session:
+            signals = await RunRepository(session).summarize_for_owner(
+                [thread_id],
+                self.owner_user_id,
+            )
+        return signals.get(thread_id, (False, None))
+
+    async def _hydrate(
+        self,
+        views: list[ThreadView],
+        signals: dict[uuid.UUID, tuple[bool, str | None]],
+    ) -> list[ThreadResponse]:
+        semaphore = asyncio.Semaphore(CHECKPOINT_READ_CONCURRENCY)
+
+        async def hydrate(view: ThreadView) -> ThreadResponse:
+            async with semaphore:
+                snapshot = await self._read_snapshot(view)
+            return self._response(view, signals.get(view.id, (False, None)), snapshot)
+
+        return list(await asyncio.gather(*(hydrate(view) for view in views)))
+
+    async def _read_snapshot(self, view: ThreadView) -> Any:
+        registered = self._resolve_graph(str(view.agent_id))
+        return await registered.graph.aget_state(
+            {
+                "configurable": {
+                    "thread_id": str(view.id),
+                    "checkpoint_ns": "",
+                }
+            }
+        )
+
+    def _response(
+        self,
+        view: ThreadView,
+        signal: tuple[bool, str | None],
+        snapshot: Any,
+    ) -> ThreadResponse:
+        state = snapshot_to_state(view.id, snapshot)
+        has_active, latest_status = signal
+        return ThreadResponse(
+            thread_id=str(view.id),
+            created_at=view.created_at,
+            updated_at=view.updated_at,
+            state_updated_at=view.last_activity_at,
+            metadata=view.metadata,
+            status=agent_protocol_status(
+                has_active_run=has_active,
+                latest_run_status=latest_status,
+                checkpoint_interrupted=snapshot_interrupted(snapshot),
+            ),
+            values=state.values,
+            interrupts=interrupt_map(snapshot),
+        )
 
     def _resolve_graph(self, identifier: str) -> RegisteredGraph:
         registered = self.registry.resolve(identifier)
@@ -134,43 +295,37 @@ class ThreadService:
         return registered
 
     @staticmethod
-    def _config(thread_id: uuid.UUID) -> dict[str, dict[str, str]]:
-        return {
-            "configurable": {
-                "thread_id": str(thread_id),
-                "checkpoint_ns": "",
+    def _history_config(
+        thread_id: uuid.UUID,
+        checkpoint: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        if checkpoint is None:
+            return {
+                "configurable": {
+                    "thread_id": str(thread_id),
+                    "checkpoint_ns": "",
+                }
             }
+        source = checkpoint.get("configurable") if "configurable" in checkpoint else checkpoint
+        source = dict(source or {})
+        supplied_thread = source.get("thread_id")
+        if supplied_thread is not None and str(supplied_thread) != str(thread_id):
+            raise CheckpointReferenceError(
+                "checkpoint belongs to a different thread",
+                422,
+            )
+        configurable: dict[str, Any] = {
+            "thread_id": str(thread_id),
+            "checkpoint_ns": str(source.get("checkpoint_ns") or ""),
         }
+        if source.get("checkpoint_id"):
+            configurable["checkpoint_id"] = str(source["checkpoint_id"])
+        if isinstance(source.get("checkpoint_map"), dict):
+            configurable["checkpoint_map"] = source["checkpoint_map"]
+        return {"configurable": configurable}
 
-    @classmethod
-    def _state_response(
-        cls,
-        thread_id: uuid.UUID,
-        snapshot: Any,
-    ) -> ThreadStateResponse:
-        config = getattr(snapshot, "config", None) or cls._config(thread_id)
-        parent = getattr(snapshot, "parent_config", None)
-        return ThreadStateResponse(
-            values=jsonable_encoder(getattr(snapshot, "values", {}) or {}),
-            next=list(getattr(snapshot, "next", ()) or ()),
-            checkpoint=cls._checkpoint(thread_id, config),
-            metadata=jsonable_encoder(getattr(snapshot, "metadata", None)),
-            created_at=getattr(snapshot, "created_at", None),
-            parent_checkpoint=(
-                cls._checkpoint(thread_id, parent) if parent is not None else None
-            ),
-            tasks=[],
-        )
 
-    @staticmethod
-    def _checkpoint(
-        thread_id: uuid.UUID,
-        config: dict[str, Any],
-    ) -> CheckpointResponse:
-        configurable = config.get("configurable", {})
-        return CheckpointResponse(
-            thread_id=str(configurable.get("thread_id") or thread_id),
-            checkpoint_ns=str(configurable.get("checkpoint_ns") or ""),
-            checkpoint_id=configurable.get("checkpoint_id"),
-            checkpoint_map=configurable.get("checkpoint_map"),
-        )
+def _is_unique_violation(exc: IntegrityError) -> bool:
+    original = getattr(exc, "orig", None)
+    sqlstate = getattr(original, "sqlstate", None) or getattr(original, "pgcode", None)
+    return sqlstate == "23505"

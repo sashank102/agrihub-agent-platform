@@ -74,7 +74,10 @@ class ThreadRepository:
         offset: int = 0,
     ) -> list[Thread]:
         """List an owner's threads by most recent activity."""
-        statement = select(Thread).where(Thread.owner_user_id == owner_user_id)
+        statement = select(Thread).where(
+            Thread.owner_user_id == owner_user_id,
+            Thread.status != "deleted",
+        )
         if status is not None:
             statement = statement.where(Thread.status == status)
         if metadata:
@@ -88,16 +91,32 @@ class ThreadRepository:
             statement = statement.limit(limit)
         return list((await self.session.scalars(statement)).all())
 
-    async def update(
+    async def get_by_id(self, thread_id: uuid.UUID) -> Thread | None:
+        """Return a thread by primary key without applying an owner scope."""
+        return await self.session.get(Thread, thread_id)
+
+    async def update_for_owner(
         self,
-        thread: Thread,
+        thread_id: uuid.UUID,
+        owner_user_id: uuid.UUID,
         *,
         title: str | None = None,
         status: str | None = None,
         metadata: dict[str, Any] | None = None,
         touch: bool = False,
-    ) -> Thread:
-        """Update mutable thread fields and flush."""
+    ) -> Thread | None:
+        """Update one owned, non-deleted thread loaded inside this session."""
+        thread = await self.session.scalar(
+            select(Thread)
+            .where(
+                Thread.id == thread_id,
+                Thread.owner_user_id == owner_user_id,
+                Thread.status != "deleted",
+            )
+            .with_for_update()
+        )
+        if thread is None:
+            return None
         if title is not None:
             thread.title = title
         if status is not None:
@@ -106,5 +125,20 @@ class ThreadRepository:
             thread.metadata_ = metadata
         if touch:
             thread.last_activity_at = datetime.now(UTC)
+        await self.session.flush()
+        return thread
+
+    async def update_status_internal(
+        self,
+        thread_id: uuid.UUID,
+        status: str,
+    ) -> Thread | None:
+        """Update thread lifecycle from a trusted system path."""
+        thread = await self.session.scalar(
+            select(Thread).where(Thread.id == thread_id).with_for_update()
+        )
+        if thread is None:
+            return None
+        thread.status = status
         await self.session.flush()
         return thread

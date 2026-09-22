@@ -30,3 +30,10 @@ class GraphRegistry:
     def resolve(self, identifier: str) -> RegisteredGraph | None:
         """Return a graph by graph ID or assistant UUID."""
         return self._graphs.get(identifier)
+
+    def graph_id_for_agent(self, agent_id: uuid.UUID) -> str | None:
+        """Return the public graph id registered for an agent UUID."""
+        for entry in self._graphs.values():
+            if entry.agent_id == agent_id:
+                return entry.graph_id
+        return None

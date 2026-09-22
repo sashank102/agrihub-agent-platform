@@ -3,11 +3,27 @@
 import uuid
 from collections.abc import AsyncIterator
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent_platform.core.settings import Settings
 from agent_platform.db.session import session_scope
+
+_READY_ATTRIBUTES = (
+    "session_factory",
+    "graph_registry",
+    "persistence",
+    "run_manager",
+)
+
+
+async def require_ready(request: Request) -> None:
+    """Reject business routes until lifespan initialization has finished."""
+    state = request.app.state
+    if not getattr(state, "ready", False):
+        raise HTTPException(status_code=503, detail="service is not ready")
+    if any(getattr(state, name, None) is None for name in _READY_ATTRIBUTES):
+        raise HTTPException(status_code=503, detail="service is not ready")
 
 
 async def get_session(request: Request) -> AsyncIterator[AsyncSession]:

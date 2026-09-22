@@ -1,15 +1,15 @@
-"""Local-development FastAPI server for the minimal chat protocol."""
+"""Local-development FastAPI server for the single-process chat protocol."""
 
-import asyncio
+import os
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
+from agent_platform.api.request_limit import RequestSizeLimitMiddleware
 from agent_platform.api.routes import health, info, runs, threads
 from agent_platform.core.settings import Settings, get_settings
 from agent_platform.db.models import Agent
@@ -21,6 +21,7 @@ from agent_platform.db.session import (
 )
 from agent_platform.persistence import open_postgres_persistence
 from agent_platform.services.graph_registry import GraphRegistry
+from agent_platform.services.run_manager import RunManager
 from open_deep_research.deep_researcher import build_graph
 
 GraphBuilder = Callable[..., Any]
@@ -92,6 +93,7 @@ def create_app(
         application.state.engine = engine
         application.state.session_factory = create_session_factory(engine)
         application.state.ready = False
+        application.state.run_manager = None
         try:
             async with persistence_factory(
                 active_settings.DATABASE_URI
@@ -109,11 +111,22 @@ def create_app(
                     graph,
                 )
                 application.state.graph_registry = registry
-                application.state.run_semaphore = asyncio.Semaphore(
-                    active_settings.API_MAX_CONCURRENT_RUNS
+                manager = RunManager(
+                    application.state.session_factory,
+                    registry,
+                    max_concurrent_runs=active_settings.API_MAX_CONCURRENT_RUNS,
+                    subscriber_queue_size=(
+                        active_settings.API_STREAM_SUBSCRIBER_QUEUE_SIZE
+                    ),
                 )
+                await manager.reconcile_orphaned_runs(reason="process_restart")
+                application.state.run_manager = manager
                 application.state.ready = True
-                yield
+                try:
+                    yield
+                finally:
+                    application.state.ready = False
+                    await manager.shutdown()
         finally:
             application.state.ready = False
             await engine.dispose()
@@ -126,6 +139,10 @@ def create_app(
     application.state.settings = active_settings
     application.state.ready = False
     application.add_middleware(
+        RequestSizeLimitMiddleware,
+        max_bytes=active_settings.API_MAX_REQUEST_BODY_BYTES,
+    )
+    application.add_middleware(
         CORSMiddleware,
         allow_origins=active_settings.API_ALLOWED_ORIGINS,
         allow_credentials=False,
@@ -133,30 +150,6 @@ def create_app(
         allow_headers=["*"],
         expose_headers=["Content-Location", "X-Run-ID", "X-Thread-ID"],
     )
-
-    @application.middleware("http")
-    async def limit_request_body(request: Request, call_next: Callable[..., Any]):
-        content_length = request.headers.get("content-length")
-        maximum = active_settings.API_MAX_REQUEST_BODY_BYTES
-        if content_length is not None:
-            try:
-                if int(content_length) > maximum:
-                    return JSONResponse(
-                        {"detail": "request body too large"},
-                        status_code=413,
-                    )
-            except ValueError:
-                return JSONResponse(
-                    {"detail": "invalid content-length"},
-                    status_code=400,
-                )
-        body = await request.body()
-        if len(body) > maximum:
-            return JSONResponse(
-                {"detail": "request body too large"},
-                status_code=413,
-            )
-        return await call_next(request)
 
     application.include_router(health.router)
     application.include_router(info.router)
@@ -166,9 +159,19 @@ def create_app(
 
 
 def run() -> None:
-    """Run the development API with the configured address and one worker."""
+    """Run the development API on one Uvicorn worker.
+
+    Run tasks and subscriber queues live in this process. ``WEB_CONCURRENCY``
+    greater than 1 is rejected because another worker would not share them.
+    """
     import uvicorn
 
+    workers = os.environ.get("WEB_CONCURRENCY")
+    if workers not in {None, "", "1"}:
+        raise RuntimeError(
+            "AgriHub requires exactly one Uvicorn worker; "
+            f"WEB_CONCURRENCY={workers} is not supported"
+        )
     settings = get_settings()
     uvicorn.run(
         "agent_platform.main:app",

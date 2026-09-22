@@ -34,6 +34,7 @@ class ArtifactRepository:
             select(Thread.id).where(
                 Thread.id == thread_id,
                 Thread.owner_user_id == owner_user_id,
+                Thread.status != "deleted",
             )
         )
         if owned_thread_id is None:
@@ -97,16 +98,30 @@ class ArtifactRepository:
         )
         return list((await self.session.scalars(statement)).all())
 
-    async def update(
+    async def update_for_owner(
         self,
-        artifact: Artifact,
+        artifact_id: uuid.UUID,
+        owner_user_id: uuid.UUID,
         *,
         text_content: str | None = None,
         content: dict[str, Any] | None = None,
         external_uri: str | None = None,
         metadata: dict[str, Any] | None = None,
-    ) -> Artifact:
-        """Update mutable artifact content and flush."""
+    ) -> Artifact | None:
+        """Update an artifact only when its thread is still owned and active."""
+        artifact = await self.session.scalar(
+            select(Artifact)
+            .join(Thread, Thread.id == Artifact.thread_id)
+            .where(
+                Artifact.id == artifact_id,
+                Artifact.owner_user_id == owner_user_id,
+                Thread.owner_user_id == owner_user_id,
+                Thread.status != "deleted",
+            )
+            .with_for_update(of=Artifact)
+        )
+        if artifact is None:
+            return None
         if text_content is not None:
             artifact.text_content = text_content
         if content is not None:

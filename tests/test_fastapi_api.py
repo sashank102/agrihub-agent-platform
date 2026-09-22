@@ -151,20 +151,19 @@ def test_lifespan_health_ready_info_and_cors(postgres_database_uri: str):
                 info = (await client.get("/info")).json()
                 assert info["authentication"] is False
                 assert info["capabilities"]["stream_modes"] == ["values"]
-                assert info["capabilities"]["resumable_streams"] is False
+                assert info["capabilities"]["resumable_streams"] is True
+                assert info["capabilities"]["workers"] == 1
 
-                preflight = await client.options(
-                    "/threads",
-                    headers={
-                        "Origin": "http://127.0.0.1:3000",
-                        "Access-Control-Request-Method": "POST",
-                    },
-                )
-                assert preflight.status_code == 200
-                assert (
-                    preflight.headers["access-control-allow-origin"]
-                    == "http://127.0.0.1:3000"
-                )
+                for origin in ("http://127.0.0.1:3000", "http://localhost:3000"):
+                    preflight = await client.options(
+                        "/threads",
+                        headers={
+                            "Origin": origin,
+                            "Access-Control-Request-Method": "POST",
+                        },
+                    )
+                    assert preflight.status_code == 200
+                    assert preflight.headers["access-control-allow-origin"] == origin
         assert app.state.ready is False
 
     asyncio.run(scenario())

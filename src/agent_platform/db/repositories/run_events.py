@@ -31,12 +31,40 @@ class RunEventRepository:
             .where(
                 Run.id == run_id,
                 Thread.owner_user_id == owner_user_id,
+                Thread.status != "deleted",
             )
             .with_for_update(of=Run)
         )
         if locked_run_id is None:
             raise LookupError("run is not owned by the user")
+        return await self._append_locked(
+            run_id,
+            event_type,
+            payload,
+        )
 
+    async def append_for_system(
+        self,
+        *,
+        run_id: uuid.UUID,
+        event_type: str,
+        payload: dict[str, Any] | None = None,
+    ) -> RunEvent:
+        """Append an event from startup or shutdown without an owner scope."""
+        locked_run_id = await self.session.scalar(
+            select(Run.id).where(Run.id == run_id).with_for_update()
+        )
+        if locked_run_id is None:
+            raise LookupError("run not found")
+        return await self._append_locked(run_id, event_type, payload)
+
+    async def _append_locked(
+        self,
+        run_id: uuid.UUID,
+        event_type: str,
+        payload: dict[str, Any] | None,
+    ) -> RunEvent:
+        """Allocate the next sequence for a run already locked in this transaction."""
         current_sequence = await self.session.scalar(
             select(func.max(RunEvent.sequence)).where(RunEvent.run_id == run_id)
         )

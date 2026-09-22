@@ -10,6 +10,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 DEVELOPMENT_DATABASE_URI = (
     "postgresql://agent_platform:agent_platform@localhost:5432/agent_platform"
 )
+LOCAL_CORS_ORIGINS = (
+    "http://127.0.0.1:3000",
+    "http://localhost:3000",
+)
 
 
 class Settings(BaseSettings):
@@ -20,10 +24,11 @@ class Settings(BaseSettings):
     API_HOST: str = "127.0.0.1"
     API_PORT: int = Field(default=8000, ge=1, le=65535)
     API_ALLOWED_ORIGINS: list[str] = Field(
-        default_factory=lambda: ["http://127.0.0.1:3000"]
+        default_factory=lambda: list(LOCAL_CORS_ORIGINS)
     )
     API_MAX_REQUEST_BODY_BYTES: int = Field(default=1_048_576, ge=1)
     API_MAX_CONCURRENT_RUNS: int = Field(default=4, ge=1)
+    API_STREAM_SUBSCRIBER_QUEUE_SIZE: int = Field(default=16, ge=1)
     DEVELOPMENT_USER_ID: uuid.UUID = uuid.UUID(
         "00000000-0000-4000-8000-000000000001"
     )
