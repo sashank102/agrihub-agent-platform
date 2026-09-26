@@ -1,13 +1,18 @@
 # Local FastAPI chat server
 
-The FastAPI server is the single-process chat protocol API. With
-`AUTH_MODE=disabled` it is an explicit local-development bridge and every
-request acts as `DEVELOPMENT_USER_ID`. That mode cannot start when
-`ENVIRONMENT=production`. Production requires `AUTH_MODE=api_key` and an
-`API_KEY_PEPPER` of at least 16 characters. There is no default pepper.
-The server never accepts owner identity from request metadata. Normal
-development uses this FastAPI server. The frontend does not connect to the
-old in-memory LangGraph development server.
+The FastAPI server is the single-process chat protocol API. Normal local
+development uses `AUTH_MODE=api_key`. Set `API_KEY_PEPPER` to at least 16
+characters and issue a key with the admin CLI before opening the UI. There
+is no default pepper. `./start-dev.sh` uses that mode when `AUTH_MODE` is
+unset and exits if the pepper is missing.
+
+`AUTH_MODE=disabled` remains an explicit local bridge: every request acts as
+`DEVELOPMENT_USER_ID`, `/info` reports `auth_mode: disabled`, and the UI
+shows a development-mode gate instead of treating an arbitrary string as a
+key. That mode cannot start when `ENVIRONMENT=production`. Production
+requires `AUTH_MODE=api_key` and a pepper. The server never accepts owner
+identity from request metadata. The frontend does not connect to the old
+in-memory LangGraph development server.
 
 ## Start
 

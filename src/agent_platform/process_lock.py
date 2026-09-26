@@ -8,6 +8,9 @@ import psycopg
 # classid is the ASCII prefix AGRI; objid is HUB plus one.
 API_PROCESS_ADVISORY_LOCK_CLASSID = 1_095_914_057
 API_PROCESS_ADVISORY_LOCK_OBJID = 1_214_579_201
+# Separate from the process lock so migrations can finish before the worker starts.
+MIGRATION_ADVISORY_LOCK_CLASSID = 1_095_914_057
+MIGRATION_ADVISORY_LOCK_OBJID = 1_214_579_202
 
 
 class ApiProcessLock:

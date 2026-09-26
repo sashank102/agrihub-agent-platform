@@ -22,6 +22,7 @@ async def main() -> None:
         user_b = await accounts.create_user(display_name="Browser B")
         deleted = await accounts.create_user(display_name="Browser Deleted")
         active = await accounts.issue_api_key(user_id=user_a.id, label="browser-a")
+        ephemeral = await accounts.issue_api_key(user_id=user_a.id, label="ephemeral")
         other = await accounts.issue_api_key(user_id=user_b.id, label="browser-b")
         revoked = await accounts.issue_api_key(user_id=user_a.id, label="revoked")
         expired = await accounts.issue_api_key(
@@ -35,6 +36,8 @@ async def main() -> None:
         payload = {
             "user_a": active.plaintext,
             "user_b": other.plaintext,
+            "ephemeral": ephemeral.plaintext,
+            "ephemeral_id": str(ephemeral.id),
             "revoked": revoked.plaintext,
             "expired": expired.plaintext,
             "deleted": removed.plaintext,

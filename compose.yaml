@@ -3,10 +3,10 @@ services:
     image: postgres:17.6-alpine3.22
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-agent_platform}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agent_platform}
       POSTGRES_USER: ${POSTGRES_USER:-agent_platform}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agent_platform}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     healthcheck:
       test:
         - CMD-SHELL
@@ -17,6 +17,68 @@ services:
       start_period: 5s
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
+  api:
+    image: agrihub-api
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      AUTH_MODE: ${AUTH_MODE:-api_key}
+      DATABASE_URI: postgresql://${POSTGRES_USER:-agent_platform}:${POSTGRES_PASSWORD:-agent_platform}@postgres:5432/${POSTGRES_DB:-agent_platform}
+      API_KEY_PEPPER: ${API_KEY_PEPPER:-}
+      API_KEY_PREFIX: ${API_KEY_PREFIX:-aghub}
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      API_ALLOWED_ORIGINS: ${API_ALLOWED_ORIGINS:-["http://127.0.0.1:3000","http://localhost:3000"]}
+      WEB_CONCURRENCY: "1"
+      GRAPH_FIXTURE: ${GRAPH_FIXTURE:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    restart: "no"
+
+  frontend:
+    image: agrihub-frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://127.0.0.1:8000}
+        NEXT_PUBLIC_ASSISTANT_ID: ${NEXT_PUBLIC_ASSISTANT_ID:-agrihub}
+    environment:
+      API_INTERNAL_URL: http://api:8000
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://127.0.0.1:8000}
+      NEXT_PUBLIC_ASSISTANT_ID: ${NEXT_PUBLIC_ASSISTANT_ID:-agrihub}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: "no"
 
 volumes:
   postgres_data:

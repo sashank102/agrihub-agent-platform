@@ -17,7 +17,12 @@ from agent_platform.services.api_key_crypto import (
     secrets_match,
 )
 from agent_platform.services.graph_registry import GraphRegistry
-from agent_platform.services.redaction import redact_text, sanitize
+from agent_platform.services.redaction import (
+    is_sensitive_key,
+    redact_text,
+    sanitize,
+    strip_client_secrets,
+)
 from agent_platform.services.run_manager import RunManager, decide_orphan_outcome
 from agent_platform.services.tenant_context import tenant_user_id
 from agent_platform.services.tenant_store import TenantStore
@@ -74,6 +79,68 @@ def test_redaction_removes_keys_and_payloads():
     assert cleaned["cache_read_input_tokens"] == 3
     assert cleaned["cache_creation_input_tokens"] == 1
     assert cleaned["note"] == "ok"
+
+
+def test_redaction_allowlist_preserves_telemetry_and_denies_credentials():
+    payload = {
+        "openai_api_key": "sk-secretvalue1234",
+        "anthropic_api_key": "sk-ant-secret",
+        "groq_api_key": "gsk-secret",
+        "aws_secret_access_key": "wJalrXUtnFEMI",
+        "aws_access_key_id": "AKIASECRETKEY",
+        "private_key": "private-key-material",
+        "session_token": "session-secret",
+        "refresh_token": "refresh-secret",
+        "db_password": "hunter2",
+        "client_secret": "client-secret",
+        "cookie": "sid=abc12345",
+        "authorization": "Bearer aghub_abcd1234SECRETVALUE",
+        "input_tokens": 3,
+        "output_tokens": 4,
+        "total_tokens": 7,
+        "cache_read_input_tokens": 1,
+        "cache_creation_input_tokens": 2,
+        "cache_write_tokens": 8,
+        "content_type": "application/pdf",
+        "request_id": "req-1",
+        "thread_id": "thread-1",
+    }
+    cleaned = sanitize(payload)
+    for key in (
+        "openai_api_key",
+        "anthropic_api_key",
+        "groq_api_key",
+        "aws_secret_access_key",
+        "aws_access_key_id",
+        "private_key",
+        "session_token",
+        "refresh_token",
+        "db_password",
+        "client_secret",
+        "cookie",
+        "authorization",
+    ):
+        assert cleaned[key] == "[redacted]"
+        assert is_sensitive_key(key)
+    assert cleaned["input_tokens"] == 3
+    assert cleaned["output_tokens"] == 4
+    assert cleaned["total_tokens"] == 7
+    assert cleaned["cache_read_input_tokens"] == 1
+    assert cleaned["cache_creation_input_tokens"] == 2
+    assert cleaned["cache_write_tokens"] == 8
+    assert cleaned["content_type"] == "application/pdf"
+    assert cleaned["request_id"] == "req-1"
+    assert cleaned["thread_id"] == "thread-1"
+    assert not is_sensitive_key("input_tokens")
+    assert not is_sensitive_key("content_type")
+    stripped = strip_client_secrets(payload)
+    assert "openai_api_key" not in stripped
+    assert "cookie" not in stripped
+    assert stripped["input_tokens"] == 3
+    assert stripped["content_type"] == "application/pdf"
+    redacted = redact_text("Cookie: sid=abc12345 Authorization: Bearer sk-secretvalue1234")
+    assert "abc12345" not in redacted
+    assert "secretvalue1234" not in redacted
 
 
 def test_production_settings_reject_disabled_auth():

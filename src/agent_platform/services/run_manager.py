@@ -21,6 +21,7 @@ from typing import Any
 
 from fastapi.encoders import jsonable_encoder
 from langgraph.errors import GraphInterrupt, NodeCancelledError
+from sqlalchemy.exc import IntegrityError
 
 from agent_platform.api.schemas import RunStreamRequest
 from agent_platform.db.models.run import TERMINAL_RUN_STATUSES, Run
@@ -300,7 +301,11 @@ class RunManager:
                     owner_user_id,
                 )
                 if active is not None and await self._genuinely_active(active):
-                    raise ActiveRunConflict()
+                    raise await self._active_run_conflict(
+                        thread_id,
+                        owner_user_id,
+                        active,
+                    )
                 if active is not None:
                     active_to_settle = active
             if active_to_settle is not None:
@@ -313,8 +318,12 @@ class RunManager:
                         thread_id,
                         owner_user_id,
                     )
-                if active is not None and await self._genuinely_active(active):
-                    raise ActiveRunConflict()
+                if active is not None:
+                    raise await self._active_run_conflict(
+                        thread_id,
+                        owner_user_id,
+                        active,
+                    )
             run_id = uuid.uuid4()
             await self._reserve_run(
                 run_id,
@@ -334,12 +343,12 @@ class RunManager:
                         thread_id,
                         owner_user_id,
                     )
-                    if (
-                        active is not None
-                        and active != run_id
-                        and await self._genuinely_active(active)
-                    ):
-                        raise ActiveRunConflict()
+                    if active is not None and active != run_id:
+                        raise await self._active_run_conflict(
+                            thread_id,
+                            owner_user_id,
+                            active,
+                        )
                     run, _created = await RunRepository(session).create_idempotent(
                         owner_user_id=owner_user_id,
                         thread_id=thread_id,
@@ -356,6 +365,15 @@ class RunManager:
                         metadata={"thread_id": str(thread_id)},
                     )
                     view = RunView.from_run(run)
+            except IntegrityError as exc:
+                await self._discard_reservation(run_id)
+                if not _is_active_run_uniqueness(exc):
+                    raise
+                raise await self._active_run_conflict(
+                    thread_id,
+                    owner_user_id,
+                    None,
+                ) from exc
             except Exception:
                 await self._discard_reservation(run_id)
                 raise
@@ -453,6 +471,10 @@ class RunManager:
                 resource_id=str(run_id),
                 metadata={"thread_id": str(thread_id)},
             )
+        async with self._lock:
+            entry = self._runs.get(run_id)
+            if entry is not None:
+                entry.cancel_requested = True
         task = await self._task_for_cancel(run_id)
         if task is not None:
             task.cancel()
@@ -482,7 +504,12 @@ class RunManager:
                     await self._mark_cancelled(run_id, owner_user_id, thread_id)
 
         refreshed = await self._visible_run(thread_id, run_id, owner_user_id)
-        return self._cancel_payload(refreshed or current)
+        if refreshed is None:
+            raise LookupError("run not found")
+        payload = self._cancel_payload(refreshed)
+        if refreshed.status in {"pending", "running"}:
+            payload["cancellation"] = "accepted"
+        return payload
 
     async def persist_and_publish(
         self,
@@ -1078,6 +1105,46 @@ class RunManager:
                 return True
             return not entry.task.done()
 
+    async def _active_run_conflict(
+        self,
+        thread_id: uuid.UUID,
+        owner_user_id: uuid.UUID,
+        run_id: uuid.UUID | None,
+    ) -> ActiveRunConflict:
+        """Build a conflict that reports durable status without a second active row."""
+        status: str | None = None
+        intent_name: str | None = None
+        graph_succeeded: bool | None = None
+        visible_id = run_id
+        async with session_scope(self.session_factory) as session:
+            repository = RunRepository(session)
+            if visible_id is None:
+                visible_id = await repository.find_active_id(thread_id, owner_user_id)
+            if visible_id is not None:
+                run = await repository.get_for_owner(visible_id, owner_user_id)
+                if run is not None:
+                    status = run.status
+                    intent = _intent_from_details(dict(run.error_details or {}))
+                    if intent is not None:
+                        intent_name = str(intent.get("intent") or "") or None
+                        if "graph_succeeded" in intent:
+                            graph_succeeded = bool(intent.get("graph_succeeded"))
+        logger.warning(
+            "admission rejected thread_id=%s active_run_id=%s status=%s "
+            "reconciliation_intent=%s graph_succeeded=%s",
+            thread_id,
+            visible_id,
+            status,
+            intent_name,
+            graph_succeeded,
+        )
+        return ActiveRunConflict(
+            run_id=None if visible_id is None else str(visible_id),
+            status=status,
+            reconciliation_intent=intent_name,
+            graph_succeeded=graph_succeeded,
+        )
+
     async def _reserve_run(
         self,
         run_id: uuid.UUID,
@@ -1131,6 +1198,7 @@ class RunManager:
         *,
         fallback_reason: str,
     ) -> bool:
+        intent: dict[str, Any] | None
         if record.cancellation_requested:
             intent = {
                 "intent": "cancelled",
@@ -1146,6 +1214,15 @@ class RunManager:
             checkpoint=checkpoint,
             intent=intent,
             fallback_reason=fallback_reason,
+        )
+        await self._record_reconciliation_intent(
+            run_id=record.id,
+            owner_user_id=record.owner_user_id,
+            status=decision.status,
+            event_type=decision.event_type,
+            event_payload=decision.event_payload,
+            graph_succeeded=decision.graph_succeeded,
+            reason=decision.error_code or decision.status,
         )
         try:
             async with session_scope(self.session_factory) as session:
@@ -1479,7 +1556,9 @@ class RunManager:
 
     async def _task_for_cancel(self, run_id: uuid.UUID) -> asyncio.Task | None:
         """Wait until a registered task exists. Do not treat a placeholder as absent."""
-        for _ in range(200):
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + 5.0
+        while True:
             async with self._lock:
                 entry = self._runs.get(run_id)
                 if entry is None:
@@ -1489,8 +1568,9 @@ class RunManager:
                     if entry.task.done():
                         return None
                     return entry.task
-            await asyncio.sleep(0)
-        return None
+            if loop.time() >= deadline:
+                return None
+            await asyncio.sleep(0.01)
 
     async def _release_stale_active(
         self,
@@ -2052,6 +2132,11 @@ def decide_orphan_outcome(
         },
         graph_succeeded=False,
     )
+
+
+def _is_active_run_uniqueness(exc: IntegrityError) -> bool:
+    """Return whether PostgreSQL rejected a second pending or running row."""
+    return "uq_runs_one_active_per_thread" in str(getattr(exc, "orig", exc))
 
 
 def _intent_from_details(details: dict[str, Any] | None) -> dict[str, Any] | None:

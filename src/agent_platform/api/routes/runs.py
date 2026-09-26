@@ -32,7 +32,16 @@ def _run_http_error(exc: Exception) -> HTTPException:
         detail = str(exc) if str(exc) in {"thread not found", "run not found"} else "thread not found"
         return HTTPException(status_code=404, detail=detail)
     if isinstance(exc, ActiveRunConflict):
-        return HTTPException(status_code=409, detail=str(exc))
+        conflict: dict[str, object] = {"message": str(exc)}
+        if exc.run_id is not None:
+            conflict["run_id"] = exc.run_id
+        if exc.status is not None:
+            conflict["status"] = exc.status
+        if exc.reconciliation_intent is not None:
+            conflict["reconciliation_intent"] = exc.reconciliation_intent
+        if exc.graph_succeeded is not None:
+            conflict["graph_succeeded"] = exc.graph_succeeded
+        return HTTPException(status_code=409, detail=conflict)
     if isinstance(exc, ThreadNotInterrupted):
         return HTTPException(status_code=409, detail=str(exc))
     if isinstance(exc, UnsupportedRunOption):

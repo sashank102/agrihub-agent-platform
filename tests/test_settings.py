@@ -11,6 +11,7 @@ from agent_platform.core.settings import (
 def test_development_settings_have_safe_local_database_default():
     settings = Settings(
         ENVIRONMENT="development",
+        AUTH_MODE="disabled",
         DATABASE_URI=None,
         _env_file=None,
     )
@@ -30,6 +31,7 @@ def test_production_settings_require_explicit_database_uri():
 def test_local_cors_defaults_include_both_loopback_origins():
     settings = Settings(
         ENVIRONMENT="development",
+        AUTH_MODE="disabled",
         DATABASE_URI=None,
         _env_file=None,
     )
@@ -57,10 +59,16 @@ def test_production_requires_api_key_mode_and_pepper():
         )
 
 
-def test_development_defaults_to_explicit_disabled_auth():
-    settings = Settings(ENVIRONMENT="development", DATABASE_URI=None, _env_file=None)
-    assert settings.AUTH_MODE == "disabled"
-    assert settings.API_KEY_PEPPER is None
+def test_development_defaults_to_api_key_and_requires_a_pepper():
+    with pytest.raises(ValidationError, match="API_KEY_PEPPER is required"):
+        Settings(ENVIRONMENT="development", DATABASE_URI=None, _env_file=None)
+    settings = Settings(
+        ENVIRONMENT="development",
+        DATABASE_URI=None,
+        API_KEY_PEPPER="local-development-pepper",
+        _env_file=None,
+    )
+    assert settings.AUTH_MODE == "api_key"
 
 
 def test_pepper_is_excluded_from_settings_repr():

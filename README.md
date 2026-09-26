@@ -9,23 +9,44 @@ LangGraph, PostgreSQL, and a Next.js chat interface.
 - `src/agent_platform/` — PostgreSQL persistence, platform metadata models, and repositories
 - `alembic/` — migrations for the platform-owned PostgreSQL schema
 - `frontend/` — Next.js chat client using the LangGraph SDK
-- `compose.yaml` — local PostgreSQL service
+- `compose.yaml` — PostgreSQL, one FastAPI process, and the Next.js UI
+- `Dockerfile` and `frontend/Dockerfile` — production images
+- `.github/workflows/ci.yml` — lint, tests, browser checks, and image build
 
-`start-dev.sh` starts PostgreSQL-backed FastAPI on port `8000` and the Next.js
-UI on port `3000`. The UI sends a platform API key as `X-Api-Key`. Local
-development can set `AUTH_MODE=disabled`; production requires API keys. The
-in-memory LangGraph development server is not part of normal development.
+`./start-dev.sh` starts PostgreSQL-backed FastAPI on port `8000` and the
+Next.js UI on port `3000`. It defaults to `AUTH_MODE=api_key` and requires
+`API_KEY_PEPPER` plus a key from the admin CLI. `AUTH_MODE=disabled` is an
+explicit development bridge; the UI labels it as such, and production rejects
+it. `./start-prod.sh` builds the Compose stack. There is no Redis and only
+one API worker. The in-memory LangGraph development server is not part of
+normal development.
 
 ## Local setup
 
 ```bash
 ./setup.sh
 cp .env.example .env
-# Add the selected model-provider key to .env
+# Add API_KEY_PEPPER (16+ characters) and the selected model-provider key.
+docker compose up -d postgres
+./.tools/bin/uv run alembic upgrade head
+./.tools/bin/uv run python -m agent_platform create-user --display-name "Local"
+./.tools/bin/uv run python -m agent_platform issue-key --user-id "<user-id>" --label local
 ./start-dev.sh
 ```
 
-Open <http://127.0.0.1:3000>.
+Open <http://127.0.0.1:3000> and paste the printed API key.
+
+Production on one machine:
+
+```bash
+# Export POSTGRES_PASSWORD and API_KEY_PEPPER first. Do not commit them.
+./start-prod.sh
+```
+
+Operations: [backup and restore](docs/operations/backup-restore.md),
+[migrations](docs/operations/migrations.md),
+[API keys](docs/operations/api-keys.md),
+[reconciliation](docs/operations/reconciliation.md).
 
 For free-tier Groq testing:
 

@@ -27,8 +27,10 @@ dist-ssr
 .langgraph_api
 .env
 .next/
+*.tsbuildinfo
 next-env.d.ts
 e2e/.keys.json
+e2e/.restart
 playwright-report/
 test-results/
 blob-report/

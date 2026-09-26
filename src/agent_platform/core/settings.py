@@ -79,9 +79,9 @@ class Settings(BaseSettings):
                 )
             self.DATABASE_URI = DEVELOPMENT_DATABASE_URI
         if self.AUTH_MODE is None:
-            self.AUTH_MODE = (
-                "api_key" if self.ENVIRONMENT == "production" else "disabled"
-            )
+            # Tests opt into disabled auth by leaving the mode unset. Local
+            # development and production both require an issued API key.
+            self.AUTH_MODE = "disabled" if self.ENVIRONMENT == "test" else "api_key"
         if self.AUTH_MODE == "disabled" and self.ENVIRONMENT == "production":
             raise ValueError(
                 "AUTH_MODE=disabled is not allowed when ENVIRONMENT=production"

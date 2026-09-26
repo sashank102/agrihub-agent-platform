@@ -96,6 +96,7 @@ PLATFORM_INDEXES = {
     "uq_agents_global_graph_version",
     "uq_agents_owner_graph_version",
     "uq_api_keys_key_prefix",
+    "uq_runs_one_active_per_thread",
     "uq_runs_thread_idempotency_key",
     "uq_users_email",
 }

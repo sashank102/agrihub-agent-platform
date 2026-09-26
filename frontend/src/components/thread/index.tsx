@@ -98,6 +98,7 @@ export function Thread() {
   const [input, setInput] = useState("");
   const {
     contentBlocks,
+    uploadError,
     setContentBlocks,
     handleFileUpload,
     dropRef,
@@ -472,6 +473,15 @@ export function Thread() {
                         className="field-sizing-content resize-none border-none bg-transparent p-3.5 pb-0 shadow-none ring-0 outline-none focus:ring-0 focus:outline-none"
                       />
 
+                      {uploadError ? (
+                        <p
+                          role="alert"
+                          data-testid="composer-error"
+                          className="px-3.5 text-sm text-rose-600"
+                        >
+                          {uploadError}
+                        </p>
+                      ) : null}
                       <div className="flex items-center gap-6 p-2 pt-4">
                         <div>
                           <div className="flex items-center space-x-2">

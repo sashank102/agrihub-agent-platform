@@ -1,4 +1,9 @@
 node_modules
 .next
-.git
+playwright-report
+test-results
+blob-report
+e2e/.keys.json
 .env
+.env.local
+*.log

@@ -108,6 +108,30 @@ async def _run(service: AccountService, args: argparse.Namespace) -> dict[str, A
             expires_at_set=explicit,
         )
         return _issued(issued)
+    if command == "retain":
+        from agent_platform.services.retention import apply_retention
+
+        if not any(
+            (
+                args.run_events_days,
+                args.terminal_runs_days,
+                args.audit_days,
+                args.expired_keys_days,
+                args.checkpoint_days,
+            )
+        ):
+            raise ValueError("retain requires at least one retention window")
+        report = await apply_retention(
+            service.session_factory,
+            apply=args.apply,
+            run_events_days=args.run_events_days,
+            terminal_runs_days=args.terminal_runs_days,
+            audit_days=args.audit_days,
+            expired_keys_days=args.expired_keys_days,
+            checkpoint_days=args.checkpoint_days,
+            include_security_audit=args.include_security_audit,
+        )
+        return report.as_dict()
     if command == "update-global-agent":
         agent_id = await service.update_global_agent(
             uuid.UUID(args.agent_id),
@@ -174,6 +198,25 @@ def _parser() -> argparse.ArgumentParser:
     )
     rotate.add_argument("--key-id", required=True)
     rotate.add_argument("--expires-in-days", type=int)
+
+    retain = commands.add_parser(
+        "retain",
+        help=(
+            "Count or delete old run events, terminal runs, audit rows, "
+            "expired keys, and checkpoint families. Dry-run unless --apply."
+        ),
+    )
+    retain.add_argument(
+        "--apply",
+        action="store_true",
+        help="Delete matching rows. Omit to print counts only.",
+    )
+    retain.add_argument("--run-events-days", type=int)
+    retain.add_argument("--terminal-runs-days", type=int)
+    retain.add_argument("--audit-days", type=int)
+    retain.add_argument("--expired-keys-days", type=int)
+    retain.add_argument("--checkpoint-days", type=int)
+    retain.add_argument("--include-security-audit", action="store_true")
 
     update = commands.add_parser("update-global-agent")
     update.add_argument("--agent-id", required=True)

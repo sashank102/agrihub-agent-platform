@@ -82,20 +82,31 @@ export function isUnauthorizedStatus(error: unknown): boolean {
 
 type ApiKeyContextValue = {
   apiKey: string;
+  devMode: boolean;
   ready: boolean;
   notice: AuthNotice;
+  sessionGeneration: number;
   connection: "unknown" | "ok" | "unreachable" | "server";
   setConnection: (value: "unknown" | "ok" | "unreachable" | "server") => void;
   saveApiKey: (key: string, remember: boolean) => void;
   clearApiKey: (notice?: AuthNotice) => void;
+  enterDevelopmentMode: () => void;
 };
+
+let tenantReset: () => void = () => undefined;
+
+export function registerTenantReset(reset: () => void): void {
+  tenantReset = reset;
+}
 
 const ApiKeyContext = createContext<ApiKeyContextValue | undefined>(undefined);
 
 export function ApiKeyProvider({ children }: { children: ReactNode }) {
   const [apiKey, setApiKey] = useState("");
+  const [devMode, setDevMode] = useState(false);
   const [ready, setReady] = useState(false);
   const [notice, setNotice] = useState<AuthNotice>(null);
+  const [sessionGeneration, setSessionGeneration] = useState(0);
   const [connection, setConnection] = useState<
     "unknown" | "ok" | "unreachable" | "server"
   >("unknown");
@@ -105,31 +116,69 @@ export function ApiKeyProvider({ children }: { children: ReactNode }) {
     setReady(true);
   }, []);
 
-  const saveApiKey = useCallback((key: string, remember: boolean) => {
-    writeStoredKey(key, remember);
-    setApiKey(key);
-    setNotice(null);
-    setConnection("unknown");
+  const forgetTenant = useCallback(() => {
+    tenantReset();
+    setSessionGeneration((current) => current + 1);
   }, []);
 
-  const clearApiKey = useCallback((nextNotice: AuthNotice = null) => {
+  const saveApiKey = useCallback(
+    (key: string, remember: boolean) => {
+      forgetTenant();
+      eraseStoredKey();
+      setDevMode(false);
+      writeStoredKey(key, remember);
+      setApiKey(key);
+      setNotice(null);
+      setConnection("unknown");
+    },
+    [forgetTenant],
+  );
+
+  const clearApiKey = useCallback(
+    (nextNotice: AuthNotice = null) => {
+      forgetTenant();
+      eraseStoredKey();
+      setDevMode(false);
+      setApiKey("");
+      setNotice(nextNotice);
+      setConnection("unknown");
+    },
+    [forgetTenant],
+  );
+
+  const enterDevelopmentMode = useCallback(() => {
+    forgetTenant();
     eraseStoredKey();
     setApiKey("");
-    setNotice(nextNotice);
-    setConnection("unknown");
-  }, []);
+    setDevMode(true);
+    setNotice(null);
+    setConnection("ok");
+  }, [forgetTenant]);
 
   const value = useMemo(
     () => ({
       apiKey,
+      devMode,
       ready,
       notice,
+      sessionGeneration,
       connection,
       setConnection,
       saveApiKey,
       clearApiKey,
+      enterDevelopmentMode,
     }),
-    [apiKey, ready, notice, connection, saveApiKey, clearApiKey],
+    [
+      apiKey,
+      devMode,
+      ready,
+      notice,
+      sessionGeneration,
+      connection,
+      saveApiKey,
+      clearApiKey,
+      enterDevelopmentMode,
+    ],
   );
 
   return (

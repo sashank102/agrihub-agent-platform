@@ -1,7 +1,11 @@
-import { useState, useRef, useEffect, ChangeEvent } from "react";
+import { useState, useRef, useEffect, useCallback, ChangeEvent } from "react";
 import { toast } from "sonner";
 import { ContentBlock } from "@langchain/core/messages";
-import { fileToContentBlock } from "@/lib/multimodal-utils";
+import {
+  fileFitsRequestBudget,
+  fileToContentBlock,
+  uploadBudgetMessage,
+} from "@/lib/multimodal-utils";
 
 export const SUPPORTED_FILE_TYPES = [
   "image/jpeg",
@@ -20,6 +24,7 @@ export function useFileUpload({
 }: UseFileUploadOptions = {}) {
   const [contentBlocks, setContentBlocks] =
     useState<ContentBlock.Multimodal.Data[]>(initialBlocks);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const dropRef = useRef<HTMLDivElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const dragCounter = useRef(0);
@@ -43,6 +48,36 @@ export function useFileUpload({
     }
     return false;
   };
+
+  const acceptFiles = useCallback(async (files: File[]) => {
+    const encoded = contentBlocks.reduce(
+      (total, block) => total + (block.data?.length ?? 0),
+      0,
+    );
+    const accepted: File[] = [];
+    const rejected: string[] = [];
+    let used = encoded;
+    for (const file of files) {
+      if (!fileFitsRequestBudget(file.size, used)) {
+        rejected.push(file.name);
+        continue;
+      }
+      used += Math.ceil(file.size / 3) * 4;
+      accepted.push(file);
+    }
+    if (rejected.length > 0) {
+      const message = uploadBudgetMessage(rejected.join(", "));
+      setUploadError(message);
+      toast.error(message);
+    } else {
+      setUploadError(null);
+    }
+    if (accepted.length === 0) {
+      return;
+    }
+    const newBlocks = await Promise.all(accepted.map(fileToContentBlock));
+    setContentBlocks((prev) => [...prev, ...newBlocks]);
+  }, [contentBlocks]);
 
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -72,10 +107,7 @@ export function useFileUpload({
       );
     }
 
-    const newBlocks = uniqueFiles.length
-      ? await Promise.all(uniqueFiles.map(fileToContentBlock))
-      : [];
-    setContentBlocks((prev) => [...prev, ...newBlocks]);
+    await acceptFiles(uniqueFiles);
     e.target.value = "";
   };
 
@@ -132,10 +164,7 @@ export function useFileUpload({
         );
       }
 
-      const newBlocks = uniqueFiles.length
-        ? await Promise.all(uniqueFiles.map(fileToContentBlock))
-        : [];
-      setContentBlocks((prev) => [...prev, ...newBlocks]);
+      await acceptFiles(uniqueFiles);
     };
     const handleWindowDragEnd = (e: DragEvent) => {
       dragCounter.current = 0;
@@ -185,7 +214,7 @@ export function useFileUpload({
       window.removeEventListener("dragover", handleWindowDragOver);
       dragCounter.current = 0;
     };
-  }, [contentBlocks]);
+  }, [acceptFiles, contentBlocks]);
 
   const removeBlock = (idx: number) => {
     setContentBlocks((prev) => prev.filter((_, i) => i !== idx));
@@ -252,13 +281,13 @@ export function useFileUpload({
       );
     }
     if (uniqueFiles.length > 0) {
-      const newBlocks = await Promise.all(uniqueFiles.map(fileToContentBlock));
-      setContentBlocks((prev) => [...prev, ...newBlocks]);
+      await acceptFiles(uniqueFiles);
     }
   };
 
   return {
     contentBlocks,
+    uploadError,
     setContentBlocks,
     handleFileUpload,
     dropRef,

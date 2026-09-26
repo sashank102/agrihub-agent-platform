@@ -1,6 +1,31 @@
 import { ContentBlock } from "@langchain/core/messages";
 import { toast } from "sonner";
 
+/** The server rejects HTTP bodies above this size. It stays authoritative. */
+export const SERVER_BODY_LIMIT_BYTES = 10_485_760;
+const JSON_OVERHEAD_BYTES = 256 * 1024;
+
+export function base64EncodedBytes(byteLength: number): number {
+  if (byteLength <= 0) {
+    return 0;
+  }
+  return Math.ceil(byteLength / 3) * 4;
+}
+
+export function fileFitsRequestBudget(
+  byteLength: number,
+  alreadyEncodedBytes = 0,
+): boolean {
+  return (
+    alreadyEncodedBytes + base64EncodedBytes(byteLength) <=
+    SERVER_BODY_LIMIT_BYTES - JSON_OVERHEAD_BYTES
+  );
+}
+
+export function uploadBudgetMessage(fileName: string): string {
+  return `${fileName} is too large to send. Base64 encoding would exceed the server's 10 MB request limit.`;
+}
+
 // Returns a Promise of a typed multimodal block for images or PDFs
 export async function fileToContentBlock(
   file: File,
@@ -18,6 +43,12 @@ export async function fileToContentBlock(
       `Unsupported file type: ${file.type}. Supported types are: ${supportedFileTypes.join(", ")}`,
     );
     return Promise.reject(new Error(`Unsupported file type: ${file.type}`));
+  }
+
+  if (!fileFitsRequestBudget(file.size)) {
+    const message = uploadBudgetMessage(file.name);
+    toast.error(message);
+    return Promise.reject(new Error(message));
   }
 
   const data = await fileToBase64(file);

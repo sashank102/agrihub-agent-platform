@@ -35,8 +35,7 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [
     {
-      command:
-        "./.tools/bin/uv run python -c 'from agent_platform.main import run; run()'",
+      command: "bash frontend/e2e/api-server.sh",
       cwd: root,
       env: apiEnv,
       url: "http://127.0.0.1:8000/ready",
@@ -44,7 +43,7 @@ export default defineConfig({
       timeout: 120_000,
     },
     {
-      command: "pnpm exec next dev --port 3000",
+      command: "./node_modules/.bin/next dev --port 3000",
       cwd: frontendDir,
       env: {
         ...process.env,

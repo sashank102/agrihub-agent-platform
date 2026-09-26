@@ -1,13 +1,14 @@
 """Alembic environment for platform-owned PostgreSQL objects."""
 
 import asyncio
+import os
 from logging.config import fileConfig
 
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from agent_platform.core.settings import get_settings
+from agent_platform.core.settings import Settings
 from agent_platform.db import models  # noqa: F401
 from agent_platform.db.base import PLATFORM_SCHEMA, Base
 from agent_platform.db.session import sqlalchemy_database_uri
@@ -35,8 +36,16 @@ def include_name(
 
 
 def configure_url() -> str:
-    """Load the same validated database URI used by the application."""
-    uri = get_settings().DATABASE_URI
+    """Load the same validated database URI used by the application.
+
+    Migrations do not authenticate requests. When no pepper is configured,
+    construct settings with disabled auth so a schema upgrade does not require
+    an API key. The API process still defaults to ``AUTH_MODE=api_key``.
+    """
+    overrides: dict[str, str] = {}
+    if not os.environ.get("API_KEY_PEPPER") and not os.environ.get("AUTH_MODE"):
+        overrides["AUTH_MODE"] = "disabled"
+    uri = Settings(**overrides).DATABASE_URI
     if uri is None:
         raise RuntimeError("DATABASE_URI is not configured")
     return sqlalchemy_database_uri(uri)

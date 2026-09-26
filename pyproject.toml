@@ -84,6 +84,15 @@ lint.ignore = [
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+follow_imports = "skip"
+check_untyped_defs = false
+warn_unused_ignores = false
+disable_error_code = ["import-untyped", "no-any-return", "misc"]
+exclude = ["src/open_deep_research", "tests"]
+
 [tool.pytest.ini_options]
 markers = [
     "postgres: requires TEST_DATABASE_URI and a live PostgreSQL server",

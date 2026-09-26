@@ -110,8 +110,8 @@ const StreamSession = ({
   );
   const streamValue = useTypedStream({
     apiUrl,
-    apiKey,
-    defaultHeaders: { "X-Api-Key": apiKey },
+    apiKey: apiKey || undefined,
+    defaultHeaders: apiKey ? { "X-Api-Key": apiKey } : undefined,
     assistantId,
     threadId: threadId ?? null,
     fetchStateHistory: true,
@@ -131,6 +131,10 @@ const StreamSession = ({
   });
 
   useEffect(() => {
+    if (!apiKey) {
+      setConnection("ok");
+      return;
+    }
     let cancelled = false;
     probeApi(apiUrl, apiKey).then((result) => {
       if (cancelled) {
@@ -169,11 +173,67 @@ const StreamSession = ({
 };
 
 function ApiKeyGate() {
-  const { notice, connection, saveApiKey } = useApiKey();
+  const { notice, connection, saveApiKey, enterDevelopmentMode } = useApiKey();
   const [remember, setRemember] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [localNotice, setLocalNotice] = useState<string | null>(null);
+  const [authMode, setAuthMode] = useState<"unknown" | "api_key" | "disabled">(
+    "unknown",
+  );
   const message = localNotice ?? noticeCopy(notice, connection);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_URL}/info`)
+      .then(async (response) => {
+        if (!response.ok) {
+          return "unknown" as const;
+        }
+        const body = (await response.json()) as { auth_mode?: string };
+        return body.auth_mode === "disabled" ? "disabled" : "api_key";
+      })
+      .then((mode) => {
+        if (!cancelled) {
+          setAuthMode(mode);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAuthMode("unknown");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (authMode === "disabled") {
+    return (
+      <div className="flex min-h-screen w-full items-center justify-center p-4">
+        <div className="bg-background flex w-full max-w-xl flex-col gap-4 rounded-lg border p-6 shadow-lg">
+          <Sprout className="size-7" />
+          <h1 className="text-xl font-semibold tracking-tight">
+            Development mode
+          </h1>
+          <p className="text-muted-foreground">
+            This server is running with authentication disabled. Requests use
+            the configured development user. API keys are not checked, so an
+            arbitrary string is not a credential.
+          </p>
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              size="lg"
+              onClick={() => enterDevelopmentMode()}
+            >
+              Continue in development mode
+              <ArrowRight className="size-5" />
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen w-full items-center justify-center p-4">
@@ -286,15 +346,16 @@ function ApiKeyGate() {
 export const StreamProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
-  const { apiKey, ready } = useApiKey();
+  const { apiKey, devMode, ready, sessionGeneration } = useApiKey();
   if (!ready) {
     return <div className="min-h-screen" />;
   }
-  if (!apiKey) {
+  if (!apiKey && !devMode) {
     return <ApiKeyGate />;
   }
   return (
     <StreamSession
+      key={sessionGeneration}
       apiKey={apiKey}
       apiUrl={API_URL}
       assistantId={ASSISTANT_ID}

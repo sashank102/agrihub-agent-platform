@@ -53,6 +53,12 @@ class Run(CreatedAtMixin, Base):
             postgresql_where=text("status IN ('pending', 'running')"),
         ),
         Index(
+            "uq_runs_one_active_per_thread",
+            "thread_id",
+            unique=True,
+            postgresql_where=text("status IN ('pending', 'running')"),
+        ),
+        Index(
             "ix_runs_finished_at",
             "finished_at",
             postgresql_where=text("finished_at IS NOT NULL"),

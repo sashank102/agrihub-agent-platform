@@ -147,7 +147,10 @@ def test_lifespan_health_ready_info_and_cors(postgres_database_uri: str):
                 base_url="http://test",
             ) as client:
                 assert (await client.get("/health")).json() == {"status": "ok"}
-                assert (await client.get("/ready")).json() == {"status": "ready"}
+                ready = (await client.get("/ready")).json()
+                assert ready["status"] == "ready"
+                assert ready["process_lock"] is True
+                assert ready["run_manager"] is True
                 info = (await client.get("/info")).json()
                 assert info["authentication"] is False
                 assert info["capabilities"]["stream_modes"] == ["values"]

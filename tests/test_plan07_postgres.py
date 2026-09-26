@@ -251,7 +251,7 @@ def test_missing_terminal_event_is_repaired_once(
     asyncio.run(scenario())
 
 
-def test_failed_reconciliation_does_not_block_a_new_run(
+def test_failed_reconciliation_rejects_a_second_active_run(
     postgres_database_uri: str,
 ):
     async def scenario() -> None:
@@ -291,11 +291,28 @@ def test_failed_reconciliation_does_not_block_a_new_run(
                         f"/threads/{thread['thread_id']}/runs/stream",
                         json=_payload("two"),
                     )
-                assert second.status_code == 200, second.text
-                assert "Echo: two" in second.text
+                    assert second.status_code == 409, second.text
+                    body = second.json()["detail"]
+                    assert body["message"] == "thread already has an active run"
+                    assert body["status"] in {"pending", "running"}
+                    assert body["reconciliation_intent"] == "completed"
+                    assert body["graph_succeeded"] is True
+                async with session_scope(app.state.session_factory) as session:
+                    runs = list((await session.scalars(select(Run))).all())
+                assert len(runs) == 1
+                assert runs[0].status in {"pending", "running"}
+                assert runs[0].error_details["reconciliation"]["intent"] == "completed"
+                assert runs[0].error_details["reconciliation"]["graph_succeeded"] is True
+                recovered = await client.post(
+                    f"/threads/{thread['thread_id']}/runs/stream",
+                    json=_payload("two"),
+                )
+                assert recovered.status_code == 200, recovered.text
+                assert "Echo: two" in recovered.text
             async with session_scope(app.state.session_factory) as session:
                 runs = list((await session.scalars(select(Run))).all())
-            assert len(runs) == 2
+            assert len([run for run in runs if run.status in {"pending", "running"}]) == 0
+            assert {run.status for run in runs} == {"completed"}
 
     asyncio.run(scenario())
 

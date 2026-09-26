@@ -2,6 +2,7 @@
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import TypeAlias
 
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -12,7 +13,7 @@ from sqlalchemy.ext.asyncio import (
 
 from agent_platform.core.settings import get_settings
 
-AsyncSessionFactory = async_sessionmaker[AsyncSession]
+AsyncSessionFactory: TypeAlias = async_sessionmaker[AsyncSession]
 
 
 def sqlalchemy_database_uri(database_uri: str) -> str:

@@ -22,6 +22,7 @@ from agent_platform.db.session import (
     session_scope,
 )
 from agent_platform.fixture_graph import build_fixture_graph
+from agent_platform.logging_config import configure_logging
 from agent_platform.persistence import open_postgres_persistence
 from agent_platform.process_lock import ApiProcessLock
 from agent_platform.services.accounts import AccountService
@@ -87,6 +88,7 @@ def create_app(
     engine_factory: Callable[..., Any] = create_platform_engine,
 ) -> FastAPI:
     """Create the local-only API with injectable lifecycle dependencies."""
+    configure_logging()
     active_settings = settings or get_settings()
     if graph_builder is None:
         graph_builder = (
@@ -200,6 +202,7 @@ def run() -> None:
     """
     import uvicorn
 
+    configure_logging()
     workers = os.environ.get("WEB_CONCURRENCY")
     if workers not in {None, "", "1"}:
         raise RuntimeError(
@@ -215,4 +218,14 @@ def run() -> None:
     )
 
 
-app = create_app()
+_app: FastAPI | None = None
+
+
+def __getattr__(name: str) -> Any:
+    """Build the process-wide app on first use so imports do not read secrets."""
+    global _app
+    if name == "app":
+        if _app is None:
+            _app = create_app()
+        return _app
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

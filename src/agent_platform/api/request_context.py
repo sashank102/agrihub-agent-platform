@@ -6,6 +6,9 @@ from contextvars import ContextVar
 
 _REQUEST_ID = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
+user_id_var: ContextVar[str | None] = ContextVar("user_id", default=None)
+thread_id_var: ContextVar[str | None] = ContextVar("thread_id", default=None)
+run_id_var: ContextVar[str | None] = ContextVar("run_id", default=None)
 
 
 def current_request_id() -> str | None:

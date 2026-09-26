@@ -13,8 +13,19 @@ class UnsupportedRunOption(Exception):
 class ActiveRunConflict(Exception):
     """The thread already has a pending or running run."""
 
-    def __init__(self) -> None:
-        """Explain the multitask rejection."""
+    def __init__(
+        self,
+        *,
+        run_id: str | None = None,
+        status: str | None = None,
+        reconciliation_intent: str | None = None,
+        graph_succeeded: bool | None = None,
+    ) -> None:
+        """Explain the rejection and keep operator-visible reconciliation state."""
+        self.run_id = run_id
+        self.status = status
+        self.reconciliation_intent = reconciliation_intent
+        self.graph_succeeded = graph_succeeded
         super().__init__("thread already has an active run")
 
 

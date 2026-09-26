@@ -1,0 +1,172 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17.6-alpine3.22
+        env:
+          POSTGRES_USER: agent_platform
+          POSTGRES_PASSWORD: agent_platform
+          POSTGRES_DB: agent_platform
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U agent_platform -d agent_platform"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URI: postgresql://agent_platform:agent_platform@localhost:5432/agent_platform
+      DATABASE_URI: postgresql://agent_platform:agent_platform@localhost:5432/agent_platform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install frozen dependencies
+        run: uv sync --frozen --extra dev
+      - name: Ruff
+        run: uv run ruff check .
+      - name: Compile
+        run: uv run python -m compileall -q src tests
+      - name: Type check
+        run: uv run mypy src/agent_platform
+      - name: Unit and PostgreSQL tests
+        run: uv run pytest -q
+      - name: Alembic upgrade, downgrade, upgrade
+        run: |
+          uv run alembic upgrade head
+          uv run alembic downgrade base
+          uv run alembic upgrade head
+      - name: Migration drift
+        run: uv run alembic check
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.5.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install frozen frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: Format
+        working-directory: frontend
+        run: pnpm format:check
+      - name: Lint
+        working-directory: frontend
+        run: pnpm lint
+      - name: Type check
+        working-directory: frontend
+        run: pnpm exec tsc --noEmit --pretty false
+      - name: Production build
+        working-directory: frontend
+        run: pnpm build
+
+  contract:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17.6-alpine3.22
+        env:
+          POSTGRES_USER: agent_platform
+          POSTGRES_PASSWORD: agent_platform
+          POSTGRES_DB: agent_platform
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U agent_platform -d agent_platform"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URI: postgresql://agent_platform:agent_platform@localhost:5432/agent_platform
+      TEST_DATABASE_URI: postgresql://agent_platform:agent_platform@localhost:5432/agent_platform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.5.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install backend
+        run: uv sync --frozen --extra dev
+      - name: SDK contract tests
+        run: uv run pytest -q tests/test_plan06_postgres.py::test_sdk_contract_with_api_key tests/test_run_contract.py
+      - name: Install frontend
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: Install Playwright browser
+        working-directory: frontend
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Playwright
+        working-directory: frontend
+        run: pnpm test:e2e
+
+  containers:
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_PASSWORD: ci-postgres-password-value
+      API_KEY_PEPPER: ci-pepper-value-0123456789
+      POSTGRES_USER: agent_platform
+      POSTGRES_DB: agent_platform
+      ENVIRONMENT: production
+      AUTH_MODE: api_key
+      GRAPH_FIXTURE: "true"
+      NEXT_PUBLIC_API_URL: http://127.0.0.1:8000
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build images from the checkout
+        run: docker compose build
+      - name: Scan image metadata
+        run: |
+          python scripts/scan_secrets.py --image agrihub-api --image agrihub-frontend
+      - name: Start an empty volume
+        run: docker compose up -d --wait
+      - name: Health and readiness
+        run: |
+          curl --fail http://127.0.0.1:8000/health
+          curl --fail http://127.0.0.1:8000/ready
+          curl --fail http://127.0.0.1:3000/api/health
+      - name: Bootstrap a key and send a deterministic chat
+        run: |
+          user=$(docker compose exec -T api python -m agent_platform create-user --display-name CI)
+          user_id=$(python -c 'import json,sys; print(json.load(sys.stdin)["user_id"])' <<<"$user")
+          issued=$(docker compose exec -T api python -m agent_platform issue-key --user-id "$user_id" --label ci)
+          key=$(python -c 'import json,sys; print(json.load(sys.stdin)["api_key"])' <<<"$issued")
+          thread=$(curl --fail --silent -H "X-Api-Key: $key" -H 'Content-Type: application/json' -d '{"metadata":{"graph_id":"agrihub"}}' http://127.0.0.1:8000/threads)
+          thread_id=$(python -c 'import json,sys; print(json.load(sys.stdin)["thread_id"])' <<<"$thread")
+          curl --fail --silent -H "X-Api-Key: $key" -H 'Content-Type: application/json' \
+            -d '{"assistant_id":"agrihub","input":{"messages":[{"type":"human","content":"hello"}]}}' \
+            "http://127.0.0.1:8000/threads/${thread_id}/runs/stream" | tee /tmp/chat.txt
+          grep -q 'Echo: hello' /tmp/chat.txt
+          docker compose restart api frontend
+          docker compose up --wait
+          curl --fail --silent -H "X-Api-Key: $key" "http://127.0.0.1:8000/threads/${thread_id}/state" | grep -q 'Echo: hello'
+      - name: Secret scan of the tree
+        run: python scripts/scan_secrets.py
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan tracked files
+        run: python scripts/scan_secrets.py

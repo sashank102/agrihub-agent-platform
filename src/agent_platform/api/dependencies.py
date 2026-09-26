@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 from fastapi import HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from agent_platform.api.request_context import user_id_var
 from agent_platform.core.settings import Settings
 from agent_platform.db.session import session_scope
 from agent_platform.services.accounts import (
@@ -54,6 +55,7 @@ async def get_principal(request: Request) -> AuthenticatedPrincipal:
             auth_mode="disabled",
         )
         request.state.principal = principal
+        user_id_var.set(str(principal.user_id))
         return principal
 
     accounts: AccountService = request.app.state.accounts
@@ -65,6 +67,7 @@ async def get_principal(request: Request) -> AuthenticatedPrincipal:
     if isinstance(result, AuthenticationFailure):
         raise _unauthorized()
     request.state.principal = result
+    user_id_var.set(str(result.user_id))
     return result
 
 

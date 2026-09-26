@@ -266,11 +266,11 @@ class ThreadService:
                 thread = await repository.get_by_id(thread_id)
                 if thread is not None and thread.owner_user_id != self.owner_user_id:
                     foreign_ids.append(str(thread_id))
-        for thread_id in foreign_ids:
+        for foreign_id in foreign_ids:
             await self._audit(
                 "access.denied",
                 "thread",
-                thread_id,
+                foreign_id,
                 {"scope": "search"},
             )
 
