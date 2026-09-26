@@ -34,8 +34,8 @@ Then start both services:
 ./start-dev.sh
 ```
 
-Open <http://127.0.0.1:3000>. The UI is preconfigured to use the `agrihub`
-graph at <http://127.0.0.1:2024>.
+Open <http://127.0.0.1:3000>. The UI talks to the FastAPI server at
+<http://127.0.0.1:8000> and asks for a platform API key.
 
 If dependencies need to be recreated:
 
@@ -78,7 +78,6 @@ The main extension points are:
 
 ## Production warning
 
-Local development intentionally runs without authentication. Before exposing
-the services publicly, restore an authentication provider in `langgraph.json`,
-enforce per-user thread access, and isolate command or scientific-job execution
-in separate containers.
+Local development can run with `AUTH_MODE=disabled`. Production requires
+platform API keys. Thread and run access is limited to the key's user.
+Deployment packaging is owned by a later plan.

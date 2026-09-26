@@ -2,8 +2,11 @@
 
 Consistency boundary: this manager keeps task handles and subscriber queues
 in one process. PostgreSQL is the replay log. A second Uvicorn worker cannot
-observe those queues. Startup marks leftover pending and running rows
-interrupted and does not resume model or tool calls automatically.
+observe those queues. Startup does not resume model or tool calls. It settles
+leftover pending and running rows from durable reconciliation intent or the
+latest LangGraph checkpoint. A completed checkpoint stays completed. An
+unknown outcome is interrupted with an explicit reconciliation reason. No
+intent can be stored while PostgreSQL itself is unavailable.
 """
 
 import asyncio
@@ -27,6 +30,7 @@ from agent_platform.db.repositories import (
     ThreadRepository,
 )
 from agent_platform.db.repositories.audit_log import AuditLogRepository
+from agent_platform.db.repositories.runs import ActiveRunRecord
 from agent_platform.db.session import AsyncSessionFactory, session_scope
 from agent_platform.services.errors import ActiveRunConflict, UnsupportedRunOption
 from agent_platform.services.graph_registry import GraphRegistry
@@ -171,43 +175,53 @@ class RunManager:
         self._closed = False
 
     async def reconcile_orphaned_runs(self, *, reason: str) -> int:
-        """Mark leftover pending and running rows interrupted.
+        """Settle leftover pending and running rows without invoking the graph.
 
         ``process_restart`` is used at startup. ``shutdown`` covers rows that
-        were still active after registered tasks were cancelled. Neither path
-        invokes the graph.
+        were still active after registered tasks were cancelled. In-memory
+        terminal retries are left for ``reconcile_pending``. Every other
+        leftover row is settled from durable intent or the latest checkpoint.
         """
         async with session_scope(self.session_factory) as session:
-            run_ids = await RunRepository(session).list_active_ids()
+            records = await RunRepository(session).list_active_records()
         async with self._lock:
             pending_ids = set(self._pending_terminals)
         changed = 0
-        message = _interruption_message(reason)
-        for run_id in run_ids:
-            if run_id in pending_ids:
+        for record in records:
+            if record.id in pending_ids or await self._genuinely_active(record.id):
                 continue
-            async with session_scope(self.session_factory) as session:
-                run = await RunRepository(session).set_status_internal(
-                    run_id,
-                    "interrupted",
-                    finished_at=datetime.now(UTC),
-                    error_code=reason,
-                    error_message=message,
-                    only_active=True,
-                )
-                if run is None or run.status != "interrupted" or run.error_code != reason:
-                    continue
-                await RunEventRepository(session).append_for_system(
-                    run_id=run_id,
-                    event_type="end",
-                    payload={
-                        "status": "interrupted",
-                        "reason": reason,
-                        "message": message,
-                    },
-                )
-            changed += 1
+            if await self._settle_record(record, fallback_reason=reason):
+                changed += 1
+        await self.repair_terminal_events()
         return changed
+
+    async def repair_terminal_events(self) -> int:
+        """Append the one missing terminal event for each terminal run."""
+        async with session_scope(self.session_factory) as session:
+            runs = await RunRepository(session).list_missing_terminal_events()
+            pending = [
+                (
+                    run.id,
+                    run.thread_id,
+                    run.status,
+                    dict(run.error_details or {}),
+                    run.error_code,
+                    run.error_message,
+                )
+                for run in runs
+            ]
+        repaired = 0
+        for run_id, thread_id, status, details, error_code, error_message in pending:
+            if await self._backfill_terminal_event(
+                run_id=run_id,
+                thread_id=thread_id,
+                status=status,
+                error_details=details,
+                error_code=error_code,
+                error_message=error_message,
+            ):
+                repaired += 1
+        return repaired
 
     async def shutdown(self) -> None:
         """Cancel registered tasks and interrupt any rows that remain active."""
@@ -273,6 +287,7 @@ class RunManager:
         await self.reconcile_pending()
         async with self._thread_guard(thread_id):
             await self._release_stale_active(thread_id, owner_user_id)
+            active_to_settle: uuid.UUID | None = None
             async with session_scope(self.session_factory) as session:
                 repository = ThreadRepository(session)
                 thread = await repository.get_for_owner(thread_id, owner_user_id)
@@ -284,23 +299,66 @@ class RunManager:
                     thread_id,
                     owner_user_id,
                 )
-                if active is not None:
+                if active is not None and await self._genuinely_active(active):
                     raise ActiveRunConflict()
-                run, _created = await RunRepository(session).create_idempotent(
-                    owner_user_id=owner_user_id,
-                    thread_id=thread_id,
-                    agent_id=registered.agent_id,
-                    input=request.input,
-                    configuration=run_configuration(request),
+                if active is not None:
+                    active_to_settle = active
+            if active_to_settle is not None:
+                await self._settle_active_id(
+                    active_to_settle,
+                    fallback_reason="stale_active_run",
                 )
-                await AuditLogRepository(session).append(
-                    actor_user_id=owner_user_id,
-                    action="run.created",
-                    resource_type="run",
-                    resource_id=str(run.id),
-                    metadata={"thread_id": str(thread_id)},
-                )
-                view = RunView.from_run(run)
+                async with session_scope(self.session_factory) as session:
+                    active = await RunRepository(session).find_active_id(
+                        thread_id,
+                        owner_user_id,
+                    )
+                if active is not None and await self._genuinely_active(active):
+                    raise ActiveRunConflict()
+            run_id = uuid.uuid4()
+            await self._reserve_run(
+                run_id,
+                owner_user_id=owner_user_id,
+                thread_id=thread_id,
+                on_disconnect=disconnect_policy(request),
+            )
+            try:
+                async with session_scope(self.session_factory) as session:
+                    repository = ThreadRepository(session)
+                    thread = await repository.get_for_owner(thread_id, owner_user_id)
+                    if thread is None or thread.status == "deleted":
+                        raise LookupError("thread not found")
+                    if thread.agent_id != registered.agent_id:
+                        raise LookupError("thread not found")
+                    active = await RunRepository(session).find_active_id(
+                        thread_id,
+                        owner_user_id,
+                    )
+                    if (
+                        active is not None
+                        and active != run_id
+                        and await self._genuinely_active(active)
+                    ):
+                        raise ActiveRunConflict()
+                    run, _created = await RunRepository(session).create_idempotent(
+                        owner_user_id=owner_user_id,
+                        thread_id=thread_id,
+                        agent_id=registered.agent_id,
+                        input=request.input,
+                        configuration=run_configuration(request),
+                        run_id=run_id,
+                    )
+                    await AuditLogRepository(session).append(
+                        actor_user_id=owner_user_id,
+                        action="run.created",
+                        resource_type="run",
+                        resource_id=str(run.id),
+                        metadata={"thread_id": str(thread_id)},
+                    )
+                    view = RunView.from_run(run)
+            except Exception:
+                await self._discard_reservation(run_id)
+                raise
 
             identity = TenantIdentity(
                 user_id=str(owner_user_id),
@@ -309,17 +367,27 @@ class RunManager:
             )
             config = execution_config(thread_id, request, identity)
             options = {**options, "context": graph_context(request, identity)}
-            await self._register_task(
-                view=view,
-                owner_user_id=owner_user_id,
-                thread_id=thread_id,
-                on_disconnect=disconnect_policy(request),
-                graph=registered.graph,
-                graph_input=graph_input,
-                config=config,
-                options=options,
-                subgraphs=bool(request.stream_subgraphs),
-            )
+            await self._before_task_attach(view.id)
+            if await self._cancellation_requested(view.id):
+                await self._mark_cancelled(view.id, owner_user_id, thread_id)
+                await self._discard_reservation(view.id)
+                refreshed = await self._visible_run(thread_id, view.id, owner_user_id)
+                return refreshed or view
+            try:
+                await self._register_task(
+                    view=view,
+                    owner_user_id=owner_user_id,
+                    thread_id=thread_id,
+                    on_disconnect=disconnect_policy(request),
+                    graph=registered.graph,
+                    graph_input=graph_input,
+                    config=config,
+                    options=options,
+                    subgraphs=bool(request.stream_subgraphs),
+                )
+            except Exception:
+                await self._discard_reservation(view.id)
+                raise
         return view
 
     async def get_owned_run(
@@ -560,13 +628,24 @@ class RunManager:
                 event_type="metadata",
                 payload={"run_id": str(run_id), "thread_id": str(thread_id)},
             )
+            if await self._cancellation_requested(run_id) or self._shutting_down:
+                await choose_cancelled()
+                return
             async with self._semaphore:
-                await self._write_status(
+                written = await self._write_status(
                     run_id,
                     owner_user_id,
                     "running",
                     started_at=datetime.now(UTC),
                 )
+                if written != "running":
+                    if written not in {"completed", "failed", "interrupted"}:
+                        await choose_cancelled()
+                    return
+                await self._before_graph_execution(run_id)
+                if await self._cancellation_requested(run_id) or self._shutting_down:
+                    await choose_cancelled()
+                    return
                 async for chunk in graph.astream(graph_input, config, **options):
                     if await self._cancellation_requested(run_id):
                         raise asyncio.CancelledError()
@@ -653,6 +732,15 @@ class RunManager:
         delays = self._terminal_retry_delays
         last_error: Exception | None = None
         persistence_retry = False
+        await self._record_reconciliation_intent(
+            run_id=run_id,
+            owner_user_id=owner_user_id,
+            status=status,
+            event_type=event_type,
+            event_payload=event_payload,
+            graph_succeeded=graph_succeeded,
+            reason=str(status_kwargs.get("error_code") or status),
+        )
         for index, delay in enumerate(delays):
             if delay:
                 await asyncio.sleep(delay)
@@ -667,7 +755,23 @@ class RunManager:
                     run_id,
                     owner_user_id,
                     status,
-                    **kwargs,
+                    **_with_reconciliation(
+                        kwargs,
+                        status=status,
+                        event_type=_terminal_event_type(
+                            event_type,
+                            graph_succeeded=graph_succeeded,
+                            persistence_retry=persistence_retry,
+                        ),
+                        event_payload=_terminal_event_payload(
+                            event_payload,
+                            run_id=run_id,
+                            thread_id=thread_id,
+                            graph_succeeded=graph_succeeded,
+                            persistence_retry=persistence_retry,
+                        ),
+                        graph_succeeded=graph_succeeded,
+                    ),
                 )
                 confirmed = await self._run_status(run_id, owner_user_id)
             except Exception as exc:
@@ -768,26 +872,28 @@ class RunManager:
         graph_succeeded: bool,
         persistence_retry: bool,
     ) -> bool:
+        event_name = _terminal_event_type(
+            event_type,
+            graph_succeeded=graph_succeeded,
+            persistence_retry=persistence_retry,
+        )
+        payload = _terminal_event_payload(
+            event_payload,
+            run_id=run_id,
+            thread_id=thread_id,
+            graph_succeeded=graph_succeeded,
+            persistence_retry=persistence_retry,
+        )
         try:
-            await self.persist_and_publish(
+            event, created = await self._append_terminal_event(
                 run_id=run_id,
-                owner_user_id=owner_user_id,
-                event_type=_terminal_event_type(
-                    event_type,
-                    graph_succeeded=graph_succeeded,
-                    persistence_retry=persistence_retry,
-                ),
-                payload=_terminal_event_payload(
-                    event_payload,
-                    run_id=run_id,
-                    thread_id=thread_id,
-                    graph_succeeded=graph_succeeded,
-                    persistence_retry=persistence_retry,
-                ),
-                terminal=True,
+                event_type=event_name,
+                payload=payload,
             )
         except Exception:
             return False
+        if created:
+            await self._publish(run_id, event)
         return True
 
     async def reconcile_pending(self) -> int:
@@ -822,13 +928,13 @@ class RunManager:
                 if written != item.status or confirmed != item.status:
                     return False
                 item.status_confirmed = True
-            await self.persist_and_publish(
+            event, created = await self._append_terminal_event(
                 run_id=item.run_id,
-                owner_user_id=item.owner_user_id,
                 event_type=item.event_type,
                 payload=dict(item.event_payload),
-                terminal=True,
             )
+            if created:
+                await self._publish(item.run_id, event)
         except Exception as exc:
             self._log_persistence_failure(
                 item.run_id,
@@ -946,7 +1052,300 @@ class RunManager:
     async def _cancellation_requested(self, run_id: uuid.UUID) -> bool:
         async with self._lock:
             entry = self._runs.get(run_id)
-            return entry is not None and entry.cancel_requested
+            if entry is not None and entry.cancel_requested:
+                return True
+        async with session_scope(self.session_factory) as session:
+            run = await session.get(Run, run_id)
+            if run is None:
+                return False
+            return bool(run.cancellation_requested) or run.status == "cancelled"
+
+    async def _before_task_attach(self, run_id: uuid.UUID) -> None:
+        """Pause point after the run row is visible and before the task exists."""
+        return None
+
+    async def _before_graph_execution(self, run_id: uuid.UUID) -> None:
+        """Pause point immediately before the first graph invocation."""
+        return None
+
+    async def _genuinely_active(self, run_id: uuid.UUID) -> bool:
+        """Return whether this process is executing or about to execute the run."""
+        async with self._lock:
+            entry = self._runs.get(run_id)
+            if entry is None:
+                return False
+            if entry.task is None:
+                return True
+            return not entry.task.done()
+
+    async def _reserve_run(
+        self,
+        run_id: uuid.UUID,
+        *,
+        owner_user_id: uuid.UUID,
+        thread_id: uuid.UUID,
+        on_disconnect: str,
+    ) -> None:
+        """Publish the run to cancellation before its row is committed."""
+        async with self._lock:
+            if self._shutting_down or self._closed:
+                raise RuntimeError("run manager is shutting down")
+            self._runs[run_id] = _ActiveRun(
+                task=None,
+                owner_user_id=owner_user_id,
+                thread_id=thread_id,
+                on_disconnect=on_disconnect,
+            )
+
+    async def _discard_reservation(self, run_id: uuid.UUID) -> None:
+        async with self._lock:
+            entry = self._runs.get(run_id)
+            if entry is not None and entry.task is None:
+                self._runs.pop(run_id, None)
+
+    async def _settle_active_id(self, run_id: uuid.UUID, *, fallback_reason: str) -> bool:
+        """Settle one inactive row from intent or its checkpoint."""
+        if await self._genuinely_active(run_id):
+            return False
+        async with session_scope(self.session_factory) as session:
+            run = await session.get(Run, run_id)
+            if run is None or run.status not in {"pending", "running"}:
+                return False
+            thread = await ThreadRepository(session).get_by_id(run.thread_id)
+            if thread is None:
+                return False
+            record = ActiveRunRecord(
+                id=run.id,
+                thread_id=run.thread_id,
+                agent_id=run.agent_id,
+                owner_user_id=thread.owner_user_id,
+                error_details=dict(run.error_details or {}),
+                cancellation_requested=bool(run.cancellation_requested),
+                status=run.status,
+            )
+        return await self._settle_record(record, fallback_reason=fallback_reason)
+
+    async def _settle_record(
+        self,
+        record: ActiveRunRecord,
+        *,
+        fallback_reason: str,
+    ) -> bool:
+        if record.cancellation_requested:
+            intent = {
+                "intent": "cancelled",
+                "reason": "cancelled",
+                "event_type": "end",
+                "event_payload": {"status": "cancelled"},
+                "graph_succeeded": False,
+            }
+        else:
+            intent = _intent_from_details(record.error_details)
+        checkpoint = await self._checkpoint_outcome(record.thread_id, record.agent_id)
+        decision = decide_orphan_outcome(
+            checkpoint=checkpoint,
+            intent=intent,
+            fallback_reason=fallback_reason,
+        )
+        try:
+            async with session_scope(self.session_factory) as session:
+                repository = RunRepository(session)
+                status_kwargs: dict[str, Any] = {
+                    "finished_at": datetime.now(UTC),
+                    "error_details": {
+                        "reconciliation": {
+                            "intent": decision.status,
+                            "reason": decision.error_code or decision.status,
+                            "event_type": decision.event_type,
+                            "event_payload": decision.event_payload,
+                            "graph_succeeded": decision.graph_succeeded,
+                        }
+                    },
+                }
+                if decision.error_code is not None:
+                    status_kwargs["error_code"] = decision.error_code
+                    status_kwargs["error_message"] = decision.error_message
+                if decision.status == "completed":
+                    status_kwargs["output_summary"] = {
+                        "reconciliation": checkpoint
+                        if checkpoint == "completed"
+                        else "durable_intent"
+                    }
+                if decision.status == "cancelled":
+                    status_kwargs["cancellation_requested"] = True
+                run = await repository.set_status_internal(
+                    record.id,
+                    decision.status,
+                    only_active=True,
+                    **status_kwargs,
+                )
+                if run is None or run.status != decision.status:
+                    return False
+                await RunEventRepository(session).append_terminal_if_absent(
+                    run_id=record.id,
+                    event_type=decision.event_type,
+                    payload=decision.event_payload,
+                )
+        except Exception:
+            logger.exception("Could not settle run %s", record.id)
+            await self._remember_pending(
+                _PendingTerminal(
+                    run_id=record.id,
+                    owner_user_id=record.owner_user_id,
+                    thread_id=record.thread_id,
+                    status=decision.status,
+                    status_kwargs={
+                        "finished_at": datetime.now(UTC),
+                        "error_code": decision.error_code,
+                        "error_message": decision.error_message,
+                        "touch_thread": True,
+                    },
+                    event_type=decision.event_type,
+                    event_payload=dict(decision.event_payload),
+                    graph_succeeded=decision.graph_succeeded,
+                    status_confirmed=False,
+                )
+            )
+            return False
+        return True
+
+    async def _checkpoint_outcome(self, thread_id: uuid.UUID, agent_id: uuid.UUID) -> str:
+        """Classify the latest checkpoint as completed, interrupted, or unknown."""
+        graph = self.registry.graph_for_agent(agent_id)
+        if graph is None:
+            return "unknown"
+        config = {
+            "configurable": {
+                "thread_id": str(thread_id),
+                "checkpoint_ns": "",
+            }
+        }
+        checkpointer = getattr(graph, "checkpointer", None)
+        if checkpointer is None:
+            return "unknown"
+        try:
+            saved = await checkpointer.aget_tuple(config)
+        except Exception:
+            logger.exception("Could not read the checkpoint for thread %s", thread_id)
+            return "unknown"
+        if saved is None:
+            return "unknown"
+        try:
+            snapshot = await graph.aget_state(config)
+        except Exception:
+            logger.exception("Could not read checkpoint state for thread %s", thread_id)
+            return "unknown"
+        if snapshot_interrupted(snapshot):
+            return "interrupted"
+        if tuple(getattr(snapshot, "next", ()) or ()):
+            return "unknown"
+        return "completed"
+
+    async def _append_terminal_event(
+        self,
+        *,
+        run_id: uuid.UUID,
+        event_type: str,
+        payload: dict[str, Any],
+    ) -> tuple[StreamEvent, bool]:
+        async with session_scope(self.session_factory) as session:
+            row, created = await RunEventRepository(session).append_terminal_if_absent(
+                run_id=run_id,
+                event_type=event_type,
+                payload=payload,
+            )
+            event = StreamEvent(
+                sequence=int(row.sequence),
+                event_type=row.event_type,
+                payload=dict(row.payload or {}),
+                terminal=True,
+            )
+        return event, created
+
+    async def _record_reconciliation_intent(
+        self,
+        *,
+        run_id: uuid.UUID,
+        owner_user_id: uuid.UUID,
+        status: str,
+        event_type: str,
+        event_payload: dict[str, Any],
+        graph_succeeded: bool,
+        reason: str,
+    ) -> None:
+        """Persist terminal intent while the run is still active, when possible."""
+        try:
+            async with session_scope(self.session_factory) as session:
+                await RunRepository(session).merge_reconciliation(
+                    run_id,
+                    owner_user_id,
+                    {
+                        "intent": status,
+                        "reason": reason,
+                        "event_type": event_type,
+                        "event_payload": event_payload,
+                        "graph_succeeded": graph_succeeded,
+                    },
+                )
+        except Exception:
+            logger.exception("Could not store reconciliation intent for run %s", run_id)
+
+    async def _repair_one_terminal_event(
+        self,
+        run_id: uuid.UUID,
+        owner_user_id: uuid.UUID,
+    ) -> None:
+        async with session_scope(self.session_factory) as session:
+            run = await RunRepository(session).get_for_owner(run_id, owner_user_id)
+            if run is None or run.status not in TERMINAL_RUN_STATUSES:
+                return
+            snapshot = (
+                run.id,
+                run.thread_id,
+                run.status,
+                dict(run.error_details or {}),
+                run.error_code,
+                run.error_message,
+            )
+        await self._backfill_terminal_event(
+            run_id=snapshot[0],
+            thread_id=snapshot[1],
+            status=snapshot[2],
+            error_details=snapshot[3],
+            error_code=snapshot[4],
+            error_message=snapshot[5],
+        )
+
+    async def _backfill_terminal_event(
+        self,
+        *,
+        run_id: uuid.UUID,
+        thread_id: uuid.UUID,
+        status: str,
+        error_details: dict[str, Any],
+        error_code: str | None,
+        error_message: str | None,
+    ) -> bool:
+        event_type, payload = _terminal_event_for_status(
+            status=status,
+            error_details=error_details,
+            error_code=error_code,
+            error_message=error_message,
+            thread_id=thread_id,
+            run_id=run_id,
+        )
+        try:
+            event, created = await self._append_terminal_event(
+                run_id=run_id,
+                event_type=event_type,
+                payload=payload,
+            )
+        except Exception:
+            logger.exception("Could not backfill the terminal event for run %s", run_id)
+            return False
+        if created:
+            await self._publish(run_id, event)
+        return created
 
     async def _thread_is_interrupted(self, graph: Any, thread_id: uuid.UUID) -> bool:
         snapshot = await graph.aget_state(
@@ -972,39 +1371,48 @@ class RunManager:
         options: dict[str, Any],
         subgraphs: bool,
     ) -> None:
-        """Insert the run, then attach its task, before either can observe a gap."""
+        """Attach the task to the reservation created before the row was visible."""
         scheduling_error: BaseException | None = None
         async with self._lock:
             if self._shutting_down or self._closed:
                 scheduling_error = RuntimeError("run manager is shutting down")
             else:
-                entry = _ActiveRun(
-                    task=None,
-                    owner_user_id=owner_user_id,
-                    thread_id=thread_id,
-                    on_disconnect=on_disconnect,
-                )
-                self._runs[view.id] = entry
-                try:
-                    task = asyncio.create_task(
-                        self._execute(
-                            run_id=view.id,
-                            thread_id=thread_id,
-                            owner_user_id=owner_user_id,
-                            graph=graph,
-                            graph_input=graph_input,
-                            config=config,
-                            options=options,
-                            subgraphs=subgraphs,
-                        ),
-                        name=f"run-{view.id}",
+                entry = self._runs.get(view.id)
+                if entry is None:
+                    entry = _ActiveRun(
+                        task=None,
+                        owner_user_id=owner_user_id,
+                        thread_id=thread_id,
+                        on_disconnect=on_disconnect,
                     )
-                except BaseException as exc:
-                    self._runs.pop(view.id, None)
-                    scheduling_error = exc
+                    self._runs[view.id] = entry
+                if entry.cancel_requested:
+                    scheduling_error = RuntimeError("cancelled before start")
                 else:
-                    entry.task = task
+                    try:
+                        task = asyncio.create_task(
+                            self._execute(
+                                run_id=view.id,
+                                thread_id=thread_id,
+                                owner_user_id=owner_user_id,
+                                graph=graph,
+                                graph_input=graph_input,
+                                config=config,
+                                options=options,
+                                subgraphs=subgraphs,
+                            ),
+                            name=f"run-{view.id}",
+                        )
+                    except BaseException as exc:
+                        self._runs.pop(view.id, None)
+                        scheduling_error = exc
+                    else:
+                        entry.task = task
         if scheduling_error is not None:
+            if str(scheduling_error) == "cancelled before start":
+                await self._mark_cancelled(view.id, owner_user_id, thread_id)
+                await self._discard_reservation(view.id)
+                return
             await self._rollback_unscheduled(view.id, owner_user_id, thread_id)
             raise scheduling_error
 
@@ -1014,21 +1422,59 @@ class RunManager:
         owner_user_id: uuid.UUID,
         thread_id: uuid.UUID,
     ) -> None:
+        payload = {
+            "status": "cancelled",
+            "reason": "task_scheduling_failed",
+        }
         try:
-            await self._write_status(
-                run_id,
-                owner_user_id,
-                "cancelled",
-                finished_at=datetime.now(UTC),
-                error_code="task_scheduling_failed",
-                error_message="Run task could not be scheduled",
-                touch_thread=True,
-            )
+            async with session_scope(self.session_factory) as session:
+                await RunRepository(session).set_status_for_owner(
+                    run_id,
+                    owner_user_id,
+                    "cancelled",
+                    finished_at=datetime.now(UTC),
+                    error_code="task_scheduling_failed",
+                    error_message="Run task could not be scheduled",
+                    error_details={
+                        "reconciliation": {
+                            "intent": "cancelled",
+                            "reason": "task_scheduling_failed",
+                            "event_type": "end",
+                            "event_payload": payload,
+                            "graph_succeeded": False,
+                        }
+                    },
+                    touch_thread=True,
+                )
+                await RunEventRepository(session).append_terminal_if_absent(
+                    run_id=run_id,
+                    event_type="end",
+                    payload=payload,
+                )
         except Exception:
             logger.exception(
                 "Could not roll back unscheduled run %s on thread %s",
                 run_id,
                 thread_id,
+            )
+            await self._remember_pending(
+                _PendingTerminal(
+                    run_id=run_id,
+                    owner_user_id=owner_user_id,
+                    thread_id=thread_id,
+                    status="cancelled",
+                    status_kwargs={
+                        "finished_at": datetime.now(UTC),
+                        "error_code": "task_scheduling_failed",
+                        "error_message": "Run task could not be scheduled",
+                        "cancellation_requested": True,
+                        "touch_thread": True,
+                    },
+                    event_type="end",
+                    event_payload=payload,
+                    graph_succeeded=False,
+                    status_confirmed=False,
+                )
             )
 
     async def _task_for_cancel(self, run_id: uuid.UUID) -> asyncio.Task | None:
@@ -1051,48 +1497,20 @@ class RunManager:
         thread_id: uuid.UUID,
         owner_user_id: uuid.UUID,
     ) -> None:
-        """Reconcile a finished graph or interrupt a row with no live task."""
+        """Settle a finished graph without treating metadata repair as a live run."""
         await self.reconcile_pending()
         async with session_scope(self.session_factory) as session:
             active = await RunRepository(session).find_active_id(
                 thread_id,
                 owner_user_id,
             )
-        if active is None:
+        if active is None or await self._genuinely_active(active):
             return
-        async with self._lock:
-            entry = self._runs.get(active)
-            live = entry is not None and entry.task is not None and not entry.task.done()
-            pending = active in self._pending_terminals
-        if live:
-            return
-        if pending:
+        pending = await self._pending_for(active)
+        if pending is not None:
             await self.reconcile_pending()
             return
-        await self._interrupt_stale(active)
-
-    async def _interrupt_stale(self, run_id: uuid.UUID) -> None:
-        message = "Run was interrupted because it had no active worker"
-        async with session_scope(self.session_factory) as session:
-            run = await RunRepository(session).set_status_internal(
-                run_id,
-                "interrupted",
-                finished_at=datetime.now(UTC),
-                error_code="stale_active_run",
-                error_message=message,
-                only_active=True,
-            )
-            if run is None or run.status != "interrupted" or run.error_code != "stale_active_run":
-                return
-            await RunEventRepository(session).append_for_system(
-                run_id=run_id,
-                event_type="end",
-                payload={
-                    "status": "interrupted",
-                    "reason": "stale_active_run",
-                    "message": message,
-                },
-            )
+        await self._settle_active_id(active, fallback_reason="stale_active_run")
 
     async def _thread_visible(
         self,
@@ -1215,6 +1633,8 @@ class RunManager:
                     break
 
             if await self._run_status(run_id, owner_user_id) in TERMINAL_RUN_STATUSES:
+                if not saw_terminal:
+                    await self._repair_one_terminal_event(run_id, owner_user_id)
                 for event in await self._read_events(run_id, owner_user_id, last):
                     if event.sequence > last:
                         yield event
@@ -1260,6 +1680,8 @@ class RunManager:
                     if subscription.lagging:
                         continue
                     if not await self._is_active(run_id):
+                        if not saw_terminal:
+                            await self._repair_one_terminal_event(run_id, owner_user_id)
                         for missed in await self._read_all_after(
                             run_id,
                             owner_user_id,
@@ -1323,7 +1745,7 @@ class RunManager:
     ) -> _Subscriber | None:
         async with self._lock:
             entry = self._runs.get(run_id)
-            if entry is None or (entry.task is not None and entry.task.done()):
+            if entry is None or entry.task is None or entry.task.done():
                 return None
             subscriber = _Subscriber(
                 queue=asyncio.Queue(maxsize=self.subscriber_queue_size),
@@ -1544,4 +1966,181 @@ def _terminal_event_payload(
 def _interruption_message(reason: str) -> str:
     if reason == "process_restart":
         return "Run was interrupted because the server process restarted"
-    return "Run was interrupted during server shutdown"
+    if reason == "shutdown":
+        return "Run was interrupted during server shutdown"
+    if reason == "stale_active_run":
+        return "Run was interrupted because it had no active worker"
+    return "Run was interrupted because its outcome could not be determined"
+
+
+@dataclass(frozen=True, slots=True)
+class RestartDecision:
+    """Terminal status chosen from a checkpoint or durable intent."""
+
+    status: str
+    error_code: str | None
+    error_message: str
+    event_type: str
+    event_payload: dict[str, Any]
+    graph_succeeded: bool
+
+
+def decide_orphan_outcome(
+    *,
+    checkpoint: str,
+    intent: dict[str, Any] | None,
+    fallback_reason: str,
+) -> RestartDecision:
+    """Choose a terminal status without downgrading a completed checkpoint.
+
+    A checkpoint that finished without an interrupt is completed even when
+    run metadata was not saved. Durable intent distinguishes failed, cancelled,
+    and interrupted runs when the checkpoint is not a successful completion.
+    Anything else is an explicit interruption.
+    """
+    if checkpoint == "completed":
+        return RestartDecision(
+            status="completed",
+            error_code=None,
+            error_message="",
+            event_type="end",
+            event_payload={"status": "success", "reconciliation": "checkpoint"},
+            graph_succeeded=True,
+        )
+    if intent and intent.get("intent") in {
+        "completed",
+        "failed",
+        "cancelled",
+        "interrupted",
+    }:
+        status = str(intent["intent"])
+        event_type = str(intent.get("event_type") or ("error" if status == "failed" else "end"))
+        payload = dict(intent.get("event_payload") or {})
+        if not payload:
+            payload = _default_terminal_payload(status, fallback_reason)
+        reason = str(intent.get("reason") or fallback_reason)
+        return RestartDecision(
+            status=status,
+            error_code=reason,
+            error_message=_message_for_status(status, reason),
+            event_type=event_type,
+            event_payload=payload,
+            graph_succeeded=bool(intent.get("graph_succeeded")),
+        )
+    if checkpoint == "interrupted":
+        return RestartDecision(
+            status="interrupted",
+            error_code="graph_interrupt",
+            error_message="Run interrupted",
+            event_type="end",
+            event_payload={
+                "status": "interrupted",
+                "reason": "checkpoint_interrupt",
+            },
+            graph_succeeded=False,
+        )
+    message = _interruption_message(fallback_reason)
+    return RestartDecision(
+        status="interrupted",
+        error_code=fallback_reason,
+        error_message=message,
+        event_type="end",
+        event_payload={
+            "status": "interrupted",
+            "reason": fallback_reason,
+            "message": message,
+        },
+        graph_succeeded=False,
+    )
+
+
+def _intent_from_details(details: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(details, dict):
+        return None
+    intent = details.get("reconciliation")
+    if not isinstance(intent, dict):
+        return None
+    return intent
+
+
+def _message_for_status(status: str, reason: str) -> str:
+    if status == "cancelled":
+        return "Run cancelled"
+    if status == "failed":
+        return "Graph execution failed"
+    if status == "interrupted":
+        return _interruption_message(reason)
+    return ""
+
+
+def _default_terminal_payload(status: str, reason: str) -> dict[str, Any]:
+    if status == "failed":
+        return {"error": "run_failed", "message": "Graph execution failed"}
+    if status == "cancelled":
+        return {"status": "cancelled"}
+    if status == "interrupted":
+        return {
+            "status": "interrupted",
+            "reason": reason,
+            "message": _interruption_message(reason),
+        }
+    return {"status": "success"}
+
+
+def _terminal_event_for_status(
+    *,
+    status: str,
+    error_details: dict[str, Any],
+    error_code: str | None,
+    error_message: str | None,
+    thread_id: uuid.UUID,
+    run_id: uuid.UUID,
+) -> tuple[str, dict[str, Any]]:
+    intent = _intent_from_details(error_details)
+    if intent and intent.get("event_type") and isinstance(intent.get("event_payload"), dict):
+        return str(intent["event_type"]), dict(intent["event_payload"])
+    if status == "failed":
+        return (
+            "error",
+            {
+                "error": "run_failed",
+                "message": error_message or "Graph execution failed",
+                "run_id": str(run_id),
+                "thread_id": str(thread_id),
+            },
+        )
+    if status == "cancelled":
+        return "end", {"status": "cancelled"}
+    if status == "interrupted":
+        reason = error_code or "interrupted"
+        return (
+            "end",
+            {
+                "status": "interrupted",
+                "reason": reason,
+                "message": error_message or _interruption_message(reason),
+            },
+        )
+    return "end", {"status": "success"}
+
+
+def _with_reconciliation(
+    status_kwargs: dict[str, Any],
+    *,
+    status: str,
+    event_type: str,
+    event_payload: dict[str, Any],
+    graph_succeeded: bool,
+) -> dict[str, Any]:
+    """Copy status fields and attach the terminal event that must be repaired."""
+    copied = dict(status_kwargs)
+    details = dict(copied.get("error_details") or {})
+    details["reconciliation"] = {
+        "intent": status,
+        "reason": copied.get("error_code") or status,
+        "event_type": event_type,
+        "event_payload": event_payload,
+        "graph_succeeded": graph_succeeded,
+    }
+    copied["error_details"] = details
+    return copied

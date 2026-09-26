@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     API_ALLOWED_ORIGINS: list[str] = Field(
         default_factory=lambda: list(LOCAL_CORS_ORIGINS)
     )
-    API_MAX_REQUEST_BODY_BYTES: int = Field(default=1_048_576, ge=1)
+    API_MAX_REQUEST_BODY_BYTES: int = Field(default=10_485_760, ge=1)
     API_MAX_CONCURRENT_RUNS: int = Field(default=4, ge=1)
     API_STREAM_SUBSCRIBER_QUEUE_SIZE: int = Field(default=16, ge=1)
     AUTH_MODE: Literal["api_key", "disabled"] | None = None
@@ -43,6 +43,7 @@ class Settings(BaseSettings):
         "00000000-0000-4000-8000-000000000002"
     )
     DEVELOPMENT_GRAPH_ID: str = "agrihub"
+    GRAPH_FIXTURE: bool = False
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -94,6 +95,8 @@ class Settings(BaseSettings):
             )
         if not self.API_KEY_PREFIX.isalpha() or not self.API_KEY_PREFIX.islower():
             raise ValueError("API_KEY_PREFIX must be lowercase letters")
+        if not 2 <= len(self.API_KEY_PREFIX) <= 32:
+            raise ValueError("API_KEY_PREFIX must be 2-32 lowercase letters")
         return self
 
 

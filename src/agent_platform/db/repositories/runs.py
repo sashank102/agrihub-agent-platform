@@ -1,6 +1,7 @@
 """Async persistence operations for run metadata."""
 
 import uuid
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -8,8 +9,23 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent_platform.db.models import Run, Thread
+from agent_platform.db.models import Run, RunEvent, Thread
 from agent_platform.db.models.run import ACTIVE_RUN_STATUSES, TERMINAL_RUN_STATUSES
+
+TERMINAL_EVENT_TYPES = frozenset({"end", "error"})
+
+
+@dataclass(frozen=True, slots=True)
+class ActiveRunRecord:
+    """Active run fields needed to reconcile after a process restart."""
+
+    id: uuid.UUID
+    thread_id: uuid.UUID
+    agent_id: uuid.UUID
+    owner_user_id: uuid.UUID
+    error_details: dict[str, Any]
+    cancellation_requested: bool
+    status: str
 
 
 class RunRepository:
@@ -28,6 +44,7 @@ class RunRepository:
         input: dict[str, Any] | None = None,
         configuration: dict[str, Any] | None = None,
         idempotency_key: str | None = None,
+        run_id: uuid.UUID | None = None,
     ) -> tuple[Run, bool]:
         """Create a run or return the existing thread/idempotency-key run."""
         matching_thread = await self.session.scalar(
@@ -42,7 +59,7 @@ class RunRepository:
             raise LookupError("thread is not owned by the user and agent")
 
         values = {
-            "id": uuid.uuid4(),
+            "id": run_id or uuid.uuid4(),
             "thread_id": thread_id,
             "agent_id": agent_id,
             "input": input or {},
@@ -132,6 +149,60 @@ class RunRepository:
             .limit(1)
         )
 
+    async def list_active_records(self) -> list["ActiveRunRecord"]:
+        """Return pending and running runs with the thread owner."""
+        rows = (
+            await self.session.execute(
+                select(
+                    Run.id,
+                    Run.thread_id,
+                    Run.agent_id,
+                    Thread.owner_user_id,
+                    Run.error_details,
+                    Run.cancellation_requested,
+                    Run.status,
+                )
+                .join(Thread, Thread.id == Run.thread_id)
+                .where(Run.status.in_(ACTIVE_RUN_STATUSES))
+                .order_by(Run.created_at, Run.id)
+            )
+        ).all()
+        return [
+            ActiveRunRecord(
+                id=row.id,
+                thread_id=row.thread_id,
+                agent_id=row.agent_id,
+                owner_user_id=row.owner_user_id,
+                error_details=dict(row.error_details or {}),
+                cancellation_requested=bool(row.cancellation_requested),
+                status=row.status,
+            )
+            for row in rows
+        ]
+
+    async def list_missing_terminal_events(self) -> list[Run]:
+        """Return terminal runs that do not yet have an end or error event."""
+        terminal_event = (
+            select(RunEvent.run_id)
+            .where(
+                RunEvent.run_id == Run.id,
+                RunEvent.event_type.in_(tuple(TERMINAL_EVENT_TYPES)),
+            )
+            .exists()
+        )
+        return list(
+            (
+                await self.session.scalars(
+                    select(Run)
+                    .where(
+                        Run.status.in_(TERMINAL_RUN_STATUSES),
+                        ~terminal_event,
+                    )
+                    .order_by(Run.created_at, Run.id)
+                )
+            ).all()
+        )
+
     async def list_active_ids(self) -> list[uuid.UUID]:
         """Return every pending or running run id for process reconciliation."""
         return list(
@@ -205,6 +276,8 @@ class RunRepository:
         run = await self._lock_owned(run_id, owner_user_id)
         if run is None:
             return None
+        if _running_transition_blocked(run, status):
+            return run
         if run.status in TERMINAL_RUN_STATUSES and run.status != status:
             return run
         self._apply_status(
@@ -249,6 +322,8 @@ class RunRepository:
         )
         if run is None:
             return None
+        if _running_transition_blocked(run, status):
+            return run
         if only_active and run.status not in ACTIVE_RUN_STATUSES:
             return run
         if run.status in TERMINAL_RUN_STATUSES and run.status != status:
@@ -279,6 +354,21 @@ class RunRepository:
         run.cancellation_requested = True
         await self.session.flush()
         return run
+
+    async def merge_reconciliation(
+        self,
+        run_id: uuid.UUID,
+        owner_user_id: uuid.UUID,
+        reconciliation: dict[str, Any],
+    ) -> None:
+        """Store terminal intent on an active run without changing its status."""
+        run = await self._lock_owned(run_id, owner_user_id)
+        if run is None or run.status in TERMINAL_RUN_STATUSES:
+            return
+        details = dict(run.error_details or {})
+        details["reconciliation"] = reconciliation
+        run.error_details = details
+        await self.session.flush()
 
     async def _lock_owned(
         self,
@@ -324,3 +414,12 @@ class RunRepository:
             run.error_details = error_details
         if cancellation_requested is not None:
             run.cancellation_requested = cancellation_requested
+
+
+def _running_transition_blocked(run: Run, status: str) -> bool:
+    """Refuse to move a cancelled or already terminal run back to running."""
+    if status != "running":
+        return False
+    if run.cancellation_requested:
+        return True
+    return run.status in TERMINAL_RUN_STATUSES

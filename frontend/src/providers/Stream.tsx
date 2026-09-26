@@ -1,9 +1,9 @@
 import React, {
-  createContext,
   useContext,
   ReactNode,
   useState,
   useEffect,
+  useCallback,
 } from "react";
 import { useStream } from "@langchain/langgraph-sdk/react";
 import { type Message } from "@langchain/langgraph-sdk";
@@ -15,12 +15,11 @@ import {
   type RemoveUIMessage,
 } from "@langchain/langgraph-sdk/react-ui";
 import { useQueryState } from "nuqs";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ArrowRight, Sprout } from "lucide-react";
 import { PasswordInput } from "@/components/ui/password-input";
-import { getApiKey } from "@/lib/api-key";
+import { isUnauthorizedStatus, useApiKey } from "@/lib/api-key";
 import { useThreads } from "./Thread";
 import { toast } from "sonner";
 
@@ -39,29 +38,48 @@ const useTypedStream = useStream<
 >;
 
 type StreamContextType = ReturnType<typeof useTypedStream>;
-const StreamContext = createContext<StreamContextType | undefined>(undefined);
+const StreamContext = React.createContext<StreamContextType | undefined>(
+  undefined,
+);
 
-async function sleep(ms = 4000) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+const ASSISTANT_ID = process.env.NEXT_PUBLIC_ASSISTANT_ID || "agrihub";
+
+type ProbeResult = "ok" | "unauthorized" | "unreachable" | "server";
+
+async function probeApi(apiUrl: string, apiKey: string): Promise<ProbeResult> {
+  try {
+    const response = await fetch(`${apiUrl}/threads/search`, {
+      method: "POST",
+      headers: {
+        "X-Api-Key": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ limit: 1 }),
+    });
+    if (response.status === 401) {
+      return "unauthorized";
+    }
+    if (!response.ok) {
+      return "server";
+    }
+    return "ok";
+  } catch {
+    return "unreachable";
+  }
 }
 
-async function checkGraphStatus(
-  apiUrl: string,
-  apiKey: string | null,
-): Promise<boolean> {
-  try {
-    const headers = new Headers();
-    if (apiKey) headers.set("X-Api-Key", apiKey);
-
-    const res = await fetch(`${apiUrl}/info`, {
-      headers,
-    });
-
-    return res.ok;
-  } catch (e) {
-    console.error(e);
-    return false;
+function noticeCopy(notice: string | null, connection: string): string | null {
+  if (notice === "rejected") {
+    return "That API key was rejected. Check that it is active and belongs to an enabled user.";
   }
+  if (notice === "unreachable" || connection === "unreachable") {
+    return "The AgriHub server could not be reached. This is a connection problem, not a rejected key.";
+  }
+  if (notice === "server" || connection === "server") {
+    return "The AgriHub server returned an error before accepting the key.";
+  }
+  return null;
 }
 
 const StreamSession = ({
@@ -71,18 +89,33 @@ const StreamSession = ({
   assistantId,
 }: {
   children: ReactNode;
-  apiKey: string | null;
+  apiKey: string;
   apiUrl: string;
   assistantId: string;
 }) => {
   const [threadId, setThreadId] = useQueryState("threadId");
   const { getThreads, setThreads } = useThreads();
+  const { clearApiKey, setConnection } = useApiKey();
+  const handleFailure = useCallback(
+    (error: unknown) => {
+      if (isUnauthorizedStatus(error)) {
+        clearApiKey("rejected");
+        return;
+      }
+      toast.error("The AgriHub server could not complete that request.", {
+        description: "The API key was not included in this message.",
+      });
+    },
+    [clearApiKey],
+  );
   const streamValue = useTypedStream({
     apiUrl,
-    apiKey: apiKey ?? undefined,
+    apiKey,
+    defaultHeaders: { "X-Api-Key": apiKey },
     assistantId,
     threadId: threadId ?? null,
     fetchStateHistory: true,
+    onError: handleFailure,
     onCustomEvent: (event, options) => {
       if (isUIMessage(event) || isRemoveUIMessage(event)) {
         options.mutate((prev) => {
@@ -93,29 +126,40 @@ const StreamSession = ({
     },
     onThreadId: (id) => {
       setThreadId(id);
-      // Refetch threads list when thread ID changes.
-      // Wait for some seconds before fetching so we're able to get the new thread that was created.
-      sleep().then(() => getThreads().then(setThreads).catch(console.error));
+      getThreads().then(setThreads).catch(handleFailure);
     },
   });
 
   useEffect(() => {
-    checkGraphStatus(apiUrl, apiKey).then((ok) => {
-      if (!ok) {
-        toast.error("Failed to connect to the AgriHub server", {
-          description: () => (
-            <p>
-              Please ensure your graph is running at <code>{apiUrl}</code> and
-              your API key is correctly set (if connecting to a deployed graph).
-            </p>
-          ),
-          duration: 10000,
-          richColors: true,
-          closeButton: true,
-        });
+    let cancelled = false;
+    probeApi(apiUrl, apiKey).then((result) => {
+      if (cancelled) {
+        return;
       }
+      if (result === "unauthorized") {
+        clearApiKey("rejected");
+        return;
+      }
+      if (result === "unreachable") {
+        setConnection("unreachable");
+        toast.error("Cannot reach the AgriHub server", {
+          description: `No response from ${apiUrl}. The API key was not reported.`,
+        });
+        return;
+      }
+      if (result === "server") {
+        setConnection("server");
+        toast.error("The AgriHub server returned an error", {
+          description: "Authentication was not the failure.",
+        });
+        return;
+      }
+      setConnection("ok");
     });
-  }, [apiKey, apiUrl]);
+    return () => {
+      cancelled = true;
+    };
+  }, [apiKey, apiUrl, clearApiKey, setConnection]);
 
   return (
     <StreamContext.Provider value={streamValue}>
@@ -124,151 +168,142 @@ const StreamSession = ({
   );
 };
 
-// Default values for the form
-const DEFAULT_API_URL = "http://127.0.0.1:2024";
-const DEFAULT_ASSISTANT_ID = "agent";
+function ApiKeyGate() {
+  const { notice, connection, saveApiKey } = useApiKey();
+  const [remember, setRemember] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [localNotice, setLocalNotice] = useState<string | null>(null);
+  const message = localNotice ?? noticeCopy(notice, connection);
+
+  return (
+    <div className="flex min-h-screen w-full items-center justify-center p-4">
+      <div className="bg-background flex w-full max-w-xl flex-col rounded-lg border shadow-lg">
+        <div className="mt-10 flex flex-col gap-2 border-b p-6">
+          <Sprout className="size-7" />
+          <h1 className="text-xl font-semibold tracking-tight">
+            AgriHub Research Agent
+          </h1>
+          <p className="text-muted-foreground">
+            Enter the platform API key issued for this server. The key is sent
+            as <code>X-Api-Key</code> and is kept out of the address bar.
+          </p>
+        </div>
+        <form
+          onSubmit={async (event) => {
+            event.preventDefault();
+            const form = event.currentTarget;
+            const formData = new FormData(form);
+            const apiKey = String(formData.get("apiKey") ?? "").trim();
+            if (!apiKey) {
+              setLocalNotice("An API key is required.");
+              return;
+            }
+            setSubmitting(true);
+            setLocalNotice(null);
+            const result = await probeApi(API_URL, apiKey);
+            setSubmitting(false);
+            if (result === "unauthorized") {
+              setLocalNotice(
+                "That API key was rejected. Check that it is active and belongs to an enabled user.",
+              );
+              return;
+            }
+            if (result === "unreachable") {
+              setLocalNotice(
+                "The AgriHub server could not be reached. This is a connection problem, not a rejected key.",
+              );
+              return;
+            }
+            if (result === "server") {
+              setLocalNotice(
+                "The AgriHub server returned an error before accepting the key.",
+              );
+              return;
+            }
+            saveApiKey(apiKey, remember);
+            form.reset();
+          }}
+          className="bg-muted/50 flex flex-col gap-6 p-6"
+        >
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="apiKey">
+              Platform API key<span className="text-rose-500">*</span>
+            </Label>
+            <PasswordInput
+              id="apiKey"
+              name="apiKey"
+              autoComplete="off"
+              className="bg-background"
+              placeholder="Platform API key"
+              required
+            />
+          </div>
+          <label className="flex items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={remember}
+              onChange={(event) => setRemember(event.target.checked)}
+            />
+            <span>
+              <span className="font-medium">Remember this key</span>
+              <span className="text-muted-foreground block">
+                Off by default. The key stays in session storage and is
+                discarded when the tab closes. Turning this on stores it in
+                localStorage, which any script on this page can read if the site
+                is compromised.
+              </span>
+            </span>
+          </label>
+          {message ? (
+            <p
+              role="status"
+              className="text-sm text-rose-600"
+            >
+              {message}
+            </p>
+          ) : (
+            <p className="text-muted-foreground text-sm">
+              Waiting for a platform API key. Server: {API_URL}
+            </p>
+          )}
+          <div className="flex justify-end">
+            <Button
+              type="submit"
+              size="lg"
+              disabled={submitting}
+            >
+              {submitting ? "Checking" : "Continue"}
+              <ArrowRight className="size-5" />
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 export const StreamProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
-  // Get environment variables
-  const envApiUrl: string | undefined = process.env.NEXT_PUBLIC_API_URL;
-  const envAssistantId: string | undefined =
-    process.env.NEXT_PUBLIC_ASSISTANT_ID;
-
-  // Use URL params with env var fallbacks
-  const [apiUrl, setApiUrl] = useQueryState("apiUrl", {
-    defaultValue: envApiUrl || "",
-  });
-  const [assistantId, setAssistantId] = useQueryState("assistantId", {
-    defaultValue: envAssistantId || "",
-  });
-  // For API key, use localStorage with env var fallback
-  const [apiKey, _setApiKey] = useState(() => {
-    const storedKey = getApiKey();
-    return storedKey || "";
-  });
-
-  const setApiKey = (key: string) => {
-    window.localStorage.setItem("lg:chat:apiKey", key);
-    _setApiKey(key);
-  };
-
-  // Determine final values to use, prioritizing URL params then env vars
-  const finalApiUrl = apiUrl || envApiUrl;
-  const finalAssistantId = assistantId || envAssistantId;
-
-  // Show the form if we: don't have an API URL, or don't have an assistant ID
-  if (!finalApiUrl || !finalAssistantId) {
-    return (
-      <div className="flex min-h-screen w-full items-center justify-center p-4">
-        <div className="animate-in fade-in-0 zoom-in-95 bg-background flex max-w-3xl flex-col rounded-lg border shadow-lg">
-          <div className="mt-14 flex flex-col gap-2 border-b p-6">
-            <div className="flex flex-col items-start gap-2">
-              <Sprout className="size-7" />
-              <h1 className="text-xl font-semibold tracking-tight">
-                AgriHub Research Agent
-              </h1>
-            </div>
-            <p className="text-muted-foreground">
-              Enter the research server URL and agent ID to get started.
-            </p>
-          </div>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-
-              const form = e.target as HTMLFormElement;
-              const formData = new FormData(form);
-              const apiUrl = formData.get("apiUrl") as string;
-              const assistantId = formData.get("assistantId") as string;
-              const apiKey = formData.get("apiKey") as string;
-
-              setApiUrl(apiUrl);
-              setApiKey(apiKey);
-              setAssistantId(assistantId);
-
-              form.reset();
-            }}
-            className="bg-muted/50 flex flex-col gap-6 p-6"
-          >
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="apiUrl">
-                Deployment URL<span className="text-rose-500">*</span>
-              </Label>
-              <p className="text-muted-foreground text-sm">
-                This can be a local or production AgriHub deployment.
-              </p>
-              <Input
-                id="apiUrl"
-                name="apiUrl"
-                className="bg-background"
-                defaultValue={apiUrl || DEFAULT_API_URL}
-                required
-              />
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="assistantId">
-                Assistant / Graph ID<span className="text-rose-500">*</span>
-              </Label>
-              <p className="text-muted-foreground text-sm">
-                This is the ID of the graph (can be the graph name), or
-                assistant to fetch threads from, and invoke when actions are
-                taken.
-              </p>
-              <Input
-                id="assistantId"
-                name="assistantId"
-                className="bg-background"
-                defaultValue={assistantId || DEFAULT_ASSISTANT_ID}
-                required
-              />
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="apiKey">Server API Key</Label>
-              <p className="text-muted-foreground text-sm">
-                This is <strong>NOT</strong> required for the local server. It
-                is stored in your browser and only authenticates requests sent
-                to your configured research server.
-              </p>
-              <PasswordInput
-                id="apiKey"
-                name="apiKey"
-                defaultValue={apiKey ?? ""}
-                className="bg-background"
-                placeholder="Platform API key"
-              />
-            </div>
-
-            <div className="mt-2 flex justify-end">
-              <Button
-                type="submit"
-                size="lg"
-              >
-                Continue
-                <ArrowRight className="size-5" />
-              </Button>
-            </div>
-          </form>
-        </div>
-      </div>
-    );
+  const { apiKey, ready } = useApiKey();
+  if (!ready) {
+    return <div className="min-h-screen" />;
   }
-
+  if (!apiKey) {
+    return <ApiKeyGate />;
+  }
   return (
     <StreamSession
       apiKey={apiKey}
-      apiUrl={finalApiUrl}
-      assistantId={finalAssistantId}
+      apiUrl={API_URL}
+      assistantId={ASSISTANT_ID}
     >
       {children}
     </StreamSession>
   );
 };
 
-// Create a custom hook to use the context
 export const useStreamContext = (): StreamContextType => {
   const context = useContext(StreamContext);
   if (context === undefined) {

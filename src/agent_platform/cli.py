@@ -99,7 +99,14 @@ async def _run(service: AccountService, args: argparse.Namespace) -> dict[str, A
             "revoked_at": row.revoked_at,
         }
     if command == "rotate-key":
-        issued = await service.rotate_api_key(uuid.UUID(args.key_id))
+        explicit = args.expires_in_days is not None
+        if explicit and args.expires_in_days <= 0:
+            raise ValueError("--expires-in-days must be a positive number of days")
+        issued = await service.rotate_api_key(
+            uuid.UUID(args.key_id),
+            expires_at=_expiry(args.expires_in_days) if explicit else None,
+            expires_at_set=explicit,
+        )
         return _issued(issued)
     if command == "update-global-agent":
         agent_id = await service.update_global_agent(
@@ -157,8 +164,16 @@ def _parser() -> argparse.ArgumentParser:
     revoke = commands.add_parser("revoke-key")
     revoke.add_argument("--key-id", required=True)
 
-    rotate = commands.add_parser("rotate-key")
+    rotate = commands.add_parser(
+        "rotate-key",
+        help=(
+            "Revoke a key and issue a replacement. An expired key is not "
+            "copied onto the replacement. Omit --expires-in-days to issue a "
+            "non-expiring replacement for an expired key."
+        ),
+    )
     rotate.add_argument("--key-id", required=True)
+    rotate.add_argument("--expires-in-days", type=int)
 
     update = commands.add_parser("update-global-agent")
     update.add_argument("--agent-id", required=True)

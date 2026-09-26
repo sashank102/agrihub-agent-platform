@@ -20,6 +20,7 @@ from agent_platform.services.api_key_crypto import (
     hash_api_key_secret,
     key_is_usable,
     parse_api_key,
+    replacement_expiry,
     secrets_match,
 )
 
@@ -163,8 +164,20 @@ class AccountService:
                 )
             return _metadata(row)
 
-    async def rotate_api_key(self, key_id: uuid.UUID) -> IssuedApiKey:
-        """Revoke a key and issue a replacement for the same user."""
+    async def rotate_api_key(
+        self,
+        key_id: uuid.UUID,
+        *,
+        expires_at: datetime | None = None,
+        expires_at_set: bool = False,
+    ) -> IssuedApiKey:
+        """Revoke a key and issue a replacement for the same user.
+
+        Active keys keep their expiry unless the caller sets a new one.
+        Expired keys do not copy that expiry. With no explicit replacement
+        expiry, an expired key is replaced by a key that does not expire.
+        Revoked keys can be rotated under the same expiry rules.
+        """
         self._require_pepper()
         async with session_scope(self.session_factory) as session:
             repository = ApiKeyRepository(session)
@@ -180,7 +193,12 @@ class AccountService:
                 session,
                 user_id=current.user_id,
                 label=current.label,
-                expires_at=current.expires_at,
+                expires_at=replacement_expiry(
+                    current=current.expires_at,
+                    now=datetime.now(UTC),
+                    explicit=expires_at,
+                    explicit_set=expires_at_set,
+                ),
             )
             await AuditLogRepository(session).append(
                 actor_user_id=current.user_id,
@@ -296,6 +314,7 @@ class AccountService:
         parsed = parse_api_key(
             token,
             lookup_prefix_length=self.settings.API_KEY_LOOKUP_PREFIX_LENGTH,
+            platform_prefix=self.settings.API_KEY_PREFIX,
         )
         if parsed is None:
             await self._audit_auth_failure("malformed")
@@ -424,6 +443,7 @@ class AccountService:
                 pepper=pepper,
                 lookup_prefix_length=self.settings.API_KEY_LOOKUP_PREFIX_LENGTH,
                 secret_bytes=self.settings.API_KEY_SECRET_BYTES,
+                platform_prefix=self.settings.API_KEY_PREFIX,
             )
             try:
                 async with session.begin_nested():

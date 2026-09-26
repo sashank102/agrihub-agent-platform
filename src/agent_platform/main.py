@@ -21,6 +21,7 @@ from agent_platform.db.session import (
     create_session_factory,
     session_scope,
 )
+from agent_platform.fixture_graph import build_fixture_graph
 from agent_platform.persistence import open_postgres_persistence
 from agent_platform.process_lock import ApiProcessLock
 from agent_platform.services.accounts import AccountService
@@ -81,12 +82,16 @@ async def _seed_development_principal(app: FastAPI) -> None:
 def create_app(
     *,
     settings: Settings | None = None,
-    graph_builder: GraphBuilder = build_graph,
+    graph_builder: GraphBuilder | None = None,
     persistence_factory: Callable[..., Any] = open_postgres_persistence,
     engine_factory: Callable[..., Any] = create_platform_engine,
 ) -> FastAPI:
     """Create the local-only API with injectable lifecycle dependencies."""
     active_settings = settings or get_settings()
+    if graph_builder is None:
+        graph_builder = (
+            build_fixture_graph if active_settings.GRAPH_FIXTURE else build_graph
+        )
 
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
@@ -137,6 +142,7 @@ def create_app(
                     ),
                 )
                 await manager.reconcile_orphaned_runs(reason="process_restart")
+                await manager.repair_terminal_events()
                 await manager.reconcile_pending()
                 application.state.run_manager = manager
                 application.state.ready = True
@@ -157,7 +163,7 @@ def create_app(
     )
     application.state.settings = active_settings
     application.state.ready = False
-    install_redaction()
+    install_redaction(active_settings.API_KEY_PREFIX)
     application.add_middleware(
         RequestSizeLimitMiddleware,
         max_bytes=active_settings.API_MAX_REQUEST_BODY_BYTES,

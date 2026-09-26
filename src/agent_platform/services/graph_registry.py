@@ -31,6 +31,13 @@ class GraphRegistry:
         """Return a graph by graph ID or assistant UUID."""
         return self._graphs.get(identifier)
 
+    def graph_for_agent(self, agent_id: uuid.UUID) -> Any | None:
+        """Return the compiled graph registered for an agent UUID."""
+        entry = self.resolve(str(agent_id))
+        if entry is None:
+            return None
+        return entry.graph
+
     def graph_id_for_agent(self, agent_id: uuid.UUID) -> str | None:
         """Return the public graph id registered for an agent UUID."""
         for entry in self._graphs.values():

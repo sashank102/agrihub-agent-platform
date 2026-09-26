@@ -58,6 +58,37 @@ class RunEventRepository:
             raise LookupError("run not found")
         return await self._append_locked(run_id, event_type, payload)
 
+    async def append_terminal_if_absent(
+        self,
+        *,
+        run_id: uuid.UUID,
+        event_type: str,
+        payload: dict[str, Any] | None = None,
+    ) -> tuple[RunEvent, bool]:
+        """Append one terminal event unless this run already has one.
+
+        The run row is locked first so concurrent repairs keep a single
+        monotonic sequence and do not insert a second end or error event.
+        """
+        locked_run_id = await self.session.scalar(
+            select(Run.id).where(Run.id == run_id).with_for_update()
+        )
+        if locked_run_id is None:
+            raise LookupError("run not found")
+        existing = await self.session.scalar(
+            select(RunEvent)
+            .where(
+                RunEvent.run_id == run_id,
+                RunEvent.event_type.in_(("end", "error")),
+            )
+            .order_by(RunEvent.sequence)
+            .limit(1)
+        )
+        if existing is not None:
+            return existing, False
+        created = await self._append_locked(run_id, event_type, payload)
+        return created, True
+
     async def _append_locked(
         self,
         run_id: uuid.UUID,

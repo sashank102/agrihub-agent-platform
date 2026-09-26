@@ -18,6 +18,13 @@ from agent_platform.services.tenant_context import TenantIdentity
 _IDENTITY_KEYS = ("user_id", "owner_user_id", "owner_id", "run_id")
 
 SUPPORTED_STREAM_MODES = frozenset({"values"})
+# The React SDK always requests ``updates`` beside ``values``. It also registers
+# ``custom`` for onCustomEvent and ``messages-tuple`` when message helpers are
+# read during render. Those extra modes are accepted and not emitted. The run
+# still streams ``values``, which carry the message state.
+ACCEPTED_STREAM_MODES = frozenset(
+    {"values", "updates", "custom", "messages-tuple"}
+)
 IMPLEMENTED_DURABILITY = frozenset({"sync", "async", "exit"})
 
 
@@ -54,7 +61,13 @@ def validate_run_stream_request(request: RunStreamRequest) -> None:
             "checkpoint_during cannot be combined with durability"
         )
     modes = _stream_modes(request.stream_mode)
-    if modes != ["values"]:
+    if not modes or any(mode not in ACCEPTED_STREAM_MODES for mode in modes):
+        unknown = ", ".join(mode for mode in modes if mode not in ACCEPTED_STREAM_MODES)
+        raise UnsupportedRunOption(
+            "stream_mode only supports values; other stream modes are not supported"
+            + (f": {unknown}" if unknown else "")
+        )
+    if "values" not in modes:
         raise UnsupportedRunOption(
             "stream_mode only supports values; other stream modes are not supported"
         )

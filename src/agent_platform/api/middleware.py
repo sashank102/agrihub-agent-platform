@@ -69,8 +69,11 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             request_id_var.reset(token)
 
 
-def install_redaction() -> None:
-    """Attach the secret filter once to the platform loggers."""
+def install_redaction(platform_prefix: str = "aghub") -> None:
+    """Attach the secret filter once and match the configured key prefix."""
+    from agent_platform.services.redaction import configure_redaction
+
+    configure_redaction(platform_prefix)
     platform_logger = logging.getLogger("agent_platform")
     if not any(isinstance(item, RedactionFilter) for item in platform_logger.filters):
         platform_logger.addFilter(RedactionFilter())

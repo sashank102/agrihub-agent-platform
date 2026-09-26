@@ -10,24 +10,58 @@ if [[ ! -x "$UV" || ! -x "$NEXT" ]]; then
   exit 1
 fi
 
-if ! grep -Eq '^ANTHROPIC_API_KEY=.+$' "$ROOT_DIR/.env"; then
-  echo "Warning: add ANTHROPIC_API_KEY to $ROOT_DIR/.env before running research."
+if [[ -f "$ROOT_DIR/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "$ROOT_DIR/.env"
+  set +a
 fi
 
 export UV_PYTHON_INSTALL_DIR="$ROOT_DIR/.uv-python"
 export UV_PYTHON_BIN_DIR="$ROOT_DIR/.uv-python/bin"
 export UV_CACHE_DIR="$ROOT_DIR/.uv-cache"
+export DATABASE_URI="${DATABASE_URI:-postgresql://agent_platform:agent_platform@localhost:5432/agent_platform}"
+
+"$UV" run python - <<'PY'
+import os
+import sys
+
+from sqlalchemy import create_engine, text
+
+uri = os.environ.get("DATABASE_URI")
+if not uri:
+    print("DATABASE_URI is required.", file=sys.stderr)
+    sys.exit(1)
+try:
+    engine = create_engine(uri, pool_pre_ping=True)
+    with engine.connect() as connection:
+        connection.execute(text("SELECT 1"))
+    engine.dispose()
+except Exception:
+    print("PostgreSQL is not ready. Start it with: docker compose up -d postgres", file=sys.stderr)
+    sys.exit(1)
+PY
+
+(
+  cd "$ROOT_DIR"
+  "$UV" run alembic upgrade head
+)
 
 cleanup() {
   trap - INT TERM EXIT
-  kill -- "-${BACKEND_PID:-}" "-${FRONTEND_PID:-}" 2>/dev/null || true
+  if [[ -n "${BACKEND_PID:-}" ]]; then
+    kill -- "-${BACKEND_PID}" 2>/dev/null || kill "${BACKEND_PID}" 2>/dev/null || true
+  fi
+  if [[ -n "${FRONTEND_PID:-}" ]]; then
+    kill -- "-${FRONTEND_PID}" 2>/dev/null || kill "${FRONTEND_PID}" 2>/dev/null || true
+  fi
   wait "${BACKEND_PID:-}" "${FRONTEND_PID:-}" 2>/dev/null || true
 }
 trap cleanup INT TERM EXIT
 
 (
   cd "$ROOT_DIR"
-  exec setsid "$UV" run langgraph dev --allow-blocking --no-browser
+  exec setsid "$UV" run python -c "from agent_platform.main import run; run()"
 ) &
 BACKEND_PID=$!
 
@@ -37,9 +71,12 @@ BACKEND_PID=$!
 ) &
 FRONTEND_PID=$!
 
-echo "AgriHub UI:       http://127.0.0.1:3000"
-echo "LangGraph API:    http://127.0.0.1:2024"
-echo "LangGraph docs:   http://127.0.0.1:2024/docs"
+echo "AgriHub UI:  http://127.0.0.1:3000"
+echo "AgriHub API: http://127.0.0.1:8000"
+echo "API docs:    http://127.0.0.1:8000/docs"
 echo "Press Ctrl+C to stop both services."
 
 wait -n "$BACKEND_PID" "$FRONTEND_PID"
+status=$?
+cleanup
+exit "$status"

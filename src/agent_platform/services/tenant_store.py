@@ -1,5 +1,6 @@
 """Force every long-term store namespace to start with the authenticated user."""
 
+import uuid
 from collections.abc import Sequence
 from typing import Any
 
@@ -10,8 +11,9 @@ class TenantStore:
     """Prefix store operations with the user bound on the executing run.
 
     Tools cannot select another tenant by passing an owner id. A namespace that
-    already starts with the authenticated user is kept. Any other first element
-    is treated as ordinary path data and placed after that user id.
+    already starts with the authenticated user is kept. A namespace whose first
+    element is a different user id is rejected. Any other first element is
+    ordinary path data and is placed after the authenticated user id.
     """
 
     def __init__(self, inner: Any) -> None:
@@ -27,6 +29,8 @@ class TenantStore:
         parts = tuple(str(part) for part in namespace)
         if parts[:1] == (user_id,):
             return parts
+        if parts and _is_foreign_user(parts[0], user_id):
+            raise PermissionError("store namespace belongs to another tenant")
         return (user_id, *parts)
 
     async def aget(
@@ -108,3 +112,16 @@ class TenantStore:
     def search(self, namespace_prefix: tuple[str, ...], /, **kwargs: Any) -> Any:
         """Search synchronously inside the authenticated user's prefix."""
         return self._inner.search(self._namespace(namespace_prefix), **kwargs)
+
+
+def _is_foreign_user(value: str, user_id: str) -> bool:
+    """Return whether ``value`` is a user id other than the caller."""
+    try:
+        presented = uuid.UUID(value)
+    except (TypeError, ValueError):
+        return False
+    try:
+        caller = uuid.UUID(user_id)
+    except (TypeError, ValueError):
+        return True
+    return presented != caller

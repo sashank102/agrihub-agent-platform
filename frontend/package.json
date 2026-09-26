@@ -10,7 +10,8 @@
     "lint": "NODE_OPTIONS='--require ./scripts/use-typescript6.cjs' eslint .",
     "lint:fix": "NODE_OPTIONS='--require ./scripts/use-typescript6.cjs' eslint . --fix",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@langchain/core": "^1.2.10",
@@ -44,6 +45,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/lodash": "^4.17.25",
     "@types/node": "^26.5.1",

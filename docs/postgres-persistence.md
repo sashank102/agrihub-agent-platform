@@ -2,8 +2,8 @@
 
 The platform runtime can compile the existing research graph with
 `AsyncPostgresSaver` and `AsyncPostgresStore`. The module-level
-`deep_researcher` export remains in memory, so the existing `langgraph dev`
-command and Studio workflow are unchanged.
+`deep_researcher` export remains available to the FastAPI graph factory. Normal
+development does not start the in-memory LangGraph development server.
 
 ## Start PostgreSQL
 

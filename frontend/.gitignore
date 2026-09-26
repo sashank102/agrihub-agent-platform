@@ -28,3 +28,9 @@ dist-ssr
 .env
 .next/
 next-env.d.ts
+e2e/.keys.json
+playwright-report/
+test-results/
+blob-report/
+AGENTS.md
+CLAUDE.md

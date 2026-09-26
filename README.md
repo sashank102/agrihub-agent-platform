@@ -11,11 +11,10 @@ LangGraph, PostgreSQL, and a Next.js chat interface.
 - `frontend/` — Next.js chat client using the LangGraph SDK
 - `compose.yaml` — local PostgreSQL service
 
-The existing `start-dev.sh` path still uses the in-memory LangGraph development
-server on port `2024`. The FastAPI server on port `8000` runs durable runs in
-one process, with PostgreSQL event replay. Local development can set
-`AUTH_MODE=disabled`; production requires API keys. The frontend remains on
-the original path until Plan 07.
+`start-dev.sh` starts PostgreSQL-backed FastAPI on port `8000` and the Next.js
+UI on port `3000`. The UI sends a platform API key as `X-Api-Key`. Local
+development can set `AUTH_MODE=disabled`; production requires API keys. The
+in-memory LangGraph development server is not part of normal development.
 
 ## Local setup
 

@@ -90,7 +90,7 @@ export default function ThreadHistory() {
     setThreadsLoading(true);
     getThreads()
       .then(setThreads)
-      .catch(console.error)
+      .catch(() => setThreads([]))
       .finally(() => setThreadsLoading(false));
   }, []);
 

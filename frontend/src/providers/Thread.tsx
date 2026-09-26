@@ -1,7 +1,6 @@
 import { validate } from "uuid";
-import { getApiKey } from "@/lib/api-key";
+import { isUnauthorizedStatus, useApiKey } from "@/lib/api-key";
 import { Thread } from "@langchain/langgraph-sdk";
-import { useQueryState } from "nuqs";
 import {
   createContext,
   useContext,
@@ -23,42 +22,48 @@ interface ThreadContextType {
 
 const ThreadContext = createContext<ThreadContextType | undefined>(undefined);
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+const ASSISTANT_ID = process.env.NEXT_PUBLIC_ASSISTANT_ID || "agrihub";
+
 function getThreadSearchMetadata(
   assistantId: string,
 ): { graph_id: string } | { assistant_id: string } {
   if (validate(assistantId)) {
     return { assistant_id: assistantId };
-  } else {
-    return { graph_id: assistantId };
   }
+  return { graph_id: assistantId };
 }
 
 export function ThreadProvider({ children }: { children: ReactNode }) {
-  const envApiUrl: string | undefined = process.env.NEXT_PUBLIC_API_URL;
-  const envAssistantId: string | undefined =
-    process.env.NEXT_PUBLIC_ASSISTANT_ID;
-
-  const [apiUrl] = useQueryState("apiUrl", {
-    defaultValue: envApiUrl || "",
-  });
-  const [assistantId] = useQueryState("assistantId");
+  const { apiKey, clearApiKey } = useApiKey();
   const [threads, setThreads] = useState<Thread[]>([]);
   const [threadsLoading, setThreadsLoading] = useState(false);
+  const [loadedKey, setLoadedKey] = useState(apiKey);
+  if (loadedKey !== apiKey) {
+    setLoadedKey(apiKey);
+    setThreads([]);
+  }
 
   const getThreads = useCallback(async (): Promise<Thread[]> => {
-    const resolvedAssistantId = assistantId || envAssistantId;
-    if (!apiUrl || !resolvedAssistantId) return [];
-    const client = createClient(apiUrl, getApiKey() ?? undefined);
-
-    const threads = await client.threads.search({
-      metadata: {
-        ...getThreadSearchMetadata(resolvedAssistantId),
-      },
-      limit: 100,
-    });
-
-    return threads;
-  }, [apiUrl, assistantId, envAssistantId]);
+    if (!apiKey) {
+      return [];
+    }
+    const client = createClient(API_URL, apiKey);
+    try {
+      return await client.threads.search({
+        metadata: {
+          ...getThreadSearchMetadata(ASSISTANT_ID),
+        },
+        limit: 100,
+      });
+    } catch (error) {
+      if (isUnauthorizedStatus(error)) {
+        clearApiKey("rejected");
+        return [];
+      }
+      throw error;
+    }
+  }, [apiKey, clearApiKey]);
 
   const value = {
     getThreads,

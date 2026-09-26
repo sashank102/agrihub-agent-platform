@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 import { ReactNode, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { useApiKey } from "@/lib/api-key";
 import { useStreamContext } from "@/providers/Stream";
 import { useState, FormEvent } from "react";
 import { Button } from "../ui/button";
@@ -81,6 +82,7 @@ function ScrollToBottom(props: { className?: string }) {
 }
 
 export function Thread() {
+  const { clearApiKey, connection } = useApiKey();
   const [artifactContext, setArtifactContext] = useArtifactContext();
   const [artifactOpen, closeArtifact] = useArtifactOpen();
 
@@ -294,6 +296,15 @@ export function Thread() {
                   </Button>
                 )}
               </div>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setThreadId(null);
+                  clearApiKey();
+                }}
+              >
+                Sign out
+              </Button>
             </div>
           )}
           {chatStarted && (
@@ -334,6 +345,24 @@ export function Thread() {
               </div>
 
               <div className="flex items-center gap-4">
+                <span className="text-muted-foreground text-xs">
+                  {connection === "ok"
+                    ? "Connected"
+                    : connection === "unreachable"
+                      ? "Server unreachable"
+                      : connection === "server"
+                        ? "Server error"
+                        : "Checking connection"}
+                </span>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setThreadId(null);
+                    clearApiKey();
+                  }}
+                >
+                  Sign out
+                </Button>
                 <TooltipIconButton
                   size="lg"
                   className="p-4"

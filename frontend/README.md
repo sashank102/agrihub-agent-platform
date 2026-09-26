@@ -7,13 +7,15 @@ Next.js chat interface for the AgriHub Agent Platform.
 Copy `.env.example` to `.env.local`:
 
 ```dotenv
-NEXT_PUBLIC_API_URL=http://127.0.0.1:2024
+NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
 NEXT_PUBLIC_ASSISTANT_ID=agrihub
 ```
 
-A platform API key can be entered in the connection form when authentication is
-enabled. It is stored in browser local storage and sent as `X-Api-Key` by the
-LangGraph SDK client.
+The API URL and assistant id come from the environment. They do not replace
+the platform API key. The sign-in form always asks for that key and sends it
+as `X-Api-Key`. By default the key is kept in session storage for the tab.
+Choosing “Remember this key” stores it in localStorage; any script that runs
+on this origin can read that copy.
 
 ## Development
 

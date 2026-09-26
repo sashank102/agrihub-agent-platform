@@ -78,7 +78,7 @@ def test_unsupported_run_fields_are_rejected():
 
 def test_implemented_and_explicitly_ignored_fields_are_accepted():
     request = _request(
-        stream_mode=["values"],
+        stream_mode=["values", "updates"],
         stream_subgraphs=True,
         stream_resumable=False,
         metadata={"source": "test"},

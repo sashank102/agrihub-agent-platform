@@ -1,13 +1,21 @@
-"""Generate and verify high-entropy API keys. Plaintext is never stored."""
+"""Generate and verify high-entropy API keys. Plaintext is never stored.
+
+The platform prefix comes from ``API_KEY_PREFIX``. It is not read from the
+request. Keys issued with the default prefix ``aghub`` keep working. Changing
+the prefix does not rewrite stored hashes; those keys must be reissued.
+"""
 
 import hashlib
 import hmac
+import math
+import re
 import secrets
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
-KEY_PLATFORM_PREFIX = "aghub_"
+_SECRET_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+_PREFIX_RE = re.compile(r"^[a-z]{2,32}$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,20 +35,34 @@ class ParsedApiKey:
     secret: str
 
 
+def validate_platform_prefix(prefix: str) -> str:
+    """Return a lowercase letter prefix suitable for key generation and parsing."""
+    if not isinstance(prefix, str) or _PREFIX_RE.fullmatch(prefix) is None:
+        raise ValueError("API_KEY_PREFIX must be 2-32 lowercase letters")
+    return prefix
+
+
+def platform_key_label(prefix: str) -> str:
+    """Return the ``prefix_`` label prepended to every issued key."""
+    return f"{validate_platform_prefix(prefix)}_"
+
+
 def generate_api_key(
     *,
     pepper: str,
     lookup_prefix_length: int = 8,
     secret_bytes: int = 32,
+    platform_prefix: str = "aghub",
 ) -> GeneratedApiKey:
     """Build a prefixed key with at least 256 bits of random secret material."""
     if secret_bytes < 32:
         raise ValueError("API key secrets must contain at least 256 bits")
     if lookup_prefix_length < 4:
         raise ValueError("API key lookup prefixes must be at least 4 characters")
+    label = platform_key_label(platform_prefix)
     lookup = _token(lookup_prefix_length)
     secret = _token_bytes(secret_bytes)
-    plaintext = f"{KEY_PLATFORM_PREFIX}{lookup}{secret}"
+    plaintext = f"{label}{lookup}{secret}"
     return GeneratedApiKey(
         plaintext=plaintext,
         key_prefix=lookup,
@@ -48,11 +70,24 @@ def generate_api_key(
     )
 
 
-def parse_api_key(token: str, *, lookup_prefix_length: int) -> ParsedApiKey | None:
-    """Split a presented key. Malformed values produce no secret material."""
-    if not token.startswith(KEY_PLATFORM_PREFIX):
+def parse_api_key(
+    token: str,
+    *,
+    lookup_prefix_length: int,
+    platform_prefix: str = "aghub",
+) -> ParsedApiKey | None:
+    """Split a presented key. Malformed values produce no secret material.
+
+    ``platform_prefix`` is the server setting. Callers must not pass a prefix
+    taken from the request.
+    """
+    try:
+        label = platform_key_label(platform_prefix)
+    except ValueError:
         return None
-    body = token[len(KEY_PLATFORM_PREFIX) :]
+    if not token.startswith(label):
+        return None
+    body = token[len(label) :]
     if len(body) <= lookup_prefix_length:
         return None
     prefix = body[:lookup_prefix_length]
@@ -62,6 +97,29 @@ def parse_api_key(token: str, *, lookup_prefix_length: int) -> ParsedApiKey | No
     if not _is_token_text(prefix) or not _is_token_text(secret):
         return None
     return ParsedApiKey(key_prefix=prefix, secret=secret)
+
+
+def replacement_expiry(
+    *,
+    current: datetime | None,
+    now: datetime,
+    explicit: datetime | None,
+    explicit_set: bool,
+) -> datetime | None:
+    """Choose the expiry stored on a rotated key.
+
+    An explicit replacement expiry always wins. An expiry that is already in
+    the past is never copied. When the key being rotated is expired and the
+    caller does not supply a new expiry, the replacement does not expire.
+    """
+    if explicit_set:
+        return explicit
+    if current is None:
+        return None
+    current_utc = current if current.tzinfo is not None else current.replace(tzinfo=UTC)
+    if current_utc <= now:
+        return None
+    return current
 
 
 def hash_api_key_secret(secret: str, pepper: str) -> str:
@@ -101,17 +159,21 @@ def new_key_id() -> uuid.UUID:
 
 
 def _token(length: int) -> str:
-    """Return ``length`` characters from a URL-safe alphabet without separators."""
-    alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-    return "".join(secrets.choice(alphabet) for _ in range(length))
+    """Return ``length`` characters from the secret alphabet."""
+    return "".join(secrets.choice(_SECRET_ALPHABET) for _ in range(length))
 
 
 def _token_bytes(nbytes: int) -> str:
-    """Return random text containing at least ``nbytes`` of entropy."""
-    # token_urlsafe uses 6 bits per character after padding is stripped.
-    raw = secrets.token_urlsafe(nbytes)
-    return raw.replace("-", "A").replace("_", "B")
+    """Encode ``nbytes`` of entropy without mapping distinct symbols together.
+
+    Each character is drawn from a 62-symbol alphabet, so the string is long
+    enough that its entropy is at least ``nbytes * 8`` bits. Characters are
+    never produced by replacing ``-`` or ``_`` with another alphabet symbol.
+    """
+    bits = nbytes * 8
+    length = math.ceil(bits / math.log2(len(_SECRET_ALPHABET)))
+    return _token(length)
 
 
 def _is_token_text(value: str) -> bool:
-    return value.isalnum()
+    return bool(value) and all(character in _SECRET_ALPHABET for character in value)

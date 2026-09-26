@@ -74,6 +74,15 @@ def test_pepper_is_excluded_from_settings_repr():
     assert "pepper-value-not-logged" not in repr(settings)
 
 
+def test_request_body_ceiling_defaults_to_ten_megabytes():
+    settings = Settings(
+        ENVIRONMENT="test",
+        DATABASE_URI="postgresql://agent_platform:agent_platform@localhost:5432/agent_platform",
+        _env_file=None,
+    )
+    assert settings.API_MAX_REQUEST_BODY_BYTES == 10_485_760
+
+
 def test_database_uri_must_point_to_postgresql():
     with pytest.raises(ValidationError, match="must use postgres"):
         Settings(

@@ -91,7 +91,10 @@ async def join_run_stream(
     stream_mode: Annotated[list[str] | None, Query()] = None,
 ) -> StreamingResponse:
     """Replay durable events and follow a still-active run."""
-    if stream_mode is not None and any(mode != "values" for mode in stream_mode):
+    if stream_mode is not None and any(
+        mode not in {"values", "updates", "custom", "messages-tuple"}
+        for mode in stream_mode
+    ):
         raise HTTPException(
             status_code=422,
             detail="stream_mode only supports values",

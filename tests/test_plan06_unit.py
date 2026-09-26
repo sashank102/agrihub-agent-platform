@@ -2,6 +2,7 @@
 
 import asyncio
 import uuid
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -12,11 +13,14 @@ from agent_platform.services.api_key_crypto import (
     generate_api_key,
     hash_api_key_secret,
     parse_api_key,
+    replacement_expiry,
     secrets_match,
 )
 from agent_platform.services.graph_registry import GraphRegistry
 from agent_platform.services.redaction import redact_text, sanitize
-from agent_platform.services.run_manager import RunManager
+from agent_platform.services.run_manager import RunManager, decide_orphan_outcome
+from agent_platform.services.tenant_context import tenant_user_id
+from agent_platform.services.tenant_store import TenantStore
 
 
 def test_api_key_format_has_prefix_lookup_and_256_bits():
@@ -51,12 +55,24 @@ def test_redaction_removes_keys_and_payloads():
     cleaned = sanitize(
         {
             "api_key": "aghub_abcd1234SECRETVALUE",
-            "prompt": "private prompt",
+            "authorization": "Bearer aghub_abcd1234SECRETVALUE",
+            "password": "hunter2",
+            "content_type": "image/png",
+            "input_tokens": 12,
+            "output_tokens": 4,
+            "cache_read_input_tokens": 3,
+            "cache_creation_input_tokens": 1,
             "note": "ok",
         }
     )
     assert cleaned["api_key"] == "[redacted]"
-    assert cleaned["prompt"] == "[redacted]"
+    assert cleaned["authorization"] == "[redacted]"
+    assert cleaned["password"] == "[redacted]"
+    assert cleaned["content_type"] == "image/png"
+    assert cleaned["input_tokens"] == 12
+    assert cleaned["output_tokens"] == 4
+    assert cleaned["cache_read_input_tokens"] == 3
+    assert cleaned["cache_creation_input_tokens"] == 1
     assert cleaned["note"] == "ok"
 
 
@@ -114,3 +130,120 @@ def test_thread_locks_are_reclaimed_and_waiters_keep_the_same_lock():
         assert shared not in manager._thread_locks
 
     asyncio.run(scenario())
+
+
+def test_api_key_secrets_round_trip_without_symbol_collisions():
+    pepper = "test-pepper-value"
+    issued = [generate_api_key(pepper=pepper) for _ in range(40)]
+    plaintexts = [item.plaintext for item in issued]
+    assert len(set(plaintexts)) == len(plaintexts)
+    alphabet = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
+    for item in issued:
+        parsed = parse_api_key(item.plaintext, lookup_prefix_length=8)
+        assert parsed is not None
+        assert f"aghub_{parsed.key_prefix}{parsed.secret}" == item.plaintext
+        assert set(parsed.secret) <= alphabet
+        assert "-" not in parsed.secret and "_" not in parsed.secret
+        assert item.plaintext not in item.secret_hash
+        again = parse_api_key(item.plaintext, lookup_prefix_length=8)
+        assert again == parsed
+
+
+def test_configured_prefix_controls_generation_and_parsing():
+    pepper = "test-pepper-value"
+    issued = generate_api_key(pepper=pepper, platform_prefix="crop")
+    assert issued.plaintext.startswith("crop_")
+    assert parse_api_key(issued.plaintext, lookup_prefix_length=8, platform_prefix="crop")
+    assert (
+        parse_api_key(issued.plaintext, lookup_prefix_length=8, platform_prefix="aghub")
+        is None
+    )
+    with pytest.raises(ValidationError, match="API_KEY_PREFIX"):
+        Settings(
+            ENVIRONMENT="test",
+            DATABASE_URI="postgresql://agent_platform:agent_platform@localhost:5432/agent_platform",
+            API_KEY_PREFIX="AgHub",
+            _env_file=None,
+        )
+
+
+def test_expired_rotation_does_not_copy_the_old_expiry():
+    now = datetime(2026, 9, 25, tzinfo=UTC)
+    expired = now - timedelta(days=2)
+    future = now + timedelta(days=9)
+    explicit = now + timedelta(days=3)
+    assert replacement_expiry(
+        current=expired, now=now, explicit=None, explicit_set=False
+    ) is None
+    assert (
+        replacement_expiry(current=future, now=now, explicit=None, explicit_set=False)
+        == future
+    )
+    assert (
+        replacement_expiry(
+            current=expired, now=now, explicit=explicit, explicit_set=True
+        )
+        == explicit
+    )
+    assert replacement_expiry(
+        current=None, now=now, explicit=None, explicit_set=False
+    ) is None
+
+
+def test_restart_decision_keeps_a_completed_checkpoint():
+    completed = decide_orphan_outcome(
+        checkpoint="completed",
+        intent={"intent": "interrupted", "reason": "process_restart"},
+        fallback_reason="process_restart",
+    )
+    assert completed.status == "completed"
+    assert completed.graph_succeeded is True
+    unknown = decide_orphan_outcome(
+        checkpoint="unknown",
+        intent=None,
+        fallback_reason="process_restart",
+    )
+    assert unknown.status == "interrupted"
+    assert unknown.error_code == "process_restart"
+    cancelled = decide_orphan_outcome(
+        checkpoint="unknown",
+        intent={
+            "intent": "cancelled",
+            "reason": "cancelled",
+            "event_type": "end",
+            "event_payload": {"status": "cancelled"},
+        },
+        fallback_reason="process_restart",
+    )
+    assert cancelled.status == "cancelled"
+    paused = decide_orphan_outcome(
+        checkpoint="interrupted",
+        intent=None,
+        fallback_reason="process_restart",
+    )
+    assert paused.status == "interrupted"
+    assert paused.error_code == "graph_interrupt"
+
+
+def test_tenant_store_rejects_a_foreign_user_namespace():
+    class _Inner:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, ...]] = []
+
+        def get(self, namespace, key, **kwargs):
+            self.calls.append(tuple(namespace))
+            return "ok"
+
+    inner = _Inner()
+    store = TenantStore(inner)
+    owner = str(uuid.uuid4())
+    foreign = str(uuid.uuid4())
+    token = tenant_user_id.set(owner)
+    try:
+        assert store.get((owner, "notes"), "draft") == "ok"
+        assert store.get(("notes",), "draft") == "ok"
+        with pytest.raises(PermissionError, match="another tenant"):
+            store.get((foreign, "notes"), "draft")
+    finally:
+        tenant_user_id.reset(token)
+    assert inner.calls == [(owner, "notes"), (owner, "notes")]

@@ -5,8 +5,9 @@ The FastAPI server is the single-process chat protocol API. With
 request acts as `DEVELOPMENT_USER_ID`. That mode cannot start when
 `ENVIRONMENT=production`. Production requires `AUTH_MODE=api_key` and an
 `API_KEY_PEPPER` of at least 16 characters. There is no default pepper.
-The server never accepts owner identity from request metadata. The frontend
-stays on `langgraph dev` until Plan 07.
+The server never accepts owner identity from request metadata. Normal
+development uses this FastAPI server. The frontend does not connect to the
+old in-memory LangGraph development server.
 
 ## Start
 
@@ -18,8 +19,10 @@ docker compose up -d postgres
 ./start-api.sh
 ```
 
-The API listens on <http://127.0.0.1:8000> by default. The existing
-`./start-dev.sh` and `langgraph dev` path remains unchanged on port `2024`.
+The API listens on <http://127.0.0.1:8000> by default. `./start-dev.sh` checks
+PostgreSQL, applies Alembic migrations, and starts this API plus the Next.js
+UI. LangGraph checkpoint tables are created when the API opens its persistence
+lifecycle. The script does not print secrets.
 
 Exactly one Uvicorn worker is required. `start-api.sh` starts Uvicorn with
 `workers=1` and refuses `WEB_CONCURRENCY` greater than 1. Lifespan also holds
@@ -28,10 +31,16 @@ dedicated connection, so `uvicorn agent_platform.main:app --workers 2` cannot
 start a second RunManager. Run tasks and SSE subscriber queues live in that
 process. PostgreSQL stores the ordered event log, so a client can disconnect
 and reconnect to this same process. A second worker or a new process after a
-crash cannot see those queues. Startup marks leftover `pending` and `running`
-rows `interrupted` unless a terminal write is still queued for reconciliation,
-and does not resume model or tool calls. Retry or resume is an explicit new
-run from the last checkpoint.
+crash cannot see those queues. Startup does not resume model or tool calls. Leftover `pending` and `running`
+rows are settled from durable reconciliation intent or the latest LangGraph
+checkpoint. A completed checkpoint is stored as `completed`. A checkpoint with
+an interrupt is stored as `interrupted`. If the outcome cannot be determined,
+the row is `interrupted` with an explicit reason such as `process_restart`.
+Nothing can record intent while PostgreSQL itself is unavailable; after it
+recovers, the checkpoint is the source of truth. A terminal status that is
+missing its `end` or `error` event is backfilled once, keeping the event
+sequence monotonic. Retry or resume is an explicit new run from the last
+checkpoint.
 
 ## API keys
 
@@ -44,13 +53,28 @@ python -m agent_platform issue-key --user-id "<user-id>" --label "local"
 python -m agent_platform list-keys --user-id "<user-id>"
 python -m agent_platform revoke-key --key-id "<key-id>"
 python -m agent_platform rotate-key --key-id "<key-id>"
+python -m agent_platform rotate-key --key-id "<key-id>" --expires-in-days 30
 ```
 
-Keys look like `aghub_` plus a short lookup prefix plus at least 256 bits of
-secret. Only the prefix and an HMAC-SHA256 of the secret are stored. Send the
+`API_KEY_PREFIX` controls both generation and parsing. The default is `aghub`,
+so keys issued before a prefix setting existed still authenticate. The prefix
+is never taken from the request. Changing `API_KEY_PREFIX` does not rewrite
+stored hashes; previously issued keys stop authenticating until they are
+reissued.
+
+Keys look like `{API_KEY_PREFIX}_` plus a short lookup prefix plus a secret
+with at least 256 bits of entropy. The secret is drawn from a 62-character
+alphabet. It is not produced by mapping `-` or `_` onto other characters.
+Only the lookup prefix and an HMAC-SHA256 of the secret are stored. Send the
 key as `X-Api-Key` or `Authorization: Bearer`. Missing, invalid, revoked,
 expired, conflicting, and inactive-user credentials all return 401 with
 `invalid authentication credentials`.
+
+Rotating an active key keeps its expiry unless `--expires-in-days` sets a new
+one. An expired expiry is never copied. Rotating an expired key without
+`--expires-in-days` issues a replacement that does not expire. Revoked keys
+can be rotated under the same expiry rules. The plaintext replacement is
+printed once.
 
 ## Supported protocol subset
 
@@ -98,7 +122,7 @@ not interrupted. A checkpoint id from another thread is rejected.
 | --- | --- |
 | `input`, `assistant_id`, `config`, `context` | Executed. `config.configurable.thread_id` is forced to the path thread. |
 | `metadata` | Stored with the run configuration. |
-| `stream_mode` | Only `values`. Anything else is 422. |
+| `stream_mode` | `values` is executed. The JS SDK may also request `updates`, `custom`, and `messages-tuple`; those modes are accepted and not emitted. Any other mode is 422. |
 | `stream_subgraphs` | Passed through to LangGraph. |
 | `stream_resumable` | Accepted and ignored. Events are always stored. |
 | `command.resume`, `command.goto`, `command.update` | Converted to a LangGraph `Command`. |
@@ -126,7 +150,7 @@ The server reads `API_HOST`, `API_PORT`, `API_ALLOWED_ORIGINS`,
 `http://localhost:3000`. List-valued origins use Pydantic's JSON environment
 syntax.
 
-Request bodies are limited while chunks arrive. A declared `Content-Length`
+The default body ceiling is 10 MB (`10485760` bytes). Request bodies are limited while chunks arrive. A declared `Content-Length`
 above the limit is rejected before the body is read. Chunked bodies are
 counted incrementally and rejected with 413 as soon as the limit is crossed;
 the remainder is not read. Invalid `Content-Length` values return 400.
