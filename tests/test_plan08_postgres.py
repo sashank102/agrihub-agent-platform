@@ -169,6 +169,59 @@ def test_cancel_during_binding_matches_durable_status(postgres_database_uri: str
     asyncio.run(scenario())
 
 
+def test_cancel_binding_timeout_forces_terminal_status(postgres_database_uri: str):
+    async def scenario() -> None:
+        app = create_app(
+            settings=_settings(postgres_database_uri),
+            graph_builder=_echo_graph(),
+        )
+        started = asyncio.Event()
+        release = asyncio.Event()
+        seen: dict[str, str] = {}
+
+        async def pause(self, run_id):
+            seen["run_id"] = str(run_id)
+            started.set()
+            await release.wait()
+
+        async def no_bound_task(self, run_id):
+            return None
+
+        async with app.router.lifespan_context(app):
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test",
+            ) as client:
+                thread = await _create_thread(client)
+                with pytest.MonkeyPatch.context() as patch:
+                    patch.setattr(RunManager, "_before_task_attach", pause)
+                    patch.setattr(RunManager, "_task_for_cancel", no_bound_task)
+                    stream_task = asyncio.create_task(
+                        client.post(
+                            f"/threads/{thread['thread_id']}/runs/stream",
+                            json=_payload("must-not-run"),
+                        )
+                    )
+                    await started.wait()
+                    cancelled = await client.post(
+                        f"/threads/{thread['thread_id']}/runs/{seen['run_id']}/cancel"
+                    )
+                    assert cancelled.status_code == 200
+                    assert cancelled.json()["status"] == "cancelled"
+                    release.set()
+                    streamed = await stream_task
+
+                assert streamed.status_code == 200
+                assert "Echo: must-not-run" not in streamed.text
+
+            async with session_scope(app.state.session_factory) as session:
+                run = await session.scalar(select(Run))
+            assert run is not None
+            assert run.status == "cancelled"
+
+    asyncio.run(scenario())
+
+
 def test_retention_dry_run_does_not_delete_rows(postgres_database_uri: str):
     async def scenario() -> None:
         app = create_app(

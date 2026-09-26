@@ -78,6 +78,17 @@ class Settings(BaseSettings):
                     "DATABASE_URI is required when ENVIRONMENT=production"
                 )
             self.DATABASE_URI = DEVELOPMENT_DATABASE_URI
+        if self.ENVIRONMENT == "production":
+            database_password = urlsplit(self.DATABASE_URI).password
+            if (
+                database_password is None
+                or len(database_password) < 16
+                or database_password == "agent_platform"
+            ):
+                raise ValueError(
+                    "production DATABASE_URI must include a non-example password "
+                    "of at least 16 characters"
+                )
         if self.AUTH_MODE is None:
             # Tests opt into disabled auth by leaving the mode unset. Local
             # development and production both require an issued API key.

@@ -26,6 +26,11 @@ docker compose exec postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELE
 
 Take a backup first. See [backup and restore](backup-restore.md).
 
+Revision `20260926_0003` refuses to create the one-active-run unique index when
+legacy data contains multiple `pending`/`running` rows for a thread. Reconcile
+or explicitly mark those stale rows terminal before retrying; do not delete
+checkpoint data to force the migration through.
+
 ```bash
 ./.tools/bin/uv run alembic upgrade head
 ```

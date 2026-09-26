@@ -11,6 +11,7 @@ from agent_platform.api.schemas import RunStreamRequest
 from agent_platform.services.accounts import AuthenticatedPrincipal
 from agent_platform.services.errors import (
     ActiveRunConflict,
+    CancellationNotSettled,
     CheckpointReferenceError,
     RunCursorError,
     ThreadNotInterrupted,
@@ -50,6 +51,15 @@ def _run_http_error(exc: Exception) -> HTTPException:
         return HTTPException(status_code=exc.status_code, detail=exc.detail)
     if isinstance(exc, RunCursorError):
         return HTTPException(status_code=400, detail=str(exc))
+    if isinstance(exc, CancellationNotSettled):
+        return HTTPException(
+            status_code=503,
+            detail={
+                "message": str(exc),
+                "run_id": exc.run_id,
+                "status": exc.status,
+            },
+        )
     raise exc
 
 
@@ -154,7 +164,8 @@ async def cancel_run(
     ``wait`` is accepted for SDK compatibility. The response is returned only
     after the terminal status has been committed, including when ``wait`` is
     false. ``action=rollback`` is rejected because checkpoints are not rolled
-    back.
+    back. A 503 response means cancellation was requested but PostgreSQL did
+    not confirm a terminal status.
     """
     if wait not in _ACCEPTED_WAIT:
         raise HTTPException(status_code=422, detail="wait must be 0 or 1")

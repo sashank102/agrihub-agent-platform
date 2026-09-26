@@ -142,14 +142,21 @@ test("accepts a small image and rejects an oversized request", async ({
   expect(oversized.statusText()).not.toContain(keys.user_a);
 });
 
-test("replays a stream after disconnect and regenerate", async ({ page }) => {
+test("replays a live stream after a mid-run disconnect", async ({ page }) => {
+  await signIn(page, keys.user_a);
+  await composer(page).fill("slow");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByRole("button", { name: "Cancel" })).toBeVisible();
+  await page.context().setOffline(true);
+  await page.waitForTimeout(500);
+  await page.context().setOffline(false);
+  await expect(page.getByText("Echo: slow")).toBeVisible({ timeout: 15_000 });
+});
+
+test("regenerates from checkpoint history", async ({ page }) => {
   await signIn(page, keys.user_a);
   await composer(page).fill("replay");
   await page.getByRole("button", { name: "Send" }).click();
-  await expect(page.getByText("Echo: replay")).toBeVisible();
-  await page.context().setOffline(true);
-  await page.context().setOffline(false);
-  await page.reload();
   await expect(page.getByText("Echo: replay")).toBeVisible();
   await page.getByRole("button", { name: "Refresh" }).click({ force: true });
   await expect(page.getByText("Echo: replay").first()).toBeVisible({
@@ -274,6 +281,65 @@ test("restores history after the API restarts", async ({ page }) => {
   await composer(page).fill("after-restart");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page.getByText("Echo: after-restart")).toBeVisible();
+});
+
+test("surfaces an orphaned run as interrupted after restart", async ({
+  page,
+}) => {
+  await signIn(page, keys.user_a);
+  await composer(page).fill("hold");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByRole("button", { name: "Cancel" })).toBeVisible();
+  const threadId = new URL(page.url()).searchParams.get("threadId");
+  expect(threadId).toBeTruthy();
+
+  fs.writeFileSync(path.join(specDir, ".restart"), "1");
+  await expect
+    .poll(async () => {
+      try {
+        const response = await page.request.get("http://127.0.0.1:8000/health");
+        return response.ok();
+      } catch {
+        return false;
+      }
+    })
+    .toBe(false);
+  await expect
+    .poll(
+      async () => {
+        try {
+          const response = await page.request.get(
+            "http://127.0.0.1:8000/ready",
+          );
+          return response.ok();
+        } catch {
+          return false;
+        }
+      },
+      { timeout: 40_000 },
+    )
+    .toBe(true);
+
+  const search = await page.request.post(
+    "http://127.0.0.1:8000/threads/search",
+    {
+      headers: {
+        "X-Api-Key": keys.user_a,
+        "Content-Type": "application/json",
+      },
+      data: { ids: [threadId] },
+    },
+  );
+  expect(search.ok()).toBeTruthy();
+  const threads = (await search.json()) as Array<{
+    thread_id: string;
+    status: string;
+  }>;
+  expect(threads).toHaveLength(1);
+  expect(threads[0]).toMatchObject({
+    thread_id: threadId,
+    status: "interrupted",
+  });
 });
 
 test("rejects an interrupt", async ({ page }) => {

@@ -39,8 +39,17 @@ Open <http://127.0.0.1:3000> and paste the printed API key.
 Production on one machine:
 
 ```bash
-# Export POSTGRES_PASSWORD and API_KEY_PEPPER first. Do not commit them.
+# Export POSTGRES_PASSWORD, API_KEY_PEPPER, MODEL, and the selected provider
+# API key first. Do not commit them.
 ./start-prod.sh
+```
+
+Production Compose has no fallback database password or API-key pepper. The API
+container receives supported provider credentials only at runtime; they are not
+baked into either image. Run retention as a one-shot maintenance container:
+
+```bash
+docker compose --profile maintenance run --rm retention
 ```
 
 Operations: [backup and restore](docs/operations/backup-restore.md),

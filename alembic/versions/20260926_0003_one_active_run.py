@@ -22,6 +22,34 @@ def upgrade() -> None:
     """Reject a second active run at the database, including admission races."""
     op.execute(
         f"""
+        DO $$
+        DECLARE
+            duplicate_threads text;
+        BEGIN
+            SELECT string_agg(thread_id::text, ', ' ORDER BY thread_id::text)
+            INTO duplicate_threads
+            FROM (
+                SELECT thread_id
+                FROM "{SCHEMA}"."runs"
+                WHERE status IN ('pending', 'running')
+                GROUP BY thread_id
+                HAVING count(*) > 1
+                LIMIT 20
+            ) AS duplicates;
+
+            IF duplicate_threads IS NOT NULL THEN
+                RAISE EXCEPTION
+                    'cannot create {INDEX}: multiple active runs exist for thread(s): %',
+                    duplicate_threads
+                    USING HINT =
+                        'Reconcile or mark stale pending/running rows terminal before retrying the migration.';
+            END IF;
+        END;
+        $$;
+        """
+    )
+    op.execute(
+        f"""
         CREATE UNIQUE INDEX "{INDEX}"
         ON "{SCHEMA}"."runs" (thread_id)
         WHERE status IN ('pending', 'running')

@@ -47,14 +47,24 @@ def test_production_requires_api_key_mode_and_pepper():
     with pytest.raises(ValidationError, match="AUTH_MODE=disabled is not allowed"):
         Settings(
             ENVIRONMENT="production",
-            DATABASE_URI="postgresql://agent_platform:secret@db.internal:5432/agent_platform",
+            DATABASE_URI="postgresql://agent_platform:production-password@db.internal:5432/agent_platform",
             AUTH_MODE="disabled",
             _env_file=None,
         )
     with pytest.raises(ValidationError, match="API_KEY_PEPPER is required"):
         Settings(
             ENVIRONMENT="production",
-            DATABASE_URI="postgresql://agent_platform:secret@db.internal:5432/agent_platform",
+            DATABASE_URI="postgresql://agent_platform:production-password@db.internal:5432/agent_platform",
+            _env_file=None,
+        )
+
+
+def test_production_rejects_weak_database_password():
+    with pytest.raises(ValidationError, match="non-example password"):
+        Settings(
+            ENVIRONMENT="production",
+            DATABASE_URI="postgresql://agent_platform:agent_platform@db.internal:5432/agent_platform",
+            API_KEY_PEPPER="production-api-key-pepper",
             _env_file=None,
         )
 

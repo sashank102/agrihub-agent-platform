@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-agent_platform}
       POSTGRES_USER: ${POSTGRES_USER:-agent_platform}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agent_platform}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     healthcheck:
@@ -26,14 +26,31 @@ services:
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-production}
       AUTH_MODE: ${AUTH_MODE:-api_key}
-      DATABASE_URI: postgresql://${POSTGRES_USER:-agent_platform}:${POSTGRES_PASSWORD:-agent_platform}@postgres:5432/${POSTGRES_DB:-agent_platform}
-      API_KEY_PEPPER: ${API_KEY_PEPPER:-}
+      DATABASE_URI: postgresql://${POSTGRES_USER:-agent_platform}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-agent_platform}
+      API_KEY_PEPPER: ${API_KEY_PEPPER:?API_KEY_PEPPER is required}
       API_KEY_PREFIX: ${API_KEY_PREFIX:-aghub}
       API_HOST: 0.0.0.0
       API_PORT: 8000
       API_ALLOWED_ORIGINS: ${API_ALLOWED_ORIGINS:-["http://127.0.0.1:3000","http://localhost:3000"]}
       WEB_CONCURRENCY: "1"
       GRAPH_FIXTURE: ${GRAPH_FIXTURE:-false}
+      MODEL: ${MODEL:-anthropic:claude-sonnet-4-20250514}
+      SUMMARIZATION_MODEL: ${SUMMARIZATION_MODEL:-}
+      RESEARCH_MODEL: ${RESEARCH_MODEL:-}
+      COMPRESSION_MODEL: ${COMPRESSION_MODEL:-}
+      FINAL_REPORT_MODEL: ${FINAL_REPORT_MODEL:-}
+      SEARCH_API: ${SEARCH_API:-anthropic}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-}
+      AWS_PROFILE: ${AWS_PROFILE:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -44,7 +61,7 @@ services:
         - CMD
         - python
         - -c
-        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready')
       interval: 10s
       timeout: 5s
       retries: 12
@@ -73,11 +90,32 @@ services:
         - CMD
         - node
         - -e
-        - fetch('http://127.0.0.1:3000/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
+        - fetch('http://127.0.0.1:3000/api/ready').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 20s
+    restart: "no"
+
+  retention:
+    image: agrihub-api
+    profiles: ["maintenance"]
+    entrypoint: ["python", "-m", "agent_platform", "retain"]
+    command:
+      - --apply
+      - --run-events-days
+      - "${RETENTION_RUN_EVENTS_DAYS:-30}"
+      - --expired-keys-days
+      - "${RETENTION_EXPIRED_KEYS_DAYS:-30}"
+    environment:
+      ENVIRONMENT: production
+      AUTH_MODE: api_key
+      DATABASE_URI: postgresql://${POSTGRES_USER:-agent_platform}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-agent_platform}
+      API_KEY_PEPPER: ${API_KEY_PEPPER:?API_KEY_PEPPER is required}
+      API_KEY_PREFIX: ${API_KEY_PREFIX:-aghub}
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: "no"
 
 volumes:

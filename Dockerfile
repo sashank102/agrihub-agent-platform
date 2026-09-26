@@ -30,5 +30,5 @@ ENV PATH="/app/.venv/bin:${PATH}" \
     API_PORT=8000
 EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=5s --start-period=40s --retries=10 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready')"
 ENTRYPOINT ["/entrypoint.sh"]

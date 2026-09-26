@@ -147,7 +147,7 @@ def test_production_settings_reject_disabled_auth():
     with pytest.raises(ValidationError, match="AUTH_MODE=disabled"):
         Settings(
             ENVIRONMENT="production",
-            DATABASE_URI="postgresql://agent_platform:agent_platform@localhost:5432/agent_platform",
+            DATABASE_URI="postgresql://agent_platform:production-password@localhost:5432/agent_platform",
             AUTH_MODE="disabled",
             _env_file=None,
         )

@@ -3,8 +3,10 @@
 import pytest
 from langgraph.types import Command
 
+from agent_platform.api.routes.runs import _run_http_error
 from agent_platform.api.schemas import RunStreamRequest
 from agent_platform.services.errors import (
+    CancellationNotSettled,
     RunCursorError,
     ThreadNotInterrupted,
     UnsupportedRunOption,
@@ -114,3 +116,15 @@ def test_event_cursor_accepts_the_header_or_query_form():
     assert parse_event_cursor(None, None) == 0
     with pytest.raises(RunCursorError):
         parse_event_cursor("next", None)
+
+
+def test_unsettled_cancellation_maps_to_retryable_service_error():
+    error = _run_http_error(
+        CancellationNotSettled(
+            "00000000-0000-4000-8000-000000000003",
+            "running",
+        )
+    )
+
+    assert error.status_code == 503
+    assert error.detail["status"] == "running"

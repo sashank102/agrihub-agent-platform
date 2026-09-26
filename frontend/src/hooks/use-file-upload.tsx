@@ -49,35 +49,38 @@ export function useFileUpload({
     return false;
   };
 
-  const acceptFiles = useCallback(async (files: File[]) => {
-    const encoded = contentBlocks.reduce(
-      (total, block) => total + (block.data?.length ?? 0),
-      0,
-    );
-    const accepted: File[] = [];
-    const rejected: string[] = [];
-    let used = encoded;
-    for (const file of files) {
-      if (!fileFitsRequestBudget(file.size, used)) {
-        rejected.push(file.name);
-        continue;
+  const acceptFiles = useCallback(
+    async (files: File[]) => {
+      const encoded = contentBlocks.reduce(
+        (total, block) => total + (block.data?.length ?? 0),
+        0,
+      );
+      const accepted: File[] = [];
+      const rejected: string[] = [];
+      let used = encoded;
+      for (const file of files) {
+        if (!fileFitsRequestBudget(file.size, used)) {
+          rejected.push(file.name);
+          continue;
+        }
+        used += Math.ceil(file.size / 3) * 4;
+        accepted.push(file);
       }
-      used += Math.ceil(file.size / 3) * 4;
-      accepted.push(file);
-    }
-    if (rejected.length > 0) {
-      const message = uploadBudgetMessage(rejected.join(", "));
-      setUploadError(message);
-      toast.error(message);
-    } else {
-      setUploadError(null);
-    }
-    if (accepted.length === 0) {
-      return;
-    }
-    const newBlocks = await Promise.all(accepted.map(fileToContentBlock));
-    setContentBlocks((prev) => [...prev, ...newBlocks]);
-  }, [contentBlocks]);
+      if (rejected.length > 0) {
+        const message = uploadBudgetMessage(rejected.join(", "));
+        setUploadError(message);
+        toast.error(message);
+      } else {
+        setUploadError(null);
+      }
+      if (accepted.length === 0) {
+        return;
+      }
+      const newBlocks = await Promise.all(accepted.map(fileToContentBlock));
+      setContentBlocks((prev) => [...prev, ...newBlocks]);
+    },
+    [contentBlocks],
+  );
 
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;

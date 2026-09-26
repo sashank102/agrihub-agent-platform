@@ -33,7 +33,11 @@ from agent_platform.db.repositories import (
 from agent_platform.db.repositories.audit_log import AuditLogRepository
 from agent_platform.db.repositories.runs import ActiveRunRecord
 from agent_platform.db.session import AsyncSessionFactory, session_scope
-from agent_platform.services.errors import ActiveRunConflict, UnsupportedRunOption
+from agent_platform.services.errors import (
+    ActiveRunConflict,
+    CancellationNotSettled,
+    UnsupportedRunOption,
+)
 from agent_platform.services.graph_registry import GraphRegistry
 from agent_platform.services.run_fields import (
     astream_options,
@@ -489,27 +493,21 @@ class RunManager:
             if pending is not None and pending.graph_succeeded:
                 await self.reconcile_pending()
             else:
-                async with self._lock:
-                    entry = self._runs.get(run_id)
-                    still_binding = entry is not None and entry.task is None
-                if still_binding:
-                    task = await self._task_for_cancel(run_id)
-                    if task is not None:
-                        task.cancel()
-                        try:
-                            await task
-                        except asyncio.CancelledError:
-                            pass
-                else:
-                    await self._mark_cancelled(run_id, owner_user_id, thread_id)
+                await self._mark_cancelled(run_id, owner_user_id, thread_id)
+                await self._discard_reservation(run_id)
 
         refreshed = await self._visible_run(thread_id, run_id, owner_user_id)
         if refreshed is None:
             raise LookupError("run not found")
-        payload = self._cancel_payload(refreshed)
         if refreshed.status in {"pending", "running"}:
-            payload["cancellation"] = "accepted"
-        return payload
+            await self._mark_cancelled(run_id, owner_user_id, thread_id)
+            await self._discard_reservation(run_id)
+            refreshed = await self._visible_run(thread_id, run_id, owner_user_id)
+            if refreshed is None:
+                raise LookupError("run not found")
+        if refreshed.status in {"pending", "running"}:
+            raise CancellationNotSettled(str(run_id), refreshed.status)
+        return self._cancel_payload(refreshed)
 
     async def persist_and_publish(
         self,
@@ -1036,12 +1034,13 @@ class RunManager:
         run_id: uuid.UUID,
         owner_user_id: uuid.UUID,
         thread_id: uuid.UUID,
-    ) -> None:
+    ) -> bool:
         pending = await self._pending_for(run_id)
         if pending is not None and pending.graph_succeeded:
             await self.reconcile_pending()
-            return
-        await self._commit_terminal(
+            status = await self._run_status(run_id, owner_user_id)
+            return status in TERMINAL_RUN_STATUSES if status is not None else False
+        return await self._commit_terminal(
             run_id=run_id,
             owner_user_id=owner_user_id,
             thread_id=thread_id,

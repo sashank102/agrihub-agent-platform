@@ -143,7 +143,7 @@ jobs:
         run: |
           curl --fail http://127.0.0.1:8000/health
           curl --fail http://127.0.0.1:8000/ready
-          curl --fail http://127.0.0.1:3000/api/health
+          curl --fail http://127.0.0.1:3000/api/ready
       - name: Bootstrap a key and send a deterministic chat
         run: |
           user=$(docker compose exec -T api python -m agent_platform create-user --display-name CI)

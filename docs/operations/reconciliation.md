@@ -29,8 +29,10 @@ the in-process check still cannot insert a second active row.
 
 Cancellation is stored on the row before the response returns. If the task
 is not registered yet, the request waits for registration and then cancels
-it, or returns `cancellation: accepted` while `status` is still `pending` or
-`running`. The response status is the durable row status. Repeating the
+it. If registration does not complete, the reserved run is durably marked
+`cancelled` before the response returns. A cancellation endpoint never claims
+success while the durable status remains `pending` or `running`; an inability
+to persist a terminal status returns a service error instead. Repeating the
 cancel after the row is terminal returns that terminal status again.
 
 ## What not to do

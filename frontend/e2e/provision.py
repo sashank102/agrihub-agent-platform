@@ -12,6 +12,7 @@ from agent_platform.services.accounts import AccountService
 
 
 async def main() -> None:
+    """Create isolated browser-test users and write their one-time keys."""
     settings = Settings(_env_file=None)
     if settings.DATABASE_URI is None:
         raise RuntimeError("DATABASE_URI is required")

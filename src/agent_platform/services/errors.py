@@ -53,3 +53,13 @@ class RunCursorError(Exception):
     def __init__(self) -> None:
         """Explain the invalid cursor."""
         super().__init__("invalid last event id")
+
+
+class CancellationNotSettled(Exception):
+    """Cancellation was requested but no durable terminal state was confirmed."""
+
+    def __init__(self, run_id: str, status: str) -> None:
+        """Keep the actual durable status for an operator-visible 503 response."""
+        self.run_id = run_id
+        self.status = status
+        super().__init__("cancellation has not reached a durable terminal state")

@@ -29,11 +29,43 @@ from agent_platform.services.accounts import AccountService
 from agent_platform.services.graph_registry import GraphRegistry
 from agent_platform.services.run_manager import RunManager
 from agent_platform.services.tenant_store import TenantStore
+from open_deep_research.configuration import Configuration, SearchAPI
 from open_deep_research.deep_researcher import build_graph
+from open_deep_research.utils import get_api_key_for_model, get_tavily_api_key
 
 logger = logging.getLogger(__name__)
 
 GraphBuilder = Callable[..., Any]
+
+
+def _validate_model_credentials() -> None:
+    """Fail startup before accepting traffic when the real graph cannot call its providers."""
+    configuration = Configuration.from_runnable_config()
+    models = {
+        configuration.summarization_model,
+        configuration.research_model,
+        configuration.compression_model,
+        configuration.final_report_model,
+    }
+    missing: list[str] = []
+    for model in sorted(models):
+        provider = model.split(":", 1)[0].lower().replace("-", "_")
+        if provider == "bedrock":
+            if not (os.getenv("AWS_ACCESS_KEY_ID") or os.getenv("AWS_PROFILE")):
+                missing.append(f"{model} (AWS credentials)")
+            continue
+        if provider == "google_vertexai" and (
+            os.getenv("GOOGLE_APPLICATION_CREDENTIALS") or os.getenv("GOOGLE_API_KEY")
+        ):
+            continue
+        if not get_api_key_for_model(model, {}):
+            missing.append(model)
+    if configuration.search_api == SearchAPI.TAVILY and not get_tavily_api_key({}):
+        missing.append("Tavily search")
+    if missing:
+        raise RuntimeError(
+            "missing server-side model/search credentials for: " + ", ".join(missing)
+        )
 
 
 async def _seed_development_principal(app: FastAPI) -> None:
@@ -97,6 +129,8 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
+        if graph_builder is build_graph:
+            _validate_model_credentials()
         if active_settings.AUTH_MODE == "disabled":
             logger.warning(
                 "AUTH_MODE=disabled; every request uses development user %s. "

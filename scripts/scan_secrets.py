@@ -14,6 +14,9 @@ PATTERNS = (
     re.compile(r"ghp_[A-Za-z0-9]{20,}"),
     re.compile(r"github_pat_[A-Za-z0-9_]{20,}"),
     re.compile(r"xox[baprs]-[A-Za-z0-9-]{10,}"),
+    # Platform keys are: configurable lowercase prefix + "_" + 8 lookup
+    # characters + a 43-character secret (32 bytes of entropy).
+    re.compile(r"\b[a-z]{2,32}_[A-Za-z0-9]{51}\b"),
 )
 SKIP_PARTS = {
     ".git",
@@ -21,6 +24,7 @@ SKIP_PARTS = {
     ".next",
     ".venv",
     ".tools",
+    ".keys.json",
     "playwright-report",
     "test-results",
 }
@@ -36,7 +40,7 @@ def scan_tree(root: Path) -> list[str]:
     """Scan the git index when available, otherwise the working tree."""
     findings: list[str] = []
     listed = subprocess.run(
-        ["git", "ls-files"],
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
         cwd=root,
         check=False,
         capture_output=True,

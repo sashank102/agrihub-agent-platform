@@ -66,6 +66,19 @@ python -m agent_platform retain --apply --checkpoint-days 90 --terminal-runs-day
 Security audit rows (`auth.*`, `api_key.*`, `user.*`, `access.denied`) stay
 unless `--include-security-audit` is set.
 
+The production Compose file also exposes a one-shot maintenance profile:
+
+```bash
+docker compose --profile maintenance run --rm retention
+```
+
+Schedule that command with the host scheduler rather than keeping a second
+long-running worker. For example, a daily systemd timer or cron entry can run
+the one-shot container after backups complete. Override
+`RETENTION_RUN_EVENTS_DAYS` and `RETENTION_EXPIRED_KEYS_DAYS` in the scheduler
+environment. Run the CLI without `--apply` manually before changing retention
+windows.
+
 ## Limits
 
 - A dump does not include files that were never stored in PostgreSQL. This

@@ -37,6 +37,8 @@ export NEXT_PUBLIC_ASSISTANT_ID="${NEXT_PUBLIC_ASSISTANT_ID:-agrihub}"
 export API_ALLOWED_ORIGINS="${API_ALLOWED_ORIGINS:-[\"http://127.0.0.1:${FRONTEND_PORT}\",\"http://localhost:${FRONTEND_PORT}\"]}"
 export WEB_CONCURRENCY=1
 export GRAPH_FIXTURE="${GRAPH_FIXTURE:-false}"
+export MODEL="${MODEL:-anthropic:claude-sonnet-4-20250514}"
+export SEARCH_API="${SEARCH_API:-anthropic}"
 
 if [[ -z "${POSTGRES_PASSWORD:-}" || ${#POSTGRES_PASSWORD} -lt 16 ]]; then
   fail "POSTGRES_PASSWORD is required and must be at least 16 characters."
@@ -46,6 +48,30 @@ if [[ -z "${API_KEY_PEPPER:-}" || ${#API_KEY_PEPPER} -lt 16 ]]; then
 fi
 if [[ "${POSTGRES_PASSWORD}" == "agent_platform" || "${API_KEY_PEPPER}" == "agent_platform" ]]; then
   fail "Refusing the example password or pepper."
+fi
+
+if [[ "$GRAPH_FIXTURE" != "true" ]]; then
+  model_provider="${MODEL%%:*}"
+  case "$model_provider" in
+    google | google_genai | google_vertexai) provider_key="${GOOGLE_API_KEY:-}" ;;
+    bedrock)
+      if [[ -z "${AWS_ACCESS_KEY_ID:-}" && -z "${AWS_PROFILE:-}" ]]; then
+        fail "Bedrock requires AWS_ACCESS_KEY_ID or AWS_PROFILE."
+      fi
+      provider_key="aws"
+      ;;
+    *)
+      provider_variable="${model_provider^^}_API_KEY"
+      provider_variable="${provider_variable//-/_}"
+      provider_key="${!provider_variable:-}"
+      ;;
+  esac
+  if [[ -z "$provider_key" ]]; then
+    fail "The configured MODEL provider '$model_provider' requires its server-side API key."
+  fi
+  if [[ "${SEARCH_API:-anthropic}" == "tavily" && -z "${TAVILY_API_KEY:-}" ]]; then
+    fail "SEARCH_API=tavily requires TAVILY_API_KEY."
+  fi
 fi
 
 echo "Building and starting PostgreSQL, the API, and the frontend."
