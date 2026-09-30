@@ -46,6 +46,7 @@ packages = [
     "agent_platform.db.models",
     "agent_platform.db.repositories",
     "agent_platform.services",
+    "agrihub",
     "open_deep_research",
     "tests",
 ]
@@ -53,6 +54,7 @@ packages = [
 [tool.setuptools.package-dir]
 "open_deep_research" = "src/open_deep_research"
 "agent_platform" = "src/agent_platform"
+"agrihub" = "src/agrihub"
 "tests" = "tests"
 
 [tool.setuptools.package-data]
