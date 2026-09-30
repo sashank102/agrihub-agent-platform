@@ -60,6 +60,11 @@ logger = logging.getLogger(__name__)
 
 TERMINAL_EVENT_TYPES = frozenset({"end", "error"})
 READ_BATCH = 200
+MAX_PAYLOAD_STRING_BYTES = 8 * 1024
+# Bulky research scratch space that the UI never renders.
+DROPPED_PAYLOAD_KEYS = frozenset({"raw_notes", "raw_content"})
+
+EventPayload = dict[str, Any] | list[Any]
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,7 +105,7 @@ class StreamEvent:
 
     sequence: int
     event_type: str
-    payload: dict[str, Any]
+    payload: EventPayload
     terminal: bool = False
 
 
@@ -163,11 +168,13 @@ class RunManager:
         max_concurrent_runs: int,
         subscriber_queue_size: int = 16,
         terminal_retry_delays: tuple[float, ...] = (0.0, 0.05),
+        stream_subgraph_updates: bool = False,
     ) -> None:
         """Create an empty task registry and the process-wide run semaphore."""
         self.session_factory = session_factory
         self.registry = registry
         self.subscriber_queue_size = subscriber_queue_size
+        self.stream_subgraph_updates = stream_subgraph_updates
         self._terminal_retry_delays = terminal_retry_delays or (0.0,)
         self._semaphore = asyncio.Semaphore(max_concurrent_runs)
         self._lock = asyncio.Lock()
@@ -405,7 +412,6 @@ class RunManager:
                     graph_input=graph_input,
                     config=config,
                     options=options,
-                    subgraphs=bool(request.stream_subgraphs),
                 )
             except Exception:
                 await self._discard_reservation(view.id)
@@ -515,7 +521,7 @@ class RunManager:
         run_id: uuid.UUID,
         owner_user_id: uuid.UUID,
         event_type: str,
-        payload: dict[str, Any],
+        payload: EventPayload,
         terminal: bool = False,
     ) -> StreamEvent:
         """Commit one event, then deliver that committed sequence to subscribers."""
@@ -529,7 +535,7 @@ class RunManager:
             event = StreamEvent(
                 sequence=int(row.sequence),
                 event_type=row.event_type,
-                payload=dict(row.payload or {}),
+                payload=_copy_payload(row.payload),
                 terminal=terminal or row.event_type in TERMINAL_EVENT_TYPES,
             )
         await self._publish(run_id, event)
@@ -545,7 +551,6 @@ class RunManager:
         graph_input: Any,
         config: dict[str, Any],
         options: dict[str, Any],
-        subgraphs: bool,
     ) -> None:
         finalized = False
         outcome_chosen = False
@@ -671,19 +676,29 @@ class RunManager:
                 if await self._cancellation_requested(run_id) or self._shutting_down:
                     await choose_cancelled()
                     return
-                async for chunk in graph.astream(graph_input, config, **options):
+                async for part in graph.astream(graph_input, config, **options):
                     if await self._cancellation_requested(run_id):
                         raise asyncio.CancelledError()
-                    namespace, data = _unwrap_chunk(chunk, subgraphs)
-                    latest = data
-                    event_type = "values"
-                    if namespace:
-                        event_type = "values|" + "|".join(str(part) for part in namespace)
+                    mode = str(part["type"])
+                    namespace = tuple(part.get("ns") or ())
+                    data = part["data"]
+                    # useStream applies every values event as root state, so
+                    # subgraph snapshots would overwrite the thread's messages.
+                    if namespace and mode == "values":
+                        continue
+                    if (
+                        namespace
+                        and mode == "updates"
+                        and not self.stream_subgraph_updates
+                    ):
+                        continue
+                    if mode == "values":
+                        latest = data
                     await self.persist_and_publish(
                         run_id=run_id,
                         owner_user_id=owner_user_id,
-                        event_type=event_type,
-                        payload=_json_object(data),
+                        event_type=_stream_event_name(mode, namespace),
+                        payload=_encode_payload(data),
                     )
                 graph_completed = True
                 snapshot = await graph.aget_state(config)
@@ -693,7 +708,7 @@ class RunManager:
                     run_id=run_id,
                     owner_user_id=owner_user_id,
                     event_type="values",
-                    payload=_json_object(values_with_interrupts(snapshot)),
+                    payload=_encode_payload(values_with_interrupts(snapshot)),
                 )
                 await choose_interrupted()
             else:
@@ -1445,7 +1460,6 @@ class RunManager:
         graph_input: Any,
         config: dict[str, Any],
         options: dict[str, Any],
-        subgraphs: bool,
     ) -> None:
         """Attach the task to the reservation created before the row was visible."""
         scheduling_error: BaseException | None = None
@@ -1475,7 +1489,6 @@ class RunManager:
                                 graph_input=graph_input,
                                 config=config,
                                 options=options,
-                                subgraphs=subgraphs,
                             ),
                             name=f"run-{view.id}",
                         )
@@ -1810,7 +1823,7 @@ class RunManager:
                 StreamEvent(
                     sequence=int(row.sequence),
                     event_type=row.event_type,
-                    payload=dict(row.payload or {}),
+                    payload=_copy_payload(row.payload),
                     terminal=row.event_type in TERMINAL_EVENT_TYPES,
                 )
                 for row in rows
@@ -1985,11 +1998,47 @@ def _encode_sse(event: StreamEvent) -> bytes:
     ).encode()
 
 
-def _json_object(value: Any) -> dict[str, Any]:
-    encoded = jsonable_encoder(value)
-    if isinstance(encoded, dict):
+def _stream_event_name(mode: str, namespace: tuple[Any, ...]) -> str:
+    if not namespace:
+        return mode
+    return mode + "|" + "|".join(str(part) for part in namespace)
+
+
+def _encode_payload(value: Any) -> EventPayload:
+    """Encode one stream part as bounded JSON.
+
+    Strings longer than ``MAX_PAYLOAD_STRING_BYTES`` keep a UTF-8 prefix and a
+    ``[truncated N bytes]`` marker. ``DROPPED_PAYLOAD_KEYS`` are removed at any
+    depth. Scalars are wrapped as ``{"value": ...}``.
+    """
+    encoded = _trim_payload(jsonable_encoder(value))
+    if isinstance(encoded, dict | list):
         return encoded
     return {"value": encoded}
+
+
+def _trim_payload(value: Any) -> Any:
+    if isinstance(value, str):
+        raw = value.encode()
+        if len(raw) <= MAX_PAYLOAD_STRING_BYTES:
+            return value
+        kept = raw[:MAX_PAYLOAD_STRING_BYTES].decode(errors="ignore")
+        return f"{kept}…[truncated {len(raw) - len(kept.encode())} bytes]"
+    if isinstance(value, dict):
+        return {
+            key: _trim_payload(item)
+            for key, item in value.items()
+            if key not in DROPPED_PAYLOAD_KEYS
+        }
+    if isinstance(value, list):
+        return [_trim_payload(item) for item in value]
+    return value
+
+
+def _copy_payload(value: Any) -> EventPayload:
+    if isinstance(value, list):
+        return list(value)
+    return dict(value or {})
 
 
 def _output_summary(latest: Any) -> dict[str, Any]:
@@ -1997,17 +2046,6 @@ def _output_summary(latest: Any) -> dict[str, Any]:
     if isinstance(encoded, dict):
         return {"keys": sorted(str(key) for key in encoded)}
     return {"result_type": type(encoded).__name__}
-
-
-def _unwrap_chunk(chunk: Any, subgraphs: bool) -> tuple[tuple[Any, ...], Any]:
-    if (
-        subgraphs
-        and isinstance(chunk, tuple)
-        and len(chunk) == 2
-        and isinstance(chunk[0], tuple)
-    ):
-        return chunk[0], chunk[1]
-    return (), chunk
 
 
 def _terminal_event_type(

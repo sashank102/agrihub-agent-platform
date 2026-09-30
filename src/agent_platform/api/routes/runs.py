@@ -17,7 +17,10 @@ from agent_platform.services.errors import (
     ThreadNotInterrupted,
     UnsupportedRunOption,
 )
-from agent_platform.services.run_fields import parse_event_cursor
+from agent_platform.services.run_fields import (
+    ACCEPTED_STREAM_MODES,
+    parse_event_cursor,
+)
 
 router = APIRouter(
     prefix="/threads",
@@ -111,12 +114,11 @@ async def join_run_stream(
 ) -> StreamingResponse:
     """Replay durable events and follow a still-active run."""
     if stream_mode is not None and any(
-        mode not in {"values", "updates", "custom", "messages-tuple"}
-        for mode in stream_mode
+        mode not in ACCEPTED_STREAM_MODES for mode in stream_mode
     ):
         raise HTTPException(
             status_code=422,
-            detail="stream_mode only supports values",
+            detail="stream_mode only supports values, updates, and custom",
         )
     try:
         cursor = parse_event_cursor(last_event_id, last_event_id_query)

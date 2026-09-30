@@ -17,14 +17,13 @@ from agent_platform.services.tenant_context import TenantIdentity
 
 _IDENTITY_KEYS = ("user_id", "owner_user_id", "owner_id", "run_id")
 
-SUPPORTED_STREAM_MODES = frozenset({"values"})
-# The React SDK always requests ``updates`` beside ``values``. It also registers
-# ``custom`` for onCustomEvent and ``messages-tuple`` when message helpers are
-# read during render. Those extra modes are accepted and not emitted. The run
-# still streams ``values``, which carry the message state.
-ACCEPTED_STREAM_MODES = frozenset(
-    {"values", "updates", "custom", "messages-tuple"}
-)
+SUPPORTED_STREAM_MODES = frozenset({"values", "updates", "custom"})
+# The React SDK registers ``tools`` and ``messages-tuple`` when the matching
+# helpers are read during render. Those modes are accepted and not emitted.
+# ``values`` and ``custom`` are always streamed: values carry the message
+# state and custom carries ``agrihub.run-event/v1`` events.
+ACCEPTED_STREAM_MODES = SUPPORTED_STREAM_MODES | {"tools", "messages-tuple"}
+ALWAYS_STREAMED_MODES = ("values", "custom")
 IMPLEMENTED_DURABILITY = frozenset({"sync", "async", "exit"})
 
 
@@ -64,12 +63,13 @@ def validate_run_stream_request(request: RunStreamRequest) -> None:
     if not modes or any(mode not in ACCEPTED_STREAM_MODES for mode in modes):
         unknown = ", ".join(mode for mode in modes if mode not in ACCEPTED_STREAM_MODES)
         raise UnsupportedRunOption(
-            "stream_mode only supports values; other stream modes are not supported"
+            "stream_mode only supports values, updates, and custom; "
+            "other stream modes are not supported"
             + (f": {unknown}" if unknown else "")
         )
     if "values" not in modes:
         raise UnsupportedRunOption(
-            "stream_mode only supports values; other stream modes are not supported"
+            "stream_mode must include values; runs always stream the state"
         )
     _validate_command(request.command)
     _validate_interrupt_nodes(request.interrupt_before, "interrupt_before")
@@ -244,10 +244,22 @@ async def ensure_checkpoint_belongs_to_thread(
 
 
 def astream_options(request: RunStreamRequest) -> dict[str, Any]:
-    """Return keyword arguments implemented by the in-process graph stream."""
+    """Return keyword arguments implemented by the in-process graph stream.
+
+    The graph streams v2 ``{type, ns, data}`` parts. ``values`` and
+    ``custom`` are always requested; ``updates`` only when the client asks.
+    """
+    requested = _stream_modes(request.stream_mode)
+    stream_mode = list(ALWAYS_STREAMED_MODES)
+    stream_mode.extend(
+        mode
+        for mode in sorted(SUPPORTED_STREAM_MODES)
+        if mode in requested and mode not in stream_mode
+    )
     options: dict[str, Any] = {
-        "stream_mode": "values",
+        "stream_mode": stream_mode,
         "subgraphs": bool(request.stream_subgraphs),
+        "version": "v2",
         "durability": request.durability or "sync",
     }
     if request.interrupt_before is not None:

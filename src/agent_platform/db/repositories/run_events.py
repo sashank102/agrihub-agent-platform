@@ -22,7 +22,7 @@ class RunEventRepository:
         run_id: uuid.UUID,
         owner_user_id: uuid.UUID,
         event_type: str,
-        payload: dict[str, Any] | None = None,
+        payload: dict[str, Any] | list[Any] | None = None,
     ) -> RunEvent:
         """Lock the owned run and append its next sequence atomically."""
         locked_run_id = await self.session.scalar(
@@ -48,7 +48,7 @@ class RunEventRepository:
         *,
         run_id: uuid.UUID,
         event_type: str,
-        payload: dict[str, Any] | None = None,
+        payload: dict[str, Any] | list[Any] | None = None,
     ) -> RunEvent:
         """Append an event from startup or shutdown without an owner scope."""
         locked_run_id = await self.session.scalar(
@@ -63,7 +63,7 @@ class RunEventRepository:
         *,
         run_id: uuid.UUID,
         event_type: str,
-        payload: dict[str, Any] | None = None,
+        payload: dict[str, Any] | list[Any] | None = None,
     ) -> tuple[RunEvent, bool]:
         """Append one terminal event unless this run already has one.
 
@@ -93,7 +93,7 @@ class RunEventRepository:
         self,
         run_id: uuid.UUID,
         event_type: str,
-        payload: dict[str, Any] | None,
+        payload: dict[str, Any] | list[Any] | None,
     ) -> RunEvent:
         """Allocate the next sequence for a run already locked in this transaction."""
         current_sequence = await self.session.scalar(
@@ -103,7 +103,7 @@ class RunEventRepository:
             run_id=run_id,
             sequence=(current_sequence or 0) + 1,
             event_type=event_type,
-            payload=payload or {},
+            payload={} if payload is None else payload,
         )
         self.session.add(event)
         await self.session.flush()

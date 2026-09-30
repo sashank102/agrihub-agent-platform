@@ -4,10 +4,10 @@ version = "0.1.0"
 description = "A self-hosted multi-agent research platform."
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "langchain>=1.2.9",
-    "langgraph>=0.5.4",
+    "langgraph>=1.1",
     "langgraph-checkpoint-postgres>=3.0.0",
     "langchain-openai>=0.3.28",
     "langchain-anthropic>=0.3.15",

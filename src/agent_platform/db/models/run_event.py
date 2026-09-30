@@ -36,7 +36,7 @@ class RunEvent(Base):
     )
     sequence: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     event_type: Mapped[str] = mapped_column(String(100), nullable=False)
-    payload: Mapped[dict[str, Any]] = mapped_column(
+    payload: Mapped[dict[str, Any] | list[Any]] = mapped_column(
         JSONB,
         nullable=False,
         default=dict,
