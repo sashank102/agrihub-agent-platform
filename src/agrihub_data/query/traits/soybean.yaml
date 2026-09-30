@@ -1,0 +1,99 @@
+# Curator-editable trait profiles for soybean. map_trait uses a profile when
+# the trait text equals one of its names (or contains one as a phrase), then
+# adds TF-IDF matches from the bundle's ontologies. Every id here was checked
+# against the fetched to.obo, Soy9.6.obo, PPTO.obo.gz, CO_336 OWL and
+# go-basic.obo.
+profiles:
+  - key: plant_height
+    names: [plant height, height, PH, plant stature, stem height]
+    terms:
+      - TO:0000207      # plant height
+      - SOY:0001365     # Plant Height
+      - SOY:0001366     # Height/Lodging
+      - SOY:0001688     # Stem Termination Type (determinacy)
+      - SOY:0001752     # Node Number
+      - SOY:0001679     # Internode length
+      - PPTO:0000126    # plant height
+      - CO_336:0000027  # Plant height
+      - TO:0000634      # stem node number
+      - TO:0000145      # shoot axis internode length
+      - GO:0009686      # gibberellin biosynthetic process
+      - GO:0009740      # gibberellic acid mediated signaling pathway
+      - GO:0016132      # brassinosteroid biosynthetic process
+      - GO:0009742      # brassinosteroid mediated signaling pathway
+      - GO:0010022      # meristem determinacy
+    keywords:
+      - plant height
+      - stem height
+      - dwarf
+      - semi-dwarf
+      - determinacy
+      - determinate
+      - indeterminate
+      - semi-determinate
+      - stem termination
+      - stem growth habit
+      - internode length
+      - node number
+      - gibberellin
+      - brassinosteroid
+    seed_families: [TFL1, AP1, GA20ox, GA3ox, DELLA, GID1, DWF4, BRI1]
+  - key: flowering_time
+    names: [flowering time, days to flowering, first flower, DTF, time to flowering]
+    terms:
+      - TO:0002616      # flowering time trait
+      - TO:0000344      # days to flowering trait
+      - TO:0000934      # photoperiod-sensitive flowering time trait
+      - PPTO:0001204    # flowering time trait
+      - PPTO:0000155    # days to flowering trait
+      - CO_336:0000000  # Flowering time
+      - CO_336:0000165  # First flower
+      - GO:0048573      # photoperiodism, flowering
+      - GO:0009909      # regulation of flower development
+      - GO:0010228      # vegetative to reproductive phase transition of meristem
+    keywords: [flowering time, days to flowering, first flower, photoperiod, flowering]
+    seed_families: [FT, E1, CO, GI, PRR, LHY, ELF3, TOE]
+  - key: maturity
+    names: [maturity, days to maturity, maturity time, maturity group, DTM]
+    terms:
+      - TO:0000469      # days to maturity
+      - SOY:0001646     # R8 Full Maturity
+      - SOY:0001708     # Maturity group
+      - PPTO:0000156    # days to maturity
+      - CO_336:0000021  # Maturity time
+      - CO_336:0000141  # Maturity group
+      - CO_336:0000174  # R8 Full Maturity
+    keywords: [maturity, days to maturity, maturity group, photoperiod]
+    seed_families: [E1, E2, E3, E4, FT, TOF]
+  - key: seed_oil
+    names: [seed oil, oil content, seed oil content, oil]
+    terms:
+      - TO:0000604      # lipid content trait
+      - SOY:0001668     # Seed oil content
+      - SOY:0001845     # Oil content
+      - PPTO:0000529    # fat and essential oil content
+      - CO_336:0000048  # Seed oil content
+      - GO:0006633      # fatty acid biosynthetic process
+      - GO:0019432      # triglyceride biosynthetic process
+      - GO:0019915      # lipid storage
+    keywords: [seed oil, oil content, fatty acid, triacylglycerol, oleosin]
+    seed_families: [DGAT, FAD2, FAD3, WRI1, OLEOSIN, LEC1]
+  - key: seed_protein
+    names: [seed protein, protein content, seed protein content, protein]
+    terms:
+      - TO:0000490      # seed protein content
+      - SOY:0001676     # Seed protein content
+      - PPTO:0000173    # soybean seed protein content trait
+      - CO_336:0000051  # Seed protein content
+      - GO:0045735      # nutrient reservoir activity
+    keywords: [seed protein, protein content, storage protein, glycinin, conglycinin]
+    seed_families: [GLYCININ, CONGLYCININ]
+  - key: seed_yield
+    names: [seed yield, yield, grain yield]
+    terms:
+      - TO:0000905      # seed yield trait
+      - SOY:0001622     # Seed yield
+      - PPTO:0000176    # seed yield trait
+      - CO_336:0000036  # Seed yield
+    keywords: [seed yield, yield]
+    seed_families: []

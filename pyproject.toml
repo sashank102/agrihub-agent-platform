@@ -57,6 +57,7 @@ packages = [
     "agrihub.tools",
     "agrihub_data",
     "agrihub_data.build",
+    "agrihub_data.query",
     "open_deep_research",
     "tests",
 ]
@@ -71,6 +72,7 @@ packages = [
 [tool.setuptools.package-data]
 "*" = ["py.typed"]
 "agrihub_data" = ["schema.sql", "registry/*.yaml"]
+"agrihub_data.query" = ["traits/*.yaml"]
 
 [tool.ruff]
 lint.select = [
