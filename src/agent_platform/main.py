@@ -28,7 +28,9 @@ from agent_platform.process_lock import ApiProcessLock
 from agent_platform.services.accounts import AccountService
 from agent_platform.services.graph_registry import GraphRegistry
 from agent_platform.services.run_manager import RunManager
+from agent_platform.services.study_artifacts import study_artifact_sink
 from agent_platform.services.tenant_store import TenantStore
+from agrihub.graph import build_study_graph
 from open_deep_research.configuration import Configuration, SearchAPI
 from open_deep_research.deep_researcher import build_graph
 from open_deep_research.utils import get_api_key_for_model, get_tavily_api_key
@@ -86,30 +88,42 @@ async def _seed_development_principal(app: FastAPI) -> None:
                 email=settings.DEVELOPMENT_USER_EMAIL,
             )
 
-        agent = await session.get(Agent, settings.DEVELOPMENT_AGENT_ID)
-        if agent is None:
-            conflicting = await session.scalar(
-                select(Agent).where(
-                    Agent.owner_user_id.is_(None),
-                    Agent.graph_id == settings.DEVELOPMENT_GRAPH_ID,
-                    Agent.version == 1,
+        for agent_id, graph_id, name in (
+            (
+                settings.DEVELOPMENT_AGENT_ID,
+                settings.DEVELOPMENT_GRAPH_ID,
+                "AgriHub Research Agent",
+            ),
+            (
+                settings.STUDY_AGENT_ID,
+                settings.STUDY_GRAPH_ID,
+                "AgriHub Study",
+            ),
+        ):
+            agent = await session.get(Agent, agent_id)
+            if agent is None:
+                conflicting = await session.scalar(
+                    select(Agent).where(
+                        Agent.owner_user_id.is_(None),
+                        Agent.graph_id == graph_id,
+                        Agent.version == 1,
+                    )
                 )
-            )
-            if conflicting is not None:
-                raise RuntimeError(
-                    "development graph belongs to a different configured agent ID"
+                if conflicting is not None:
+                    raise RuntimeError(
+                        f"graph {graph_id} belongs to a different configured agent ID"
+                    )
+                agent = await AgentRepository(session).create(
+                    agent_id=agent_id,
+                    owner_user_id=None,
+                    graph_id=graph_id,
+                    name=name,
+                    metadata={"development_seed": True, "global": True},
                 )
-            agent = await AgentRepository(session).create(
-                agent_id=settings.DEVELOPMENT_AGENT_ID,
-                owner_user_id=None,
-                graph_id=settings.DEVELOPMENT_GRAPH_ID,
-                name="AgriHub Research Agent",
-                metadata={"development_seed": True, "global": True},
-            )
-        if agent.owner_user_id not in {None, user.id}:
-            raise RuntimeError("configured development agent has an unexpected owner")
-        if agent.graph_id != settings.DEVELOPMENT_GRAPH_ID:
-            raise RuntimeError("configured development agent has an unexpected graph ID")
+            if agent.owner_user_id not in {None, user.id}:
+                raise RuntimeError(f"configured {graph_id} agent has an unexpected owner")
+            if agent.graph_id != graph_id:
+                raise RuntimeError(f"configured {graph_id} agent has an unexpected graph ID")
 
 
 def create_app(
@@ -162,11 +176,23 @@ def create_app(
                     checkpointer=persistence.checkpointer,
                     store=TenantStore(persistence.store),
                 )
+                study_graph = build_study_graph(
+                    checkpointer=persistence.checkpointer,
+                    store=TenantStore(persistence.store),
+                    artifact_sink=study_artifact_sink(
+                        application.state.session_factory
+                    ),
+                )
                 registry = GraphRegistry()
                 registry.register(
                     active_settings.DEVELOPMENT_GRAPH_ID,
                     active_settings.DEVELOPMENT_AGENT_ID,
                     graph,
+                )
+                registry.register(
+                    active_settings.STUDY_GRAPH_ID,
+                    active_settings.STUDY_AGENT_ID,
+                    study_graph,
                 )
                 application.state.graph_registry = registry
                 manager = RunManager(

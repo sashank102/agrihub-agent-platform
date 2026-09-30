@@ -43,6 +43,10 @@ class Settings(BaseSettings):
         "00000000-0000-4000-8000-000000000002"
     )
     DEVELOPMENT_GRAPH_ID: str = "agrihub"
+    STUDY_AGENT_ID: uuid.UUID = uuid.UUID(
+        "00000000-0000-4000-8000-000000000010"
+    )
+    STUDY_GRAPH_ID: str = "agrihub_study"
     GRAPH_FIXTURE: bool = False
 
     model_config = SettingsConfigDict(

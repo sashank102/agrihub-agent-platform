@@ -48,6 +48,7 @@ packages = [
     "agent_platform.db.repositories",
     "agent_platform.services",
     "agrihub",
+    "agrihub.nodes",
     "agrihub.tools",
     "open_deep_research",
     "tests",
