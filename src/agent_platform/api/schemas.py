@@ -7,6 +7,56 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
+class ChromosomeResponse(BaseModel):
+    """A canonical chromosome name, its length and accepted aliases."""
+
+    name: str
+    length: int
+    aliases: list[str] = Field(default_factory=list)
+
+
+class AssemblyResponse(BaseModel):
+    """One registered assembly of a species."""
+
+    id: str
+    aliases: list[str]
+    description: str
+    canonical: bool
+    chromosomes: list[ChromosomeResponse]
+
+
+class SourceResponse(BaseModel):
+    """A data source with its license terms."""
+
+    id: str
+    name: str
+    tier: Literal["core", "extended", "heavy"]
+    status: Literal["active", "planned"]
+    version: str
+    license: str
+    academic_only: bool
+    homepage: str | None = None
+
+
+class SpeciesResponse(BaseModel):
+    """Everything the study form validates against for one species."""
+
+    species: str
+    scientific_name: str
+    common_name: str
+    taxon_id: int
+    canonical_assembly: str
+    default_window: dict[str, int | None]
+    typical_ld_kb: float
+    ld_note: str
+    assemblies: list[AssemblyResponse]
+    chromosome_prefixes: list[str]
+    linkouts: list[dict[str, Any]]
+    tiers: dict[str, dict[str, Any]]
+    bundle: dict[str, Any] | None
+    sources: list[SourceResponse]
+
+
 class ThreadCreateRequest(BaseModel):
     """Fields accepted by the LangGraph SDK thread creator."""
 

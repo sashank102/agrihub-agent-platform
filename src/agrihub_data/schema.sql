@@ -1,0 +1,234 @@
+-- AgriHub species bundle schema.
+--
+-- Every data table carries species, assembly and source_version. assembly is
+-- a registered assembly id (the species' own or a reference assembly such as
+-- TAIR10), or 'none' for rows not tied to a genome. Coordinates are 1-based
+-- and inclusive, as in GFF3, on the row's assembly. Chromosome names are the
+-- registry's canonical names.
+--
+-- Reserved for later tiers: expression, samples, edges, tf, pathways.
+
+CREATE TABLE bundle_info (
+    key VARCHAR PRIMARY KEY,
+    value VARCHAR NOT NULL
+);
+
+CREATE TABLE sources (
+    species VARCHAR NOT NULL,
+    assembly VARCHAR NOT NULL,
+    source_version VARCHAR NOT NULL,
+    source_id VARCHAR PRIMARY KEY,
+    name VARCHAR NOT NULL,
+    license VARCHAR NOT NULL,
+    academic_only BOOLEAN NOT NULL,
+    homepage VARCHAR,
+    citation VARCHAR,
+    files INTEGER NOT NULL,
+    bytes BIGINT NOT NULL
+);
+
+CREATE TABLE genes (
+    species VARCHAR NOT NULL,
+    assembly VARCHAR NOT NULL,
+    source_version VARCHAR NOT NULL,
+    gene_id VARCHAR NOT NULL,
+    chrom VARCHAR NOT NULL,
+    start BIGINT NOT NULL,
+    "end" BIGINT NOT NULL,
+    strand VARCHAR NOT NULL,
+    defline VARCHAR,
+    ancestor_id VARCHAR,
+    source_db VARCHAR NOT NULL,
+    PRIMARY KEY (assembly, gene_id)
+);
+
+-- Cross-namespace and cross-assembly identifiers. relation is one of
+-- pangene_member (to_id is a pangene id, to_assembly 'none'), ancestor
+-- (GFF ancestorIdentifier), synonym (older gene id) or transcript.
+CREATE TABLE id_map (
+    species VARCHAR NOT NULL,
+    assembly VARCHAR NOT NULL,
+    source_version VARCHAR NOT NULL,
+    from_id VARCHAR NOT NULL,
+    to_id VARCHAR NOT NULL,
+    to_assembly VARCHAR NOT NULL,
+    relation VARCHAR NOT NULL,
+    source_db VARCHAR NOT NULL
+);
+
+-- Gene-level annotation, one row per (gene, kind, value). kind is pfam,
+-- panther, kog, ec, ko, interpro, arabidopsis_best_hit, rice_best_hit, or for
+-- reference genes symbol, full_name, short_description, curator_summary and
+-- computational_description.
+CREATE TABLE annotation (
+    species VARCHAR NOT NULL,
+    assembly VARCHAR NOT NULL,
+    source_version VARCHAR NOT NULL,
+    gene_id VARCHAR NOT NULL,
+    kind VARCHAR NOT NULL,
+    value VARCHAR NOT NULL,
+    label VARCHAR,
+    source_db VARCHAR NOT NULL
+);
+
+CREATE TABLE go_annot (
+    species VARCHAR NOT NULL,
+    assembly VARCHAR NOT NULL,
+    source_version VARCHAR NOT NULL,
+    gene_id VARCHAR NOT NULL,
+    go_id VARCHAR NOT NULL,
+    evidence_code VARCHAR NOT NULL,
+    qualifier VARCHAR,
+    reference VARCHAR,
+    source_db VARCHAR NOT NULL
+);
+
+-- One row per (gene, target gene, method). Consensus is computed at query
+-- time; relation is the method's own cardinality when it reports one.
+CREATE TABLE orthologs (
+    species VARCHAR NOT NULL,
+    assembly VARCHAR NOT NULL,
+    source_version VARCHAR NOT NULL,
+    gene_id VARCHAR NOT NULL,
+    source_gene_id VARCHAR NOT NULL,
+    target_species VARCHAR NOT NULL,
+    target_assembly VARCHAR NOT NULL,
+    target_gene_id VARCHAR NOT NULL,
+    method VARCHAR NOT NULL,
+    relation VARCHAR,
+    identity DOUBLE,
+    high_confidence BOOLEAN,
+    source_db VARCHAR NOT NULL
+);
+
+-- QTL placement: bp spans come from the QTL's markers on the row assembly.
+-- placement is markers, single_marker, lg_conflict or unplaced; unplaced
+-- rows keep cM only and have NULL chrom/start/end.
+CREATE TABLE qtl (
+    species VARCHAR NOT NULL,
+    assembly VARCHAR NOT NULL,
+    source_version VARCHAR NOT NULL,
+    qtl_id VARCHAR PRIMARY KEY,
+    study_id VARCHAR NOT NULL,
+    qtl_name VARCHAR NOT NULL,
+    trait_name VARCHAR NOT NULL,
+    trait_terms VARCHAR[] NOT NULL,
+    genetic_map VARCHAR,
+    linkage_group VARCHAR,
+    cm_start DOUBLE,
+    cm_end DOUBLE,
+    cm_peak DOUBLE,
+    chrom VARCHAR,
+    start BIGINT,
+    "end" BIGINT,
+    span_bp BIGINT,
+    n_markers INTEGER NOT NULL,
+    n_markers_placed INTEGER NOT NULL,
+    placement VARCHAR NOT NULL,
+    publication_doi VARCHAR,
+    source_db VARCHAR NOT NULL
+);
+
+CREATE TABLE gwas_hits (
+    species VARCHAR NOT NULL,
+    assembly VARCHAR NOT NULL,
+    source_version VARCHAR NOT NULL,
+    hit_id VARCHAR PRIMARY KEY,
+    source_db VARCHAR NOT NULL,
+    study_id VARCHAR NOT NULL,
+    trait_name VARCHAR NOT NULL,
+    trait_terms VARCHAR[] NOT NULL,
+    marker VARCHAR,
+    chrom VARCHAR,
+    pos BIGINT,
+    p_value DOUBLE,
+    pmid VARCHAR,
+    doi VARCHAR,
+    reported_genes VARCHAR[] NOT NULL,
+    placement VARCHAR NOT NULL
+);
+
+-- Curated trait genes mapped to the canonical assembly. mapping records how
+-- source_gene_id on source_assembly became gene_id.
+CREATE TABLE known_genes (
+    species VARCHAR NOT NULL,
+    assembly VARCHAR NOT NULL,
+    source_version VARCHAR NOT NULL,
+    gene_id VARCHAR NOT NULL,
+    source_gene_id VARCHAR NOT NULL,
+    source_assembly VARCHAR NOT NULL,
+    mapping VARCHAR NOT NULL,
+    symbols VARCHAR[] NOT NULL,
+    symbol_long VARCHAR,
+    synopsis VARCHAR,
+    trait_terms VARCHAR[] NOT NULL,
+    trait_names VARCHAR[] NOT NULL,
+    confidence INTEGER,
+    pmids VARCHAR[] NOT NULL,
+    dois VARCHAR[] NOT NULL,
+    weight DOUBLE NOT NULL,
+    source_db VARCHAR NOT NULL
+);
+
+-- marker_id is the source Name; alias is the id behind it (ss number) when
+-- the source provides one.
+CREATE TABLE markers (
+    species VARCHAR NOT NULL,
+    assembly VARCHAR NOT NULL,
+    source_version VARCHAR NOT NULL,
+    marker_id VARCHAR NOT NULL,
+    alias VARCHAR,
+    marker_set VARCHAR NOT NULL,
+    chrom VARCHAR NOT NULL,
+    start BIGINT NOT NULL,
+    "end" BIGINT NOT NULL,
+    alleles VARCHAR,
+    source_db VARCHAR NOT NULL
+);
+
+CREATE TABLE ontology_terms (
+    species VARCHAR NOT NULL,
+    assembly VARCHAR NOT NULL,
+    source_version VARCHAR NOT NULL,
+    ontology VARCHAR NOT NULL,
+    term_id VARCHAR PRIMARY KEY,
+    name VARCHAR NOT NULL,
+    namespace VARCHAR,
+    definition VARCHAR,
+    synonyms VARCHAR[] NOT NULL,
+    parents VARCHAR[] NOT NULL,
+    is_obsolete BOOLEAN NOT NULL,
+    source_db VARCHAR NOT NULL
+);
+
+-- Source trait names and the ontology terms their curators assigned.
+CREATE TABLE trait_map (
+    species VARCHAR NOT NULL,
+    assembly VARCHAR NOT NULL,
+    source_version VARCHAR NOT NULL,
+    trait_name VARCHAR NOT NULL,
+    term_id VARCHAR NOT NULL,
+    study_id VARCHAR,
+    source_db VARCHAR NOT NULL
+);
+
+CREATE TABLE phenotypes (
+    species VARCHAR NOT NULL,
+    assembly VARCHAR NOT NULL,
+    source_version VARCHAR NOT NULL,
+    gene_id VARCHAR NOT NULL,
+    germplasm VARCHAR,
+    phenotype VARCHAR NOT NULL,
+    pmid VARCHAR,
+    source_db VARCHAR NOT NULL
+);
+
+CREATE TABLE gene_publications (
+    species VARCHAR NOT NULL,
+    assembly VARCHAR NOT NULL,
+    source_version VARCHAR NOT NULL,
+    gene_id VARCHAR NOT NULL,
+    pmid VARCHAR NOT NULL,
+    year INTEGER,
+    source_db VARCHAR NOT NULL
+);

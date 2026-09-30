@@ -1,0 +1,99 @@
+species: maize
+scientific_name: Zea mays
+common_name: maize
+taxon_id: 4577
+abbrev: zea
+canonical_assembly: Zm-B73-REFERENCE-NAM-5.0
+default_window:
+  flank_bp: 50000
+  warn_above_bp: 50000
+typical_ld_kb: 10
+ld_note: >-
+  LD decays within 1-10 kb in diverse maize and extends further only in elite
+  inbred pools (Remington et al. 2001; Yan et al. 2009). A 250 kb flank is far
+  wider than maize LD.
+naming:
+  canonical: "chr{number}"
+  prefixes: [chr, Chr, Chromosome]
+reference_assemblies:
+  - species: arabidopsis
+    assembly: TAIR10
+assemblies:
+  - id: Zm-B73-REFERENCE-NAM-5.0
+    aliases: [B73v5, NAM-5.0, NAM5, AGPv5]
+    description: B73 RefGen v5 from the NAM founder project; Zm00001eb gene ids.
+    ncbi_accession: GCF_902167145.1
+    chromosomes:
+      - {name: chr1, number: 1, length: 308452471}
+      - {name: chr2, number: 2, length: 243675191}
+      - {name: chr3, number: 3, length: 238017767}
+      - {name: chr4, number: 4, length: 250330460}
+      - {name: chr5, number: 5, length: 226353449}
+      - {name: chr6, number: 6, length: 181357234}
+      - {name: chr7, number: 7, length: 185808916}
+      - {name: chr8, number: 8, length: 182411202}
+      - {name: chr9, number: 9, length: 163004744}
+      - {name: chr10, number: 10, length: 152435371}
+  - id: B73_RefGen_v4
+    aliases: [B73v4, AGPv4, Zm-B73-REFERENCE-GRAMENE-4.0]
+    description: B73 RefGen v4; GWAS Atlas maize coordinates, lifted to v5 with MaizeGDB chains.
+    ncbi_accession: GCF_000005005.2
+    chromosomes:
+      - {name: chr1, number: 1, length: 307041717}
+      - {name: chr2, number: 2, length: 244442276}
+      - {name: chr3, number: 3, length: 235667834}
+      - {name: chr4, number: 4, length: 246994605}
+      - {name: chr5, number: 5, length: 223902240}
+      - {name: chr6, number: 6, length: 174033170}
+      - {name: chr7, number: 7, length: 182381542}
+      - {name: chr8, number: 8, length: 181122637}
+      - {name: chr9, number: 9, length: 159769782}
+      - {name: chr10, number: 10, length: 150982314}
+id_namespaces:
+  - id: zm_v5
+    pattern: '^Zm00001eb\d{6}$'
+    assembly: Zm-B73-REFERENCE-NAM-5.0
+    example: Zm00001eb000010
+  - id: zm_v4
+    pattern: '^Zm00001d\d{6}$'
+    assembly: B73_RefGen_v4
+    example: Zm00001d027230
+linkouts:
+  - name: Ensembl Plants
+    template: "https://plants.ensembl.org/Zea_mays/Gene/Summary?g={gene_id}"
+    id_namespace: zm_v5
+sources:
+  - id: maizegdb_nam5_annotation
+    name: MaizeGDB Zm00001eb.1 gene models and annotation
+    tier: core
+    status: planned
+    version: Zm00001eb.1
+    license: MaizeGDB terms of use
+    homepage: https://download.maizegdb.org/
+    assemblies: [Zm-B73-REFERENCE-NAM-5.0]
+    notes: Use download.maizegdb.org; the main site is behind Cloudflare.
+  - id: maizegdb_v4_v5_xref
+    name: MaizeGDB B73 v3/v4 to v5 gene cross-reference
+    tier: core
+    status: planned
+    version: Pan-genes B73_gene_xref
+    license: MaizeGDB terms of use
+    homepage: https://download.maizegdb.org/
+    assemblies: [B73_RefGen_v4, Zm-B73-REFERENCE-NAM-5.0]
+  - id: gwas_atlas
+    name: GWAS Atlas maize associations
+    tier: core
+    status: planned
+    version: GWAS Atlas
+    license: GWAS Atlas terms; academic use only
+    academic_only: true
+    homepage: https://ngdc.cncb.ac.cn/gwas/
+    assemblies: [B73_RefGen_v4]
+  - id: ensembl_compara
+    name: Ensembl Plants 63 Compara protein homologies
+    tier: core
+    status: planned
+    version: Ensembl Plants 63 (Compara 116)
+    license: Ensembl data are available without restriction
+    homepage: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/tsv/ensembl-compara/homologies/zea_mays/
+    assemblies: [Zm-B73-REFERENCE-NAM-5.0, TAIR10]

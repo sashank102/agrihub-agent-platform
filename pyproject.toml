@@ -28,7 +28,12 @@ dependencies = [
     "fastapi>=0.141.1",
     "uvicorn[standard]>=0.34.3",
     "duckdb>=1.1",
+    "httpx>=0.28",
+    "pyyaml>=6.0",
 ]
+
+[project.scripts]
+agrihub-data = "agrihub_data.cli:main"
 
 [project.optional-dependencies]
 dev = ["mypy>=1.11.1", "ruff>=0.6.1"]
@@ -50,6 +55,8 @@ packages = [
     "agrihub",
     "agrihub.nodes",
     "agrihub.tools",
+    "agrihub_data",
+    "agrihub_data.build",
     "open_deep_research",
     "tests",
 ]
@@ -58,10 +65,12 @@ packages = [
 "open_deep_research" = "src/open_deep_research"
 "agent_platform" = "src/agent_platform"
 "agrihub" = "src/agrihub"
+"agrihub_data" = "src/agrihub_data"
 "tests" = "tests"
 
 [tool.setuptools.package-data]
 "*" = ["py.typed"]
+"agrihub_data" = ["schema.sql", "registry/*.yaml"]
 
 [tool.ruff]
 lint.select = [
@@ -84,6 +93,7 @@ lint.ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["D", "UP"]
 "src/agent_platform/cli.py" = ["T201"]
+"src/agrihub_data/cli.py" = ["T201"]
 "src/agent_platform/__main__.py" = ["T201"]
 
 [tool.ruff.lint.pydocstyle]
@@ -101,4 +111,5 @@ exclude = ["src/open_deep_research", "tests"]
 [tool.pytest.ini_options]
 markers = [
     "postgres: requires TEST_DATABASE_URI and a live PostgreSQL server",
+    "bundle: requires a built soybean bundle at $AGRIHUB_DATA_DIR/soybean/bundle.duckdb",
 ]

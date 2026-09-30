@@ -9,6 +9,7 @@ __pycache__/
 *.so
 .Python
 build/
+!src/agrihub_data/build/
 develop-eggs/
 dist/
 downloads/

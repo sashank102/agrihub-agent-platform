@@ -1,0 +1,543 @@
+species: soybean
+scientific_name: Glycine max
+common_name: soybean
+taxon_id: 3847
+abbrev: glyma
+canonical_assembly: Wm82.a2.v1
+default_window:
+  flank_bp: 250000
+typical_ld_kb: 150
+ld_note: >-
+  LD decays to r2 0.2 over roughly 90-575 kb in cultivated soybean; about
+  150 kb in euchromatin and much longer in pericentromeric regions
+  (Hyten et al. 2007; Zhang et al. 2015).
+naming:
+  canonical: "Gm{number:02d}"
+  prefixes: [Gm, Chr, Chromosome]
+linkage_groups:
+  D1a: 1
+  D1b: 2
+  N: 3
+  C1: 4
+  A1: 5
+  C2: 6
+  M: 7
+  A2: 8
+  K: 9
+  O: 10
+  B1: 11
+  H: 12
+  F: 13
+  B2: 14
+  E: 15
+  J: 16
+  D2: 17
+  G: 18
+  L: 19
+  I: 20
+reference_assemblies:
+  - species: arabidopsis
+    assembly: TAIR10
+  - species: rice
+    assembly: IRGSP-1.0
+assemblies:
+  - id: Wm82.a2.v1
+    aliases: [Wm82.gnm2, gnm2, a2, Glycine_max_v2.1, Gmax_275_Wm82.a2.v1]
+    description: Williams 82 assembly 2; SoyBase, GWAS Atlas and Ensembl Plants 63 use it.
+    ncbi_accession: GCF_000004515.5
+    annotation: Wm82.gnm2.ann1.RVB6
+    chrom_namespace: glyma.Wm82.gnm2.
+    scaffold_pattern: 'scaffold_\d+'
+    chromosomes:
+      - {name: Gm01, number: 1, length: 56831624}
+      - {name: Gm02, number: 2, length: 48577505}
+      - {name: Gm03, number: 3, length: 45779781}
+      - {name: Gm04, number: 4, length: 52389146}
+      - {name: Gm05, number: 5, length: 42234498}
+      - {name: Gm06, number: 6, length: 51416486}
+      - {name: Gm07, number: 7, length: 44630646}
+      - {name: Gm08, number: 8, length: 47837940}
+      - {name: Gm09, number: 9, length: 50189764}
+      - {name: Gm10, number: 10, length: 51566898}
+      - {name: Gm11, number: 11, length: 34766867}
+      - {name: Gm12, number: 12, length: 40091314}
+      - {name: Gm13, number: 13, length: 45874162}
+      - {name: Gm14, number: 14, length: 49042192}
+      - {name: Gm15, number: 15, length: 51756343}
+      - {name: Gm16, number: 16, length: 37887014}
+      - {name: Gm17, number: 17, length: 41641366}
+      - {name: Gm18, number: 18, length: 58018742}
+      - {name: Gm19, number: 19, length: 50746916}
+      - {name: Gm20, number: 20, length: 47904181}
+  - id: Wm82.a4.v1
+    aliases: [Wm82.gnm4, gnm4, a4, Glycine_max_v4.0]
+    description: Williams 82 assembly 4; PLAZA 5.0 and most LIS curation use it.
+    ncbi_accession: GCF_000004515.6
+    annotation: Wm82.gnm4.ann1.T8TQ
+    chrom_namespace: glyma.Wm82.gnm4.
+    scaffold_pattern: 'scaffold_\d+'
+    chromosomes:
+      - {name: Gm01, number: 1, length: 57932355}
+      - {name: Gm02, number: 2, length: 50400358}
+      - {name: Gm03, number: 3, length: 46951866}
+      - {name: Gm04, number: 4, length: 51203389}
+      - {name: Gm05, number: 5, length: 42274530}
+      - {name: Gm06, number: 6, length: 50945864}
+      - {name: Gm07, number: 7, length: 44949256}
+      - {name: Gm08, number: 8, length: 47227184}
+      - {name: Gm09, number: 9, length: 50572668}
+      - {name: Gm10, number: 10, length: 51638687}
+      - {name: Gm11, number: 11, length: 39643745}
+      - {name: Gm12, number: 12, length: 41531199}
+      - {name: Gm13, number: 13, length: 45225048}
+      - {name: Gm14, number: 14, length: 49893278}
+      - {name: Gm15, number: 15, length: 53754295}
+      - {name: Gm16, number: 16, length: 38112070}
+      - {name: Gm17, number: 17, length: 41740656}
+      - {name: Gm18, number: 18, length: 58286270}
+      - {name: Gm19, number: 19, length: 51272880}
+      - {name: Gm20, number: 20, length: 47846026}
+  - id: Wm82.a6.v1
+    aliases: [Wm82.gnm6, gnm6, a6, Wm82_ISU01]
+    description: Williams 82 ISU-01 haplotype assembly (lengths from the LIS genome_main FASTA).
+    annotation: Wm82.gnm6.ann1.PKSW
+    chrom_namespace: glyma.Wm82.gnm6.
+    scaffold_pattern: 'scaffold_\d+'
+    chromosomes:
+      - {name: Gm01, number: 1, length: 59600650}
+      - {name: Gm02, number: 2, length: 54790513}
+      - {name: Gm03, number: 3, length: 49119424}
+      - {name: Gm04, number: 4, length: 55533332}
+      - {name: Gm05, number: 5, length: 44449196}
+      - {name: Gm06, number: 6, length: 53606008}
+      - {name: Gm07, number: 7, length: 47205696}
+      - {name: Gm08, number: 8, length: 50288313}
+      - {name: Gm09, number: 9, length: 51135784}
+      - {name: Gm10, number: 10, length: 55391814}
+      - {name: Gm11, number: 11, length: 42152160}
+      - {name: Gm12, number: 12, length: 43682070}
+      - {name: Gm13, number: 13, length: 46106413}
+      - {name: Gm14, number: 14, length: 52776670}
+      - {name: Gm15, number: 15, length: 55366112}
+      - {name: Gm16, number: 16, length: 40198974}
+      - {name: Gm17, number: 17, length: 44073542}
+      - {name: Gm18, number: 18, length: 60749638}
+      - {name: Gm19, number: 19, length: 53875614}
+      - {name: Gm20, number: 20, length: 51026854}
+  - id: Wm82.a1.v1
+    aliases: [Wm82.gnm1, gnm1, a1, Glycine_max_v1.1, Glyma1, Wm82.a1.v1.1]
+    description: >-
+      Williams 82 assembly 1. Only marker positions are kept; BARC_ SNP names
+      embed a1 coordinates.
+    ncbi_accession: GCF_000004515.3
+    chrom_namespace: glyma.Wm82.gnm1.
+    scaffold_pattern: 'scaffold_\d+'
+    embedded_in_marker_names: true
+    chromosomes:
+      - {name: Gm01, number: 1, length: 55915595}
+      - {name: Gm02, number: 2, length: 51656713}
+      - {name: Gm03, number: 3, length: 47781076}
+      - {name: Gm04, number: 4, length: 49243852}
+      - {name: Gm05, number: 5, length: 41936504}
+      - {name: Gm06, number: 6, length: 50722821}
+      - {name: Gm07, number: 7, length: 44683157}
+      - {name: Gm08, number: 8, length: 46995532}
+      - {name: Gm09, number: 9, length: 46843750}
+      - {name: Gm10, number: 10, length: 50969635}
+      - {name: Gm11, number: 11, length: 39172790}
+      - {name: Gm12, number: 12, length: 40113140}
+      - {name: Gm13, number: 13, length: 44408971}
+      - {name: Gm14, number: 14, length: 49711204}
+      - {name: Gm15, number: 15, length: 50939160}
+      - {name: Gm16, number: 16, length: 37397385}
+      - {name: Gm17, number: 17, length: 41906774}
+      - {name: Gm18, number: 18, length: 62308140}
+      - {name: Gm19, number: 19, length: 50589441}
+      - {name: Gm20, number: 20, length: 46773167}
+id_namespaces:
+  - id: glyma
+    pattern: '^Glyma\.\d{2}G\d{6}$'
+    description: Wm82 a2/a4/a6 gene ids; the same id has different coordinates per assembly.
+    example: Glyma.18G092200
+  - id: glyma_transcript
+    pattern: '^Glyma\.\d{2}G\d{6}\.\d+$'
+    example: Glyma.18G092200.1
+  - id: lis_full
+    pattern: '^glyma\.Wm82\.gnm\d\.ann\d\.Glyma\.\d{2}G\d{6}$'
+    description: LIS assembly-qualified gene id.
+    example: glyma.Wm82.gnm4.ann1.Glyma.18G092200
+  - id: ensembl
+    pattern: '^GLYMA_\d{2}G\d{6}$'
+    assembly: Wm82.a2.v1
+    description: Ensembl Plants gene ids on Glycine_max_v2.1.
+    example: GLYMA_18G092200
+  - id: glyma1
+    pattern: '^Glyma\d{2}g\d{5}$'
+    assembly: Wm82.a1.v1
+    description: Wm82.a1 gene ids, kept as synonyms.
+    example: Glyma18g15421
+  - id: ss
+    pattern: '^ss\d+$'
+    description: dbSNP submitted ids of SoySNP50K/180K/6K markers.
+    example: ss715631025
+  - id: barc_snp
+    pattern: '^BARC_\d\.\d{2}_Gm\d{2}_\d+_[ACGTN]_[ACGTN]$'
+    assembly: Wm82.a1.v1
+    description: BARC SNP names; chromosome and position are on Wm82.a1.
+    example: BARC_1.01_Gm01_24939_A_G
+  - id: positional_snp
+    pattern: '^S\d+_\d+$'
+    description: Chromosome-position SNP ids used by GmHapMap and the sister team.
+    example: S18_9263941
+linkouts:
+  - name: Ensembl Plants
+    template: "https://plants.ensembl.org/Glycine_max/Gene/Summary?g={gene_id}"
+    id_namespace: ensembl
+  - name: SoyBase (legacy)
+    template: "https://legacy.soybase.org/sbt/search/search_results.php?category=FeatureName&search_term={gene_id}"
+    id_namespace: glyma
+  - name: PubMed
+    kind: publication
+    template: "https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
+sources:
+  - id: lis_wm82_a2
+    name: LIS Wm82.a2.v1 gene models and annotation
+    tier: core
+    version: Wm82.gnm2.ann1.RVB6
+    license: Open (LIS datastore); Phytozome-derived, see original_data_usage_policy.txt
+    homepage: https://data.legumeinfo.org/Glycine/max/annotations/Wm82.gnm2.ann1.RVB6/
+    citation: Schmutz et al. 2010, Nature 463:178-183
+    assemblies: [Wm82.a2.v1]
+    parser: lis_annotation
+    files:
+      - url: https://data.legumeinfo.org/Glycine/max/annotations/Wm82.gnm2.ann1.RVB6/glyma.Wm82.gnm2.ann1.RVB6.gene_models_main.gff3.gz
+        path: glyma.Wm82.gnm2.ann1.RVB6.gene_models_main.gff3.gz
+        sha256: 5dba8feb212683e946319b8c16667bcf9968148f0306b5b2590dbc4028374edc
+        size: 21015301
+      - url: https://data.legumeinfo.org/Glycine/max/annotations/Wm82.gnm2.ann1.RVB6/glyma.Wm82.gnm2.ann1.RVB6.info_annot.txt.gz
+        path: glyma.Wm82.gnm2.ann1.RVB6.info_annot.txt.gz
+        sha256: 6b110d3afb7d907a2f41cec3aa07406d4944cd834a913d529c3e251db9dbaf37
+        size: 2978578
+      - url: https://data.legumeinfo.org/Glycine/max/annotations/Wm82.gnm2.ann1.RVB6/glyma.Wm82.gnm2.ann1.RVB6.info_gene_annot.txt.gz
+        path: glyma.Wm82.gnm2.ann1.RVB6.info_gene_annot.txt.gz
+        sha256: c592a16d9629023e26f18a6e16fe7c4eeaddaf03847059f9824d32173e146e15
+        size: 3695858
+      - url: https://data.legumeinfo.org/Glycine/max/annotations/Wm82.gnm2.ann1.RVB6/glyma.Wm82.gnm2.ann1.RVB6.synonym.txt.gz
+        path: glyma.Wm82.gnm2.ann1.RVB6.synonym.txt.gz
+        sha256: 2b0ccd51b60d848adfa2b2fa8df47c1135bcd754197f761cd02d7988a5b5c25f
+        size: 337082
+      - url: https://data.legumeinfo.org/Glycine/max/annotations/Wm82.gnm2.ann1.RVB6/glyma.Wm82.gnm2.ann1.RVB6.markers.gff3.gz
+        path: glyma.Wm82.gnm2.ann1.RVB6.markers.gff3.gz
+        sha256: 6132ecc3dc59b9614f4425dcb4e98116359f07b989359f6800d1b1ae09460407
+        size: 1103095
+  - id: lis_wm82_a4
+    name: LIS Wm82.a4.v1 gene models and annotation
+    tier: core
+    version: Wm82.gnm4.ann1.T8TQ
+    license: Open (LIS datastore); Phytozome-derived
+    homepage: https://data.legumeinfo.org/Glycine/max/annotations/Wm82.gnm4.ann1.T8TQ/
+    citation: Valliyodan et al. 2019, Plant J 100:1066-1082
+    assemblies: [Wm82.a4.v1]
+    parser: lis_annotation
+    files:
+      - url: https://data.legumeinfo.org/Glycine/max/annotations/Wm82.gnm4.ann1.T8TQ/glyma.Wm82.gnm4.ann1.T8TQ.gene_models_main.gff3.gz
+        path: glyma.Wm82.gnm4.ann1.T8TQ.gene_models_main.gff3.gz
+        sha256: 97cc35ac8fc6c76d449188829623826ab9b2783fd9d6ff00e3b3559c76a55cfd
+        size: 18095243
+      - url: https://data.legumeinfo.org/Glycine/max/annotations/Wm82.gnm4.ann1.T8TQ/glyma.Wm82.gnm4.ann1.T8TQ.info_annot.txt.gz
+        path: glyma.Wm82.gnm4.ann1.T8TQ.info_annot.txt.gz
+        sha256: 6786570e22f4ae50e7b4812f22cbad86f60d5ca993cded93ff735063e23d0de4
+        size: 2844512
+      - url: https://data.legumeinfo.org/Glycine/max/annotations/Wm82.gnm4.ann1.T8TQ/glyma.Wm82.gnm4.ann1.T8TQ.info_gene_annot.txt.gz
+        path: glyma.Wm82.gnm4.ann1.T8TQ.info_gene_annot.txt.gz
+        sha256: 98aea5072c8189c49e1d639b80803c62b70809056a672a23ffcbaf9757bbd34e
+        size: 3444949
+      - url: https://data.legumeinfo.org/Glycine/max/annotations/Wm82.gnm4.ann1.T8TQ/glyma.Wm82.gnm4.ann1.T8TQ.info_synonyms.txt.gz
+        path: glyma.Wm82.gnm4.ann1.T8TQ.info_synonyms.txt.gz
+        sha256: 4a0d6960372eaeaa54984fa38f9e3341125dcb85d778952792510cd4677d4778
+        size: 306059
+  - id: lis_wm82_a6
+    name: LIS Wm82.a6.v1 gene models and annotation
+    tier: core
+    version: Wm82.gnm6.ann1.PKSW
+    license: Open (LIS datastore); JGI data release policy, see DataReleasePolicy.html
+    homepage: https://data.legumeinfo.org/Glycine/max/annotations/Wm82.gnm6.ann1.PKSW/
+    citation: "Espina et al. 2024, Plant J: Assembly, comparative analysis, and utilization of a single haplotype reference genome for soybean"
+    assemblies: [Wm82.a6.v1]
+    parser: lis_annotation
+    files:
+      - url: https://data.legumeinfo.org/Glycine/max/annotations/Wm82.gnm6.ann1.PKSW/glyma.Wm82.gnm6.ann1.PKSW.gene_models_main.gff3.gz
+        path: glyma.Wm82.gnm6.ann1.PKSW.gene_models_main.gff3.gz
+        sha256: 5ab96b0cc30afd4282eaf80ed376f73454da07adee632d935ce54949a0ed4377
+        size: 16995691
+      - url: https://data.legumeinfo.org/Glycine/max/annotations/Wm82.gnm6.ann1.PKSW/glyma.Wm82.gnm6.ann1.PKSW.annotation_info.txt.gz
+        path: glyma.Wm82.gnm6.ann1.PKSW.annotation_info.txt.gz
+        sha256: 12a7e797c3ecd7746450dd2548edcf2b73f7eb3c44c58d9b21445eeb9c94b201
+        size: 3263767
+      - url: https://data.legumeinfo.org/Glycine/max/annotations/Wm82.gnm6.ann1.PKSW/glyma.Wm82.gnm6.ann1.PKSW.defline.txt.gz
+        path: glyma.Wm82.gnm6.ann1.PKSW.defline.txt.gz
+        sha256: 130dbb613e606765ed149ced5fa58a0dae88b1dc32be1af7c52ec3735ec6a9a3
+        size: 1410886
+  - id: lis_pangenes
+    name: LIS Glycine pangene set pan5 (reference-line table)
+    tier: core
+    version: Glycine.pan5.MKRS
+    license: Open (LIS datastore)
+    homepage: https://data.legumeinfo.org/Glycine/GENUS/pangenes/Glycine.pan5.MKRS/
+    assemblies: [Wm82.a1.v1, Wm82.a2.v1, Wm82.a4.v1, Wm82.a6.v1]
+    parser: lis_pangenes
+    files:
+      - url: https://data.legumeinfo.org/Glycine/GENUS/pangenes/Glycine.pan5.MKRS/Glycine.pan5.MKRS.table_ref_lines.tsv.gz
+        path: Glycine.pan5.MKRS.table_ref_lines.tsv.gz
+        sha256: 2b814167d7fa69729c1b3caad46a9660531fb13c7c430d7c0e0f32191de88284
+        size: 2684351
+  - id: lis_markers
+    name: LIS marker sets (SoySNP50K on a1/a2/a4/a6; gnm2 SNP, SSR and study sets)
+    tier: core
+    version: LIS datastore markers
+    license: Open (LIS datastore)
+    homepage: https://data.legumeinfo.org/Glycine/max/markers/
+    citation: Song et al. 2013, PLoS ONE 8:e54985; Song et al. 2016, BMC Genomics 17:33
+    assemblies: [Wm82.a1.v1, Wm82.a2.v1, Wm82.a4.v1, Wm82.a6.v1]
+    parser: lis_markers
+    files:
+      - {url: "https://data.legumeinfo.org/Glycine/max/markers/Wm82.gnm1.mrk.SoySNP50K/glyma.Wm82.gnm1.mrk.SoySNP50K.gff3.gz", path: glyma.Wm82.gnm1.mrk.SoySNP50K.gff3.gz, sha256: b30cbe466618ba7b55cf3f85b97329072da1a40d79389cc13f5c777a646e387c, size: 722189}
+      - {url: "https://data.legumeinfo.org/Glycine/max/markers/Wm82.gnm2.mrk.SoySNP50K/glyma.Wm82.gnm2.mrk.SoySNP50K.gff3.gz", path: glyma.Wm82.gnm2.mrk.SoySNP50K.gff3.gz, sha256: e1899bb7af74053eadab13e8ba7e5140adffc82a9718a4922cdef3111e04cbd0, size: 800327}
+      - {url: "https://data.legumeinfo.org/Glycine/max/markers/Wm82.gnm4.mrk.SoySNP50K/glyma.Wm82.gnm4.mrk.SoySNP50K.gff3.gz", path: glyma.Wm82.gnm4.mrk.SoySNP50K.gff3.gz, sha256: ccdde931ecdf8d7d20dc42d94ec53fbaf06c87212aead72b4fd4f5e24be70431, size: 622835}
+      - {url: "https://data.legumeinfo.org/Glycine/max/markers/Wm82.gnm6.mrk.SoySNP50K/glyma.Wm82.gnm6.mrk.SoySNP50K.gff3.gz", path: glyma.Wm82.gnm6.mrk.SoySNP50K.gff3.gz, sha256: dfa3af36f6ef6c0a10b08d6a7ff1f973f858c31faea4183949604694fa85d595, size: 676175}
+      - {url: "https://data.legumeinfo.org/Glycine/max/markers/Wm82.gnm2.mrk.SoyaSNP180K/glyma.Wm82.gnm2.mrk.SoyaSNP180K.gff3.gz", path: glyma.Wm82.gnm2.mrk.SoyaSNP180K.gff3.gz, sha256: bf23546a08084b11e79799378d79ae752c8dadf2d94306b5d3e2de44b3006576, size: 2619529}
+      - {url: "https://data.legumeinfo.org/Glycine/max/markers/Wm82.gnm2.mrk.SoySNP6K/glyma.Wm82.gnm2.mrk.SoySNP6K.gff3.gz", path: glyma.Wm82.gnm2.mrk.SoySNP6K.gff3.gz, sha256: c26138356e8992f3cc3a92ca26bef9135bf93726f582252ebdfedf8d1d067be6, size: 81266}
+      - {url: "https://data.legumeinfo.org/Glycine/max/markers/Wm82.gnm2.mrk.BARCSOYSSR/glyma.Wm82.gnm2.mrk.BARCSOYSSR.gff3.gz", path: glyma.Wm82.gnm2.mrk.BARCSOYSSR.gff3.gz, sha256: 9663334cdb6cc84329025b74682a2362d8f36c38df94ff34f0317db00e2b4682, size: 556301}
+      - {url: "https://data.legumeinfo.org/Glycine/max/markers/Wm82.gnm2.mrk.SoySSR/glyma.Wm82.gnm2.mrk.SoySSR.gff3.gz", path: glyma.Wm82.gnm2.mrk.SoySSR.gff3.gz, sha256: f90d489c14c8378ae8a6d51531e597db5630494f68eccbf7ab297cf61ca5b0b7, size: 16149}
+      - {url: "https://data.legumeinfo.org/Glycine/max/markers/Wm82.gnm2.mrk.1536_USLP1/glyma.Wm82.gnm2.mrk.1536_USLP1.gff3.gz", path: glyma.Wm82.gnm2.mrk.1536_USLP1.gff3.gz, sha256: bc7e5d05b63d0473614ee83f4cb3dd58b9f21482dc7ace7272bfa9d0eb471098, size: 165901}
+      - {url: "https://data.legumeinfo.org/Glycine/max/markers/Wm82.gnm2.mrk.consensus40/glyma.Wm82.gnm2.mrk.consensus40.gff3.gz", path: glyma.Wm82.gnm2.mrk.consensus40.gff3.gz, sha256: d6eae9a97ae426de80ea209c2d998714899508eed00b7d512e356ae82dfe60af, size: 93571}
+      - {url: "https://data.legumeinfo.org/Glycine/max/markers/Wm82.gnm2.mrk.NJAU355K/glyma.Wm82.gnm2.mrk.NJAU355K.gff3.gz", path: glyma.Wm82.gnm2.mrk.NJAU355K.gff3.gz, sha256: a91ab1ee01cad30508504bffa43c4db4d801f4c4e4f9c1b410c2f0a7856ef45f, size: 3790918}
+      - {url: "https://data.legumeinfo.org/Glycine/max/markers/Wm82.gnm2.mrk.Fang_Ma_2017/glyma.Wm82.gnm2.mrk.Fang_Ma_2017.gff3.gz", path: glyma.Wm82.gnm2.mrk.Fang_Ma_2017.gff3.gz, sha256: 97698c9ba177a2bc3ad41274417636b8fb32e0be7c8c2d89b971fd21f78bb518, size: 5456}
+      - {url: "https://data.legumeinfo.org/Glycine/max/markers/Wm82.gnm2.mrk.Han_Zhao_2015/glyma.Wm82.gnm2.mrk.Han_Zhao_2015.gff3.gz", path: glyma.Wm82.gnm2.mrk.Han_Zhao_2015.gff3.gz, sha256: b97f88ed922776d594e13eb279862953d04d144552efed247cb274eca7f267f4, size: 431}
+      - {url: "https://data.legumeinfo.org/Glycine/max/markers/Wm82.gnm2.mrk.Li_Zhao_2019/glyma.Wm82.gnm2.mrk.Li_Zhao_2019.gff3.gz", path: glyma.Wm82.gnm2.mrk.Li_Zhao_2019.gff3.gz, sha256: a3726a2c27a3a06ff4c822f1436794058fa213586741d2f8d05d2799acfb19f0, size: 838}
+      - {url: "https://data.legumeinfo.org/Glycine/max/markers/Wm82.gnm2.mrk.Meng_He_2016/glyma.Wm82.gnm2.mrk.Meng_He_2016.gff3.gz", path: glyma.Wm82.gnm2.mrk.Meng_He_2016.gff3.gz, sha256: 9e402c6a130e570d6b1e64a6ae15900954245c3b4c5f4f0ded8dbb96ab7f6336, size: 571}
+      - {url: "https://data.legumeinfo.org/Glycine/max/markers/Wm82.gnm2.mrk.Sonah_ODonoughue_2015/glyma.Wm82.gnm2.mrk.Sonah_ODonoughue_2015.gff3.gz", path: glyma.Wm82.gnm2.mrk.Sonah_ODonoughue_2015.gff3.gz, sha256: e0093e993e4594978fad83b73b55659c7516413365444e12a7e67142e4ee9930, size: 482}
+      - {url: "https://data.legumeinfo.org/Glycine/max/markers/Wm82.gnm2.mrk.Tran_Steketee_2019/glyma.Wm82.gnm2.mrk.Tran_Steketee_2019.gff3.gz", path: glyma.Wm82.gnm2.mrk.Tran_Steketee_2019.gff3.gz, sha256: 11a0eb035352d65f4f34318a5d31708e129b00c23e60693b75609a4383b7c1cd, size: 1556}
+      - {url: "https://data.legumeinfo.org/Glycine/max/markers/Wm82.gnm2.mrk.Vuong_Sonah_2015/glyma.Wm82.gnm2.mrk.Vuong_Sonah_2015.gff3.gz", path: glyma.Wm82.gnm2.mrk.Vuong_Sonah_2015.gff3.gz, sha256: 2bcb0cfd4e84e076e8f46d9fdb65853c7105ce6fa2709f8fd5fea73f3e340fb3, size: 382}
+      - {url: "https://data.legumeinfo.org/Glycine/max/markers/Wm82.gnm2.mrk.Zhao_Teng_2017/glyma.Wm82.gnm2.mrk.Zhao_Teng_2017.gff3.gz", path: glyma.Wm82.gnm2.mrk.Zhao_Teng_2017.gff3.gz, sha256: 4b82a4c956e3b402d743fa7bec1a104c9df4192eb198bb11f18210df48e48c8f, size: 376}
+  - id: lis_qtl
+    name: LIS/SoyBase QTL studies (genetic-map QTL with flanking markers)
+    tier: core
+    version: LIS datastore qtl
+    rolling: true
+    license: Open (LIS datastore README per study)
+    homepage: https://data.legumeinfo.org/Glycine/max/qtl/
+    assemblies: [Wm82.a2.v1]
+    parser: lis_qtl
+    notes: >-
+      bp spans are placed on Wm82.a2.v1 from each QTL's markers; QTLs whose
+      markers cannot be placed on one chromosome keep cM only.
+    collection:
+      listing_url: https://data.legumeinfo.org/Glycine/max/qtl/
+      entry_pattern: '[^/]+\.qtl\.[^/]+'
+      files:
+        - {url: "https://data.legumeinfo.org/Glycine/max/qtl/{entry}/glyma.{entry}.qtl.tsv.gz", path: "{entry}/glyma.{entry}.qtl.tsv.gz"}
+        - {url: "https://data.legumeinfo.org/Glycine/max/qtl/{entry}/glyma.{entry}.qtlmrk.tsv.gz", path: "{entry}/glyma.{entry}.qtlmrk.tsv.gz", optional: true}
+        - {url: "https://data.legumeinfo.org/Glycine/max/qtl/{entry}/glyma.{entry}.obo.tsv.gz", path: "{entry}/glyma.{entry}.obo.tsv.gz", optional: true}
+        - {url: "https://data.legumeinfo.org/Glycine/max/qtl/{entry}/README.{entry}.yml", path: "{entry}/README.{entry}.yml", optional: true}
+  - id: lis_gwas
+    name: LIS/SoyBase GWAS studies
+    tier: core
+    version: LIS datastore gwas
+    rolling: true
+    license: Open (LIS datastore README per study)
+    homepage: https://data.legumeinfo.org/Glycine/max/gwas/
+    assemblies: [Wm82.a2.v1]
+    parser: lis_gwas
+    collection:
+      listing_url: https://data.legumeinfo.org/Glycine/max/gwas/
+      entry_pattern: '[^/]+\.gwas\.[^/]+'
+      files:
+        - {url: "https://data.legumeinfo.org/Glycine/max/gwas/{entry}/glyma.{entry}.result.tsv.gz", path: "{entry}/glyma.{entry}.result.tsv.gz"}
+        - {url: "https://data.legumeinfo.org/Glycine/max/gwas/{entry}/glyma.{entry}.obo.tsv.gz", path: "{entry}/glyma.{entry}.obo.tsv.gz", optional: true}
+        - {url: "https://data.legumeinfo.org/Glycine/max/gwas/{entry}/README.{entry}.yml", path: "{entry}/README.{entry}.yml", optional: true}
+  - id: soybase_gwas
+    name: SoyBase GWAS SNP locations
+    tier: core
+    version: SoyBase legacy getGWASlocations
+    rolling: true
+    license: Public (USDA-ARS SoyBase)
+    homepage: https://legacy.soybase.org/GWAS/
+    assemblies: [Wm82.a2.v1]
+    parser: soybase_gwas
+    files:
+      - url: https://legacy.soybase.org/GWAS/getGWASlocations.php
+        path: soybase_gwas_locations.tsv
+  - id: gwas_atlas
+    name: GWAS Atlas soybean associations and the Plant Phenotype and Trait Ontology
+    tier: core
+    version: GWAS Atlas (file dated 2022-06-27)
+    license: GWAS Atlas terms; academic use only
+    academic_only: true
+    homepage: https://ngdc.cncb.ac.cn/gwas/
+    citation: GWAS Atlas, National Genomics Data Center (CNCB-NGDC)
+    assemblies: [Wm82.a2.v1, none]
+    parser: gwas_atlas
+    files:
+      - url: https://download.cncb.ac.cn/gwas_atlas/gwas_association_result_for_soyean.txt.gz
+        path: gwas_association_result_for_soyean.txt.gz
+        sha256: 276e70fc0eb143826c87e74c565a1795657fe0554d78951aa86ef43ea6211fd5
+        size: 1401199
+      - url: https://download.cncb.ac.cn/gwas_atlas/PPTO.obo.gz
+        path: PPTO.obo.gz
+        sha256: fce5c49069ac8c20f4d1d958d0d8265d38bacca28c69807669f1a0cea0eecb59
+        size: 53929
+  - id: lis_gene_functions
+    name: LIS curated soybean gene functions (glyma.traits.yml)
+    tier: core
+    version: LIS gene_functions
+    rolling: true
+    license: Open (LIS datastore)
+    homepage: https://data.legumeinfo.org/Glycine/max/gene_functions/
+    assemblies: [Wm82.a2.v1, Wm82.a4.v1, Wm82.a6.v1]
+    parser: lis_gene_functions
+    files:
+      - url: https://data.legumeinfo.org/Glycine/max/gene_functions/glyma.traits.yml
+        path: glyma.traits.yml
+  - id: ensembl_compara
+    name: Ensembl Plants 63 Compara protein homologies
+    tier: core
+    version: Ensembl Plants 63 (Compara 116)
+    license: Ensembl data are available without restriction
+    homepage: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/tsv/ensembl-compara/homologies/
+    citation: Yates et al. 2022, Nucleic Acids Res 50:D996-D1003
+    assemblies: [Wm82.a2.v1, TAIR10]
+    parser: ensembl_compara
+    notes: Each genome file holds an arbitrary half of each pair, so both soybean and Arabidopsis files are needed.
+    files:
+      - url: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/tsv/ensembl-compara/homologies/glycine_max/Compara.116.protein_default.homologies.tsv.gz
+        path: glycine_max.Compara.116.protein_default.homologies.tsv.gz
+        sha256: 925d7330fd3c623f7ddb8867faa5ccca3ffdd8370387e0e5f730a000a830a2ee
+        size: 90434222
+      - url: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/tsv/ensembl-compara/homologies/arabidopsis_thaliana/Compara.116.protein_default.homologies.tsv.gz
+        path: arabidopsis_thaliana.Compara.116.protein_default.homologies.tsv.gz
+        sha256: 8cf0244bb93865a13982c7fded23517179dd194d19b1ebae7ef0b719b2336f1a
+        size: 30022723
+  - id: plaza_orthology
+    name: PLAZA 5.0 dicots integrative orthology for soybean
+    tier: core
+    version: PLAZA 5.0 dicots
+    license: Freely downloadable; cite Van Bel et al. 2022
+    homepage: https://bioinformatics.psb.ugent.be/plaza/versions/plaza_v5_dicots/
+    citation: Van Bel et al. 2022, Nucleic Acids Res 50:D1468-D1474
+    assemblies: [Wm82.a4.v1, TAIR10]
+    parser: plaza_orthology
+    notes: PLAZA 5.0 soybean genes are Wm82.a4.v1 ids and are mapped to a2 through pangenes.
+    files:
+      - url: https://ftp.psb.ugent.be/pub/plaza/plaza_public_dicots_05/IntegrativeOrthologySpecies/integrative_orthology.gma.tsv.gz
+        path: integrative_orthology.gma.tsv.gz
+        sha256: 6375b6893fc2cb08cbcab05930e9181c787c27e2c0f1c81122267bb0c553c878
+        size: 236653769
+  - id: tair
+    name: TAIR public functional annotation release
+    tier: core
+    version: TAIR 2024-10-01 (Zenodo 17371665)
+    license: CC-BY-4.0
+    homepage: https://zenodo.org/records/17371665
+    citation: Berardini et al. 2015, Genesis 53:474-485
+    assemblies: [TAIR10]
+    parser: tair
+    notes: ATH_GO_GOSLIM.txt.gz in this record is a zip archive despite its name; the parser sniffs magic bytes.
+    files:
+      - url: https://zenodo.org/records/17371665/files/Araport11_functional_descriptions_20241001.txt.gz?download=1
+        path: Araport11_functional_descriptions_20241001.txt.gz
+        sha256: bf45cdb59a1f711ab46d5ba3e8b1b473c1b114a8eac2fd78af48e989c65422de
+        size: 2629813
+      - url: https://zenodo.org/records/17371665/files/gene_aliases_20241001.txt.gz?download=1
+        path: gene_aliases_20241001.txt.gz
+        sha256: 036e25356166b3b30e6be064e028a58996e796c85796e40061341a363004d5e6
+        size: 372809
+      - url: https://zenodo.org/records/17371665/files/Locus_Germplasm_Phenotype_20241001.txt.gz?download=1
+        path: Locus_Germplasm_Phenotype_20241001.txt.gz
+        sha256: 7eb1ee0c5a7ac233cfa31cdf67e990ea491bb8160d7b8f28282294ad473637ed
+        size: 758991
+      - url: https://zenodo.org/records/17371665/files/Locus_Published_20241001.txt.gz?download=1
+        path: Locus_Published_20241001.txt.gz
+        sha256: 968c2712e99636ac55f3ab008e4151f8d5e38baa133a08e373796c0a441324fd
+        size: 2240401
+      - url: https://zenodo.org/records/17371665/files/ATH_GO_GOSLIM.txt.gz?download=1
+        path: ATH_GO_GOSLIM.txt.gz
+        sha256: 28d3a539fb42372058c60bbfa6946f53b055b376d5bf664928bc75a1cf331cc5
+        size: 7334287
+  - id: go_basic
+    name: Gene Ontology (basic)
+    tier: core
+    version: go-basic.obo
+    rolling: true
+    license: CC-BY-4.0
+    homepage: https://geneontology.org/docs/download-ontology/
+    assemblies: [none]
+    parser: ontology
+    files:
+      - url: https://purl.obolibrary.org/obo/go/go-basic.obo
+        path: go-basic.obo
+  - id: plant_trait_ontology
+    name: Plant Trait Ontology (TO)
+    tier: core
+    version: to.obo
+    rolling: true
+    license: CC-BY-4.0
+    homepage: https://github.com/Planteome/plant-trait-ontology
+    assemblies: [none]
+    parser: ontology
+    files:
+      - url: https://purl.obolibrary.org/obo/to.obo
+        path: to.obo
+  - id: plant_ontology
+    name: Plant Ontology (PO)
+    tier: core
+    version: po.obo
+    rolling: true
+    license: CC-BY-4.0
+    homepage: https://github.com/Planteome/plant-ontology
+    assemblies: [none]
+    parser: ontology
+    files:
+      - url: https://purl.obolibrary.org/obo/po.obo
+        path: po.obo
+  - id: soybase_ontology
+    name: SoyBase soybean trait ontology (Soy9.6)
+    tier: core
+    version: Soy9.6
+    rolling: true
+    license: CC-BY-4.0 (Planteome)
+    homepage: https://github.com/Planteome/soybase-ontology
+    assemblies: [none]
+    parser: ontology
+    files:
+      - url: https://raw.githubusercontent.com/Planteome/soybase-ontology/master/Soy9.6.obo
+        path: Soy9.6.obo
+  - id: crop_ontology_soybean
+    name: Crop Ontology soybean traits (CO_336)
+    tier: core
+    version: CO_336
+    rolling: true
+    license: CC-BY-4.0 (Crop Ontology)
+    homepage: https://cropontology.org/term/CO_336:ROOT
+    assemblies: [none]
+    parser: ontology
+    notes: Crop Ontology serves CO_336 as OWL/RDF only; the OBO endpoint returns HTML.
+    files:
+      - url: https://cropontology.org/ontology/CO_336/Soybean/owl
+        path: CO_336.owl
+  - id: lis_expression_atlas
+    name: LIS JGI soybean gene atlas (Sreedasyam, Plott et al. 2023)
+    tier: extended
+    status: planned
+    version: Wm82.gnm4.ann1.expr.Wm82.Sreedasyam_Plott_2023
+    license: Open (LIS datastore)
+    homepage: https://data.legumeinfo.org/Glycine/max/expression/
+    assemblies: [Wm82.a4.v1]
+  - id: ensembl_vep_cache
+    name: Ensembl Plants 63 VEP cache for Glycine_max_v2.1
+    tier: heavy
+    status: planned
+    version: glycine_max_vep_63_Glycine_max_v2.1
+    license: Ensembl data are available without restriction
+    homepage: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/variation/indexed_vep_cache/
+    assemblies: [Wm82.a2.v1]

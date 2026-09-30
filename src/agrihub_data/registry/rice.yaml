@@ -1,0 +1,108 @@
+species: rice
+scientific_name: Oryza sativa
+common_name: rice
+taxon_id: 4530
+abbrev: orysa
+canonical_assembly: IRGSP-1.0
+default_window:
+  flank_bp: 150000
+typical_ld_kb: 150
+ld_note: >-
+  LD decays over about 75 kb in indica, 150 kb in tropical japonica and up to
+  500 kb in temperate japonica (Mather et al. 2007).
+naming:
+  canonical: "chr{number:02d}"
+  prefixes: [chr, Chr, Os, Chromosome]
+reference_assemblies:
+  - species: arabidopsis
+    assembly: TAIR10
+assemblies:
+  - id: IRGSP-1.0
+    aliases: [IRGSP1, Os-Nipponbare-Reference-IRGSP-1.0, MSU7]
+    description: Nipponbare IRGSP-1.0; RAP-DB ids are primary and MSU7 LOC_Os ids share the pseudomolecules.
+    ncbi_accession: GCF_001433935.1
+    chromosomes:
+      - {name: chr01, number: 1, length: 43270923}
+      - {name: chr02, number: 2, length: 35937250}
+      - {name: chr03, number: 3, length: 36413819}
+      - {name: chr04, number: 4, length: 35502694}
+      - {name: chr05, number: 5, length: 29958434}
+      - {name: chr06, number: 6, length: 31248787}
+      - {name: chr07, number: 7, length: 29697621}
+      - {name: chr08, number: 8, length: 28443022}
+      - {name: chr09, number: 9, length: 23012720}
+      - {name: chr10, number: 10, length: 23207287}
+      - {name: chr11, number: 11, length: 29021106}
+      - {name: chr12, number: 12, length: 27531856}
+      - {name: chrMt, length: 490520, aliases: [Mt, ChrM, chrM, MT]}
+      - {name: chrPt, length: 134525, aliases: [Pt, ChrC, chrC, Pltd]}
+id_namespaces:
+  - id: rap
+    pattern: '^Os\d{2}g\d{7}$'
+    assembly: IRGSP-1.0
+    description: RAP-DB locus ids.
+    example: Os01g0100100
+  - id: msu
+    pattern: '^LOC_Os\d{2}g\d{5}$'
+    assembly: IRGSP-1.0
+    description: MSU rice genome annotation release 7 locus ids.
+    example: LOC_Os01g01010
+linkouts:
+  - name: Ensembl Plants
+    template: "https://plants.ensembl.org/Oryza_sativa/Gene/Summary?g={gene_id}"
+    id_namespace: rap
+  - name: Gramene
+    template: "https://www.gramene.org/?idList={gene_id}"
+    id_namespace: rap
+sources:
+  - id: rapdb_annotation
+    name: RAP-DB IRGSP-1.0 representative models and annotation
+    tier: core
+    status: planned
+    version: "2026-02-05"
+    license: RAP-DB terms of use
+    homepage: https://rapdb.dna.affrc.go.jp/
+    assemblies: [IRGSP-1.0]
+    notes: IRGSP-1.0_representative_2026-02-05.tar.gz and IRGSP-1.0_representative_annotation_2026-02-05.tsv.gz.
+  - id: rapdb_msu_map
+    name: RAP-DB to MSU id map
+    tier: core
+    status: planned
+    version: "2026-02-05"
+    license: RAP-DB terms of use
+    homepage: https://rapdb.dna.affrc.go.jp/
+    assemblies: [IRGSP-1.0]
+  - id: gramene_rice_qtl
+    name: Gramene rice QTL with TO terms
+    tier: core
+    status: planned
+    version: Rice_QTL.dat
+    license: Gramene terms of use
+    homepage: https://www.gramene.org/
+    assemblies: [IRGSP-1.0]
+    notes: Needs assembly checks and remapping.
+  - id: funricegenes
+    name: funRiceGenes curated gene keywords
+    tier: core
+    status: planned
+    version: geneKeyword.table.txt
+    license: CC-BY-SA
+    homepage: https://funricegenes.github.io/
+    assemblies: [IRGSP-1.0]
+  - id: gwas_atlas
+    name: GWAS Atlas rice associations
+    tier: core
+    status: planned
+    version: GWAS Atlas
+    license: GWAS Atlas terms; academic use only
+    academic_only: true
+    homepage: https://ngdc.cncb.ac.cn/gwas/
+    assemblies: [IRGSP-1.0]
+  - id: ensembl_compara
+    name: Ensembl Plants 63 Compara protein homologies
+    tier: core
+    status: planned
+    version: Ensembl Plants 63 (Compara 116)
+    license: Ensembl data are available without restriction
+    homepage: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/tsv/ensembl-compara/homologies/oryza_sativa/
+    assemblies: [IRGSP-1.0, TAIR10]

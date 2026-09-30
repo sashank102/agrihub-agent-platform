@@ -1,0 +1,84 @@
+species: sorghum
+scientific_name: Sorghum bicolor
+common_name: sorghum
+taxon_id: 4558
+abbrev: sorbi
+canonical_assembly: Sorghum_bicolor_NCBIv3
+default_window:
+  flank_bp: 100000
+typical_ld_kb: 50
+ld_note: >-
+  LD decays over roughly 10-150 kb depending on the panel and region
+  (Morris et al. 2013).
+naming:
+  canonical: "Chr{number:02d}"
+  prefixes: [Chr, chr, Chromosome, Sb, SBI-]
+reference_assemblies:
+  - species: arabidopsis
+    assembly: TAIR10
+assemblies:
+  - id: Sorghum_bicolor_NCBIv3
+    aliases: [NCBIv3, BTx623_v3, Sbicolor_v3, v3]
+    description: BTx623 v3; the Sorghum QTL Atlas and most GWAS use it.
+    ncbi_accession: GCF_000003195.3
+    chromosomes:
+      - {name: Chr01, number: 1, length: 80884392}
+      - {name: Chr02, number: 2, length: 77742459}
+      - {name: Chr03, number: 3, length: 74386277}
+      - {name: Chr04, number: 4, length: 68658214}
+      - {name: Chr05, number: 5, length: 71854669}
+      - {name: Chr06, number: 6, length: 61277060}
+      - {name: Chr07, number: 7, length: 65505356}
+      - {name: Chr08, number: 8, length: 62686529}
+      - {name: Chr09, number: 9, length: 59416394}
+      - {name: Chr10, number: 10, length: 61233695}
+id_namespaces:
+  - id: sorbi
+    pattern: '^SORBI_3\d{3}G\d{6}$'
+    assembly: Sorghum_bicolor_NCBIv3
+    description: Ensembl/SorghumBase gene ids.
+    example: SORBI_3001G000100
+  - id: sobic
+    pattern: '^Sobic\.\d{3}G\d{6}$'
+    assembly: Sorghum_bicolor_NCBIv3
+    description: Phytozome v3.1.1 ids; the SORBI_3 mapping must be validated.
+    example: Sobic.001G000100
+linkouts:
+  - name: Ensembl Plants
+    template: "https://plants.ensembl.org/Sorghum_bicolor/Gene/Summary?g={gene_id}"
+    id_namespace: sorbi
+sources:
+  - id: sorghumbase_ncbiv3
+    name: SorghumBase release 11 NCBIv3 gene models
+    tier: core
+    status: planned
+    version: release-11
+    license: SorghumBase terms of use
+    homepage: http://ftp.sorghumbase.org/release-11/
+    assemblies: [Sorghum_bicolor_NCBIv3]
+  - id: sorghum_qtl_atlas
+    name: Sorghum QTL Atlas (QTL, GWAS and major genes)
+    tier: core
+    status: planned
+    version: query_qtl_atlas export
+    license: See github.com/jlboat/query_qtl_atlas
+    homepage: https://github.com/jlboat/query_qtl_atlas
+    assemblies: [Sorghum_bicolor_NCBIv3]
+    notes: Rows on Sbi1.4 or v2.1 coordinates are dropped or lifted.
+  - id: gwas_atlas
+    name: GWAS Atlas sorghum associations
+    tier: core
+    status: planned
+    version: GWAS Atlas
+    license: GWAS Atlas terms; academic use only
+    academic_only: true
+    homepage: https://ngdc.cncb.ac.cn/gwas/
+    assemblies: [Sorghum_bicolor_NCBIv3]
+  - id: ensembl_compara
+    name: Ensembl Plants 63 Compara protein homologies
+    tier: core
+    status: planned
+    version: Ensembl Plants 63 (Compara 116)
+    license: Ensembl data are available without restriction
+    homepage: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/tsv/ensembl-compara/homologies/sorghum_bicolor/
+    assemblies: [Sorghum_bicolor_NCBIv3, TAIR10]
