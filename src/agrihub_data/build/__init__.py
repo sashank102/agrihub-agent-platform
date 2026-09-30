@@ -22,6 +22,20 @@ from typing import Any
 import duckdb
 
 from agrihub_data.build.context import BuildContext, BuildError
+from agrihub_data.build.gwas import build_gwas_atlas, build_soybase_gwas
+from agrihub_data.build.lis_evidence import (
+    build_lis_gene_functions,
+    build_lis_gwas,
+    build_lis_qtl,
+)
+from agrihub_data.build.lis_genome import (
+    build_lis_annotation,
+    build_lis_markers,
+    build_lis_pangenes,
+)
+from agrihub_data.build.ontology import build_ontology
+from agrihub_data.build.orthology import build_ensembl_compara, build_plaza_orthology
+from agrihub_data.build.tair import build_tair
 from agrihub_data.bundle import DATA_TABLES, SCHEMA_VERSION
 from agrihub_data.fetch import Manifest
 from agrihub_data.paths import SpeciesPaths, species_paths
@@ -45,7 +59,20 @@ class Parser:
     after: tuple[str, ...] = ()
 
 
-PARSERS: tuple[Parser, ...] = ()
+PARSERS: tuple[Parser, ...] = (
+    Parser("ontology", build_ontology),
+    Parser("lis_annotation", build_lis_annotation),
+    Parser("lis_pangenes", build_lis_pangenes),
+    Parser("lis_markers", build_lis_markers),
+    Parser("lis_qtl", build_lis_qtl, after=("lis_annotation", "lis_markers")),
+    Parser("lis_gwas", build_lis_gwas, after=("lis_markers",)),
+    Parser("soybase_gwas", build_soybase_gwas),
+    Parser("gwas_atlas", build_gwas_atlas),
+    Parser("lis_gene_functions", build_lis_gene_functions, after=("lis_annotation", "lis_pangenes")),
+    Parser("ensembl_compara", build_ensembl_compara, after=("lis_annotation",)),
+    Parser("plaza_orthology", build_plaza_orthology, after=("lis_annotation", "lis_pangenes")),
+    Parser("tair", build_tair),
+)
 
 
 @dataclass
