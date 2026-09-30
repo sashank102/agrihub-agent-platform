@@ -27,6 +27,7 @@ dependencies = [
     "langchain-aws>=0.2.28",
     "fastapi>=0.141.1",
     "uvicorn[standard]>=0.34.3",
+    "duckdb>=1.1",
 ]
 
 [project.optional-dependencies]
@@ -47,6 +48,7 @@ packages = [
     "agent_platform.db.repositories",
     "agent_platform.services",
     "agrihub",
+    "agrihub.tools",
     "open_deep_research",
     "tests",
 ]
