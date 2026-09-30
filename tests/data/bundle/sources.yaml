@@ -1,0 +1,201 @@
+# Fixture sources for the soybean registry. {base} is the local test server.
+# Files under files/<source_id>/ are served gzipped when the path ends in .gz.
+sources:
+  - id: lis_wm82_a2
+    name: LIS Wm82.a2.v1 fixture
+    tier: core
+    version: Wm82.gnm2.ann1.RVB6
+    license: Open
+    assemblies: [Wm82.a2.v1]
+    parser: lis_annotation
+    files:
+      - {url: "{base}/lis_wm82_a2/glyma.Wm82.gnm2.ann1.RVB6.gene_models_main.gff3.gz", path: glyma.Wm82.gnm2.ann1.RVB6.gene_models_main.gff3.gz}
+      - {url: "{base}/lis_wm82_a2/glyma.Wm82.gnm2.ann1.RVB6.info_annot.txt.gz", path: glyma.Wm82.gnm2.ann1.RVB6.info_annot.txt.gz}
+      - {url: "{base}/lis_wm82_a2/glyma.Wm82.gnm2.ann1.RVB6.info_gene_annot.txt.gz", path: glyma.Wm82.gnm2.ann1.RVB6.info_gene_annot.txt.gz}
+      - {url: "{base}/lis_wm82_a2/glyma.Wm82.gnm2.ann1.RVB6.synonym.txt.gz", path: glyma.Wm82.gnm2.ann1.RVB6.synonym.txt.gz}
+      - {url: "{base}/lis_wm82_a2/glyma.Wm82.gnm2.ann1.RVB6.markers.gff3.gz", path: glyma.Wm82.gnm2.ann1.RVB6.markers.gff3.gz}
+  - id: lis_wm82_a4
+    name: LIS Wm82.a4.v1 fixture
+    tier: core
+    version: Wm82.gnm4.ann1.T8TQ
+    license: Open
+    assemblies: [Wm82.a4.v1]
+    parser: lis_annotation
+    files:
+      - {url: "{base}/lis_wm82_a4/glyma.Wm82.gnm4.ann1.T8TQ.gene_models_main.gff3.gz", path: glyma.Wm82.gnm4.ann1.T8TQ.gene_models_main.gff3.gz}
+      - {url: "{base}/lis_wm82_a4/glyma.Wm82.gnm4.ann1.T8TQ.info_annot.txt.gz", path: glyma.Wm82.gnm4.ann1.T8TQ.info_annot.txt.gz}
+  - id: lis_wm82_a6
+    name: LIS Wm82.a6.v1 fixture
+    tier: core
+    version: Wm82.gnm6.ann1.PKSW
+    license: Open
+    assemblies: [Wm82.a6.v1]
+    parser: lis_annotation
+    files:
+      - {url: "{base}/lis_wm82_a6/glyma.Wm82.gnm6.ann1.PKSW.gene_models_main.gff3.gz", path: glyma.Wm82.gnm6.ann1.PKSW.gene_models_main.gff3.gz}
+      - {url: "{base}/lis_wm82_a6/glyma.Wm82.gnm6.ann1.PKSW.annotation_info.txt.gz", path: glyma.Wm82.gnm6.ann1.PKSW.annotation_info.txt.gz}
+      - {url: "{base}/lis_wm82_a6/glyma.Wm82.gnm6.ann1.PKSW.defline.txt.gz", path: glyma.Wm82.gnm6.ann1.PKSW.defline.txt.gz}
+  - id: lis_pangenes
+    name: LIS pangene fixture
+    tier: core
+    version: Glycine.pan5.MKRS
+    license: Open
+    assemblies: [Wm82.a1.v1, Wm82.a2.v1, Wm82.a4.v1, Wm82.a6.v1]
+    parser: lis_pangenes
+    files:
+      - {url: "{base}/lis_pangenes/Glycine.pan5.MKRS.table_ref_lines.tsv.gz", path: Glycine.pan5.MKRS.table_ref_lines.tsv.gz}
+  - id: lis_markers
+    name: LIS marker fixture
+    tier: core
+    version: LIS datastore markers
+    license: Open
+    assemblies: [Wm82.a1.v1, Wm82.a2.v1, Wm82.a4.v1]
+    parser: lis_markers
+    files:
+      - {url: "{base}/lis_markers/glyma.Wm82.gnm1.mrk.SoySNP50K.gff3.gz", path: glyma.Wm82.gnm1.mrk.SoySNP50K.gff3.gz}
+      - {url: "{base}/lis_markers/glyma.Wm82.gnm2.mrk.SoySNP50K.gff3.gz", path: glyma.Wm82.gnm2.mrk.SoySNP50K.gff3.gz}
+      - {url: "{base}/lis_markers/glyma.Wm82.gnm4.mrk.SoySNP50K.gff3.gz", path: glyma.Wm82.gnm4.mrk.SoySNP50K.gff3.gz}
+  - id: lis_qtl
+    name: LIS QTL fixture
+    tier: core
+    version: LIS datastore qtl
+    rolling: true
+    license: Open
+    assemblies: [Wm82.a2.v1]
+    parser: lis_qtl
+    collection:
+      listing_url: "{base}/lis_qtl/"
+      entry_pattern: '[^/]+\.qtl\.[^/]+'
+      files:
+        - {url: "{base}/lis_qtl/{entry}/glyma.{entry}.qtl.tsv.gz", path: "{entry}/glyma.{entry}.qtl.tsv.gz"}
+        - {url: "{base}/lis_qtl/{entry}/glyma.{entry}.qtlmrk.tsv.gz", path: "{entry}/glyma.{entry}.qtlmrk.tsv.gz", optional: true}
+        - {url: "{base}/lis_qtl/{entry}/glyma.{entry}.obo.tsv.gz", path: "{entry}/glyma.{entry}.obo.tsv.gz", optional: true}
+        - {url: "{base}/lis_qtl/{entry}/README.{entry}.yml", path: "{entry}/README.{entry}.yml", optional: true}
+  - id: lis_gwas
+    name: LIS GWAS fixture
+    tier: core
+    version: LIS datastore gwas
+    rolling: true
+    license: Open
+    assemblies: [Wm82.a2.v1]
+    parser: lis_gwas
+    collection:
+      listing_url: "{base}/lis_gwas/"
+      entry_pattern: '[^/]+\.gwas\.[^/]+'
+      files:
+        - {url: "{base}/lis_gwas/{entry}/glyma.{entry}.result.tsv.gz", path: "{entry}/glyma.{entry}.result.tsv.gz"}
+        - {url: "{base}/lis_gwas/{entry}/glyma.{entry}.obo.tsv.gz", path: "{entry}/glyma.{entry}.obo.tsv.gz", optional: true}
+        - {url: "{base}/lis_gwas/{entry}/README.{entry}.yml", path: "{entry}/README.{entry}.yml", optional: true}
+  - id: soybase_gwas
+    name: SoyBase GWAS fixture
+    tier: core
+    version: SoyBase legacy getGWASlocations
+    rolling: true
+    license: Public
+    assemblies: [Wm82.a2.v1]
+    parser: soybase_gwas
+    files:
+      - {url: "{base}/soybase_gwas/soybase_gwas_locations.tsv", path: soybase_gwas_locations.tsv}
+  - id: gwas_atlas
+    name: GWAS Atlas fixture
+    tier: core
+    version: GWAS Atlas fixture
+    license: academic use only
+    academic_only: true
+    assemblies: [Wm82.a2.v1, none]
+    parser: gwas_atlas
+    files:
+      - {url: "{base}/gwas_atlas/gwas_association_result_for_soyean.txt.gz", path: gwas_association_result_for_soyean.txt.gz}
+      - {url: "{base}/gwas_atlas/PPTO.obo.gz", path: PPTO.obo.gz}
+  - id: lis_gene_functions
+    name: LIS gene functions fixture
+    tier: core
+    version: LIS gene_functions
+    rolling: true
+    license: Open
+    assemblies: [Wm82.a2.v1, Wm82.a4.v1]
+    parser: lis_gene_functions
+    files:
+      - {url: "{base}/lis_gene_functions/glyma.traits.yml", path: glyma.traits.yml}
+  - id: ensembl_compara
+    name: Ensembl Compara fixture
+    tier: core
+    version: Ensembl Plants 63 (Compara 116)
+    license: unrestricted
+    assemblies: [Wm82.a2.v1, TAIR10]
+    parser: ensembl_compara
+    files:
+      - {url: "{base}/ensembl_compara/glycine_max.homologies.tsv.gz", path: glycine_max.homologies.tsv.gz}
+      - {url: "{base}/ensembl_compara/arabidopsis_thaliana.homologies.tsv.gz", path: arabidopsis_thaliana.homologies.tsv.gz}
+  - id: plaza_orthology
+    name: PLAZA fixture
+    tier: core
+    version: PLAZA 5.0 dicots
+    license: free with citation
+    assemblies: [Wm82.a4.v1, TAIR10]
+    parser: plaza_orthology
+    files:
+      - {url: "{base}/plaza_orthology/integrative_orthology.gma.tsv.gz", path: integrative_orthology.gma.tsv.gz}
+  - id: tair
+    name: TAIR fixture
+    tier: core
+    version: TAIR 2024-10-01 (Zenodo 17371665)
+    license: CC-BY-4.0
+    assemblies: [TAIR10]
+    parser: tair
+    files:
+      - {url: "{base}/tair/Araport11_functional_descriptions_20241001.txt.gz", path: Araport11_functional_descriptions_20241001.txt.gz}
+      - {url: "{base}/tair/gene_aliases_20241001.txt.gz", path: gene_aliases_20241001.txt.gz}
+      - {url: "{base}/tair/Locus_Germplasm_Phenotype_20241001.txt.gz", path: Locus_Germplasm_Phenotype_20241001.txt.gz}
+      - {url: "{base}/tair/Locus_Published_20241001.txt.gz", path: Locus_Published_20241001.txt.gz}
+      - {url: "{base}/tair/ATH_GO_GOSLIM.txt.gz", path: ATH_GO_GOSLIM.txt.gz}
+  - id: go_basic
+    name: GO fixture
+    tier: core
+    version: go-basic.obo
+    rolling: true
+    license: CC-BY-4.0
+    assemblies: [none]
+    parser: ontology
+    files:
+      - {url: "{base}/go_basic/go-basic.obo", path: go-basic.obo}
+  - id: plant_trait_ontology
+    name: TO fixture
+    tier: core
+    version: to.obo
+    rolling: true
+    license: CC-BY-4.0
+    assemblies: [none]
+    parser: ontology
+    files:
+      - {url: "{base}/plant_trait_ontology/to.obo", path: to.obo}
+  - id: plant_ontology
+    name: PO fixture
+    tier: core
+    version: po.obo
+    rolling: true
+    license: CC-BY-4.0
+    assemblies: [none]
+    parser: ontology
+    files:
+      - {url: "{base}/plant_ontology/po.obo", path: po.obo}
+  - id: soybase_ontology
+    name: SOY fixture
+    tier: core
+    version: Soy9.6
+    rolling: true
+    license: CC-BY-4.0
+    assemblies: [none]
+    parser: ontology
+    files:
+      - {url: "{base}/soybase_ontology/Soy9.6.obo", path: Soy9.6.obo}
+  - id: crop_ontology_soybean
+    name: CO_336 fixture
+    tier: core
+    version: CO_336
+    rolling: true
+    license: CC-BY-4.0
+    assemblies: [none]
+    parser: ontology
+    files:
+      - {url: "{base}/crop_ontology_soybean/CO_336.owl", path: CO_336.owl}

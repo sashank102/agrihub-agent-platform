@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rdf:RDF
+  xmlns:ns1="http://www.w3.org/2004/02/skos/core#"
+  xmlns:ns2="http://www.w3.org/2002/07/owl#"
+  xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+  xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_336:0000027">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Agronomic"/>
+    <rdfs:label xml:lang="en">Plant height</rdfs:label>
+    <ns1:definition xml:lang="en">Height of the plant from the soil surface to the top main stem node</ns1:definition>
+    <ns1:altLabel xml:lang="en">PTHT</ns1:altLabel>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_336:0000048">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <rdfs:label xml:lang="en">Seed oil content</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_336:0000258">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:label xml:lang="en">PlntHt_Meas_cm</rdfs:label>
+  </ns2:Class>
+  <rdf:Description rdf:about="https://cropontology.org/rdf/CO_336:0000224/1">
+    <rdfs:label xml:lang="en">Erect</rdfs:label>
+  </rdf:Description>
+</rdf:RDF>

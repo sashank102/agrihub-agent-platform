@@ -1,0 +1,5 @@
+LOCUS_NAME	GERMPLASM_NAME	PHENOTYPE	PUBMED_ID
+AT5G03840	CS6167	early flowering; terminal flower; determinate inflorescence	12345678
+AT5G03840	CS6168	early flowering; terminal flower	12345679
+FUL	CS999	fruits fail to elongate	
+UNKNOWNSYMBOL	CS1	not resolvable	

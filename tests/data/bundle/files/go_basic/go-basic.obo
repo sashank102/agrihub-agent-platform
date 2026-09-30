@@ -1,0 +1,57 @@
+format-version: 1.2
+data-version: releases/2026-09-01
+ontology: go
+
+[Term]
+id: GO:0003700
+name: DNA-binding transcription factor activity
+namespace: molecular_function
+def: "A protein or a member of a complex that interacts selectively with DNA." [GOC:txnOH]
+
+[Term]
+id: GO:0006355
+name: regulation of DNA-templated transcription
+namespace: biological_process
+
+[Term]
+id: GO:0043565
+name: sequence-specific DNA binding
+namespace: molecular_function
+
+[Term]
+id: GO:0048507
+name: meristem development
+namespace: biological_process
+
+[Term]
+id: GO:0010022
+name: meristem determinacy
+namespace: biological_process
+is_a: GO:0048507 ! meristem development
+
+[Term]
+id: GO:0010023
+name: fixture child of meristem determinacy
+namespace: biological_process
+is_a: GO:0010022 ! meristem determinacy
+
+[Term]
+id: GO:0009686
+name: gibberellin biosynthetic process
+namespace: biological_process
+synonym: "gibberellic acid biosynthesis" EXACT []
+
+[Term]
+id: GO:0045490
+name: pectin catabolic process
+namespace: biological_process
+
+[Term]
+id: GO:0099999
+name: obsolete fixture term
+namespace: biological_process
+is_obsolete: true
+
+[Typedef]
+id: part_of
+name: part of

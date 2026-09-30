@@ -1,0 +1,6 @@
+#qtl_identifier	trait_name	genetic_map	linkage_group	start	end	peak
+Plant height 1-1	Plant height	GmComposite2003	G	30.1	40.2	35.0			
+Plant height 1-2	Plant height	GmComposite2003	A1	10.0	20.0	15.0
+Seed oil 1-1	Seed oil	GmComposite2003	G	1.0	2.0	1.5
+Canopy wilt 1-1	Canopy wilt	GmComposite2003	C2	5.0	9.0	7.0
+Lodging 1-1	Lodging	GmComposite2003	A1	3.0	4.0	3.5

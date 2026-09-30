@@ -1,0 +1,2 @@
+#pacId	locusName	transcriptName	peptideName	Pfam	Panther	ec	KOG	KO	GO	Best-hit-arabi-name	Best-hit-arabi-defline	Best-hit-clamy-name	Best-hit-clamy-defline	Best-hit-rice-name	Best-hit-rice-defline
+PAC:1	Glyma.18G092200	Glyma.18G092200.1	Glyma.18G092200.1.p	PF03106	PTHR31429 PTHR31429:SF18	EC:1.1.1.1			GO:0003700 GO:0043565	AT1G62300.1	WRKY DNA-binding protein 6			LOC_Os01g01010.1	WRKY transcription factor

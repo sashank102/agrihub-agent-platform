@@ -1,0 +1,4 @@
+##gff-version 3
+# MarkerSet: SoySNP50K on Wm82.gnm4
+glyma.Wm82.gnm4.Gm18	BARCSoy50K	genetic_marker	9288001	9288001	.	.	.	ID=glyma.Wm82.gnm4.ss715631025;Name=ss715631025;alleles=A/G
+glyma.Wm82.gnm4.Gm18	BARCSoy50K	genetic_marker	9438001	9438001	.	.	.	ID=glyma.Wm82.gnm4.ss715631100;Name=ss715631100;alleles=C/T

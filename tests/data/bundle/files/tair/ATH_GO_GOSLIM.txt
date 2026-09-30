@@ -1,0 +1,6 @@
+!Project_name: The Arabidopsis Information Resource (TAIR)
+!Last Updated: 2024-10-01
+AT5G03840	locus:1	AT5G03840	involved in	meristem determinacy	GO:0010022	1	P	other developmental processes	IMP	Mutant Phenotype		Publication:1|PMID:12345678	curator	2020-01-01
+AT5G03840	locus:1	AT5G03840	involved in	meristem determinacy	GO:0010022	1	P	other developmental processes	IMP	Mutant Phenotype		Publication:1|PMID:12345678	curator	2020-01-01
+AT1G62300	locus:2	AT1G62300	enables	DNA-binding transcription factor activity	GO:0003700	2	F	DNA binding	IDA	direct assay		Publication:2|PMID:33333333	curator	2020-01-01
+AT1G62300	locus:2	AT1G62300	enables	DNA-binding transcription factor activity	GO:0003700	2	F	DNA binding	IEA	electronic		AnalysisReference:1	tair	2020-01-01

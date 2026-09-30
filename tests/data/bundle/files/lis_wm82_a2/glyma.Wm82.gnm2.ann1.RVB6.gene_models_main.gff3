@@ -1,0 +1,13 @@
+##gff-version 3
+##annot-version Wm82.a2.v1
+glyma.Wm82.gnm2.Gm05	phytozomev10	gene	2890001	2895000	.	+	.	ID=glyma.Wm82.gnm2.ann1.Glyma.05G032200;Name=Glyma.05G032200;Note=pectin lyase-like superfamily protein
+glyma.Wm82.gnm2.Gm05	phytozomev10	mRNA	2890001	2895000	.	+	.	ID=glyma.Wm82.gnm2.ann1.Glyma.05G032200.1;Name=Glyma.05G032200.1;Parent=glyma.Wm82.gnm2.ann1.Glyma.05G032200
+glyma.Wm82.gnm2.Gm18	phytozomev10	gene	9236520	9241505	.	-	.	ID=glyma.Wm82.gnm2.ann1.Glyma.18G092000;Name=Glyma.18G092000;Note=zinc finger CCCH domain protein
+glyma.Wm82.gnm2.Gm18	phytozomev10	gene	9262392	9267008	.	-	.	ID=glyma.Wm82.gnm2.ann1.Glyma.18G092200;Name=Glyma.18G092200;ancestorIdentifier=Glyma18g11630.v1.1;Note=WRKY family transcription factor%3B IPR003657 (DNA-binding WRKY)
+glyma.Wm82.gnm2.Gm18	phytozomev10	CDS	9262392	9263000	.	-	0	ID=glyma.Wm82.gnm2.ann1.Glyma.18G092200.1.CDS.1;Parent=glyma.Wm82.gnm2.ann1.Glyma.18G092200.1
+glyma.Wm82.gnm2.Gm18	phytozomev10	gene	9278545	9280545	.	+	.	ID=glyma.Wm82.gnm2.ann1.Glyma.18G092300;Name=Glyma.18G092300;Note=protein SEC13 homolog
+glyma.Wm82.gnm2.Gm18	phytozomev10	gene	55600001	55603000	.	+	.	ID=glyma.Wm82.gnm2.ann1.Glyma.18G273600;Name=Glyma.18G273600;Note=MADS-box transcription factor
+glyma.Wm82.gnm2.Gm18	phytozomev10	gene	58100000	58100500	.	+	.	ID=glyma.Wm82.gnm2.ann1.Glyma.18G999900;Name=Glyma.18G999900;Note=beyond the end of Gm18
+glyma.Wm82.gnm2.Gm19	phytozomev10	gene	45100001	45101500	.	+	.	ID=glyma.Wm82.gnm2.ann1.Glyma.19G194300;Name=Glyma.19G194300;ancestorIdentifier=Glyma19g37890.v1.1;Note=TERMINAL FLOWER 1-like protein
+glyma.Wm82.gnm2.scaffold_21	phytozomev10	gene	1001	2000	.	+	.	ID=glyma.Wm82.gnm2.ann1.Glyma.U000100;Name=Glyma.U000100;Note=Unknown protein
+glyma.Wm82.gnm2.unknown_contig	phytozomev10	gene	1001	2000	.	+	.	ID=glyma.Wm82.gnm2.ann1.Glyma.U000200;Name=Glyma.U000200;Note=on an unregistered sequence

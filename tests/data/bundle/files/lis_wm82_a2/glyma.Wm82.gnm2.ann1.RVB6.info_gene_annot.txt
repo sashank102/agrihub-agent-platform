@@ -1,0 +1,3 @@
+glyma.Glyma.18G092200	WRKY family transcription factor; IPR003657 (DNA-binding WRKY); GO:0003700 (DNA-binding transcription factor activity);Dbxref=InterPro:IPR003657,Pfam:PF03106;
+glyma.Glyma.19G194300	TERMINAL FLOWER 1-like protein; IPR008914 (Phosphatidylethanolamine-binding protein PEBP);Dbxref=InterPro:IPR008914,InterPro:IPR035810;
+glyma.Glyma.18G092300	protein SEC13 homolog;

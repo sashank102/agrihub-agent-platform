@@ -1,0 +1,9 @@
+# 0 = orthology type not supported | 1 = orthology type supported | -1 = no data (cannot infer support of orthology type)
+#query-gene	query-species	ortholog-gene	ortholog-species	TROG	BHIF	ORTHO	anchor_point
+Glyma.19G194300	gma	AT5G03840	ath	1	1	1	0
+Glyma.19G194300	gma	Os01g0100100	osa	1	1	1	0
+Glyma.18G092200	gma	AT1G62300	ath	0	1	1	0
+Glyma.18G092200	gma	AT1G18860	ath	0	0	1	0
+Glyma.05G032300	gma	AT1G14420	ath	0	1	1	1
+Glyma.18G273600	gma	AT5G60910	ath	1	1	1	1
+Glyma.99G000001	gma	AT1G01010	ath	1	1	1	1

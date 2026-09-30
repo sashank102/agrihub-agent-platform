@@ -1,0 +1,20 @@
+format-version: 1.2
+ontology: soy
+
+[Term]
+id: SOY:0001365
+name: Plant Height
+
+[Term]
+id: SOY:0001366
+name: Height/Lodging
+synonym: "Ht/Ldge" RELATED []
+
+[Term]
+id: SOY:0001668
+name: Seed oil content
+
+[Term]
+id: SOY:0001688
+name: Stem Termination Type
+synonym: "Determinacy" RELATED []

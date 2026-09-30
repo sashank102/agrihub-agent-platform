@@ -1,0 +1,6 @@
+name	gene_model_type	short_description	Curator_summary	Computational_description
+AT5G03840.2	protein_coding	PEBP family protein, model 2	NULL	NULL
+AT5G03840.1	protein_coding	PEBP family protein	Controls inflorescence meristem identity and determinacy.	Phosphatidylethanolamine-binding protein
+AT1G62300.1	protein_coding	WRKY family transcription factor	Encodes a transcription factor WRKY6.	NULL
+AT5G60910.1	protein_coding	AGAMOUS-like 8	Encodes FRUITFULL, a MADS box gene.	NULL
+FAKE	unknown	NULL	not a gene model	NULL

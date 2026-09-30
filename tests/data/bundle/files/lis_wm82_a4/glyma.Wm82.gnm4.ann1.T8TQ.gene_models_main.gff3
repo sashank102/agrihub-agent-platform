@@ -1,0 +1,8 @@
+##gff-version 3
+glyma.Wm82.gnm4.Gm05	phytozomev13	gene	2950001	2955000	.	+	.	ID=glyma.Wm82.gnm4.ann1.Glyma.05G032300;Name=Glyma.05G032300;Note=pectin lyase-like superfamily protein
+glyma.Wm82.gnm4.Gm11	phytozomev13	gene	11236816	11240000	.	+	.	ID=glyma.Wm82.gnm4.ann1.Glyma.11G148362;Name=Glyma.11G148362;Note=pseudo-response regulator
+glyma.Wm82.gnm4.Gm18	phytozomev13	gene	9274001	9279000	.	-	.	ID=glyma.Wm82.gnm4.ann1.Glyma.18G092000;Name=Glyma.18G092000;ancestorIdentifier=Glyma.18G092000.Wm82.a2.v1;Note=zinc finger CCCH domain protein
+glyma.Wm82.gnm4.Gm18	phytozomev13	gene	9300001	9304617	.	-	.	ID=glyma.Wm82.gnm4.ann1.Glyma.18G092200;Name=Glyma.18G092200;ancestorIdentifier=Glyma.18G092200.Wm82.a2.v1;Note=WRKY family transcription factor
+glyma.Wm82.gnm4.Gm18	phytozomev13	gene	9316001	9318001	.	+	.	ID=glyma.Wm82.gnm4.ann1.Glyma.18G092300;Name=Glyma.18G092300;ancestorIdentifier=Glyma.18G092300.Wm82.a2.v1;Note=protein SEC13 homolog
+glyma.Wm82.gnm4.Gm18	phytozomev13	gene	55900001	55903000	.	+	.	ID=glyma.Wm82.gnm4.ann1.Glyma.18G273600;Name=Glyma.18G273600;ancestorIdentifier=Glyma.18G273600.Wm82.a2.v1;Note=MADS-box transcription factor
+glyma.Wm82.gnm4.Gm19	phytozomev13	gene	45200001	45201500	.	+	.	ID=glyma.Wm82.gnm4.ann1.Glyma.19G194300;Name=Glyma.19G194300;ancestorIdentifier=Glyma.19G194300.Wm82.a2.v1;Note=TERMINAL FLOWER 1-like protein

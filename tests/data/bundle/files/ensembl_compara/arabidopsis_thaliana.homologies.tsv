@@ -1,0 +1,3 @@
+gene_stable_id	protein_stable_id	species	identity	homology_type	homology_gene_stable_id	homology_protein_stable_id	homology_species	homology_identity	dn	ds	goc_score	wga_coverage	is_high_confidence	homology_id
+AT5G60910	AT5G60910.1	arabidopsis_thaliana	66.0	ortholog_one2one	GLYMA_18G273600	KRH3	glycine_max	68.0	NULL	NULL	NULL	NULL	1	2001
+AT5G03840	AT5G03840.1	arabidopsis_thaliana	60.0	ortholog_one2many	GLYMA_19G194301	KRH4	glycine_max	61.0	NULL	NULL	NULL	NULL	0	2002

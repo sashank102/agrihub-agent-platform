@@ -1,0 +1,16 @@
+format-version: 1.2
+ontology: ppto
+
+[Term]
+id: PPTO:0000126
+name: plant height
+synonym: "Ht" RELATED []
+
+[Term]
+id: PPTO:0000126
+name: plant height (duplicate stanza)
+
+[Term]
+id: PPTO:0000529
+name: fat and essential oil content
+synonym: "OilCon" RELATED []

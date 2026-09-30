@@ -1,0 +1,3 @@
+##gff-version 3
+glyma.Wm82.gnm6.Gm18	phytozomev13	gene	9500001	9504617	.	-	.	ID=glyma.Wm82.gnm6.ann1.Glyma.18G092200;Name=Glyma.18G092200;ancestorIdentifier=Glyma.18G092200.Wm82.a4.v1
+glyma.Wm82.gnm6.Gm18	phytozomev13	gene	9520001	9521000	.	+	.	ID=glyma.Wm82.gnm6.ann1.Glyma.18G092250;Name=Glyma.18G092250;ancestorIdentifier=GmISU01.18G000100.v1.1

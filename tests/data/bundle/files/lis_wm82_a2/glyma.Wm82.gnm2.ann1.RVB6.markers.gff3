@@ -1,0 +1,9 @@
+##gff-version 3
+##annot-version glyma.Wm82.gnm2
+glyma.Wm82.gnm2.Gm05	SoyBase	genetic_marker	2800001	2800001	.	-	.	ID=glyma.Wm82.gnm2.ann1.ss107928944;Name=BARC-062429-17772
+glyma.Wm82.gnm2.Gm05	SoyBase	genetic_marker	3000001	3000001	.	-	.	ID=glyma.Wm82.gnm2.ann1.ss107916326;Name=BARC-019415-03923
+glyma.Wm82.gnm2.Gm18	SoyBase	genetic_marker	9100001	9100021	.	.	.	ID=glyma.Wm82.gnm2.ann1.Satt324;Name=Satt324
+glyma.Wm82.gnm2.Gm18	SoyBase	genetic_marker	9250001	9250001	.	-	.	ID=glyma.Wm82.gnm2.ann1.ss715631025;Name=BARC_1.01_Gm18_9199987_A_G
+glyma.Wm82.gnm2.Gm18	SoyBase	genetic_marker	9400001	9400001	.	-	.	ID=glyma.Wm82.gnm2.ann1.ss715631100;Name=BARC_1.01_Gm18_9350000_C_T
+glyma.Wm82.gnm2.Gm18	SoyBase	genetic_marker	9600001	9600021	.	.	.	ID=glyma.Wm82.gnm2.ann1.Satt288;Name=Satt288
+glyma.Wm82.gnm2.Gm18	SoyBase	genetic_marker	58500000	58500000	.	-	.	ID=glyma.Wm82.gnm2.ann1.ss000000001;Name=BARC-000000-00001

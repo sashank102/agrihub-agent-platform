@@ -1,0 +1,10 @@
+format-version: 1.2
+ontology: po
+
+[Term]
+id: PO:0009005
+name: root
+
+[Term]
+id: PO:0009006
+name: shoot system

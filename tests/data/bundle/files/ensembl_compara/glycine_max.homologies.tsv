@@ -1,0 +1,6 @@
+gene_stable_id	protein_stable_id	species	identity	homology_type	homology_gene_stable_id	homology_protein_stable_id	homology_species	homology_identity	dn	ds	goc_score	wga_coverage	is_high_confidence	homology_id
+GLYMA_19G194300	KRH1	glycine_max	77.0	ortholog_one2many	AT5G03840	AT5G03840.1	arabidopsis_thaliana	70.0	NULL	NULL	NULL	NULL	1	1001
+GLYMA_18G092200	KRH2	glycine_max	55.0	ortholog_many2many	AT1G62300	AT1G62300.1	arabidopsis_thaliana	50.0	NULL	NULL	NULL	NULL	1	1002
+GLYMA_18G092200	KRH2	glycine_max	40.0	ortholog_one2one	Os01g0100100	OS01T0100100	oryza_sativa	41.0	NULL	NULL	NULL	NULL	1	1003
+GLYMA_18G092200	KRH2	glycine_max	90.0	within_species_paralog	GLYMA_08G111100	KRH9	glycine_max	90.0	NULL	NULL	NULL	NULL	1	1004
+GLYMA_19G194300	KRH1	glycine_max	77.0	ortholog_one2many	AT5G03840	AT5G03840.1	arabidopsis_thaliana	70.0	NULL	NULL	NULL	NULL	1	1001

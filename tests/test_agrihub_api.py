@@ -190,6 +190,15 @@ def test_study_run_streams_custom_events_and_stores_artifacts(
                 assert report["species"] == "soybean"
                 assert len(report["loci"]) == 3
 
+                species = await client.get("/registry/species")
+                assert species.status_code == 200
+                assert [item["species"] for item in species.json()] == [
+                    "maize",
+                    "rice",
+                    "sorghum",
+                    "soybean",
+                ]
+
                 chat = (
                     await client.post("/threads", json={"metadata": {"graph_id": "agrihub"}})
                 ).json()

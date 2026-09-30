@@ -1,0 +1,2 @@
+#pacId	locusName	transcriptName	peptideName	Pfam	Panther	KOG	ec	KO	GO	Best-hit-arabi-name	arabi-symbol	arabi-defline
+10	Glyma.18G092200	Glyma.18G092200.1	Glyma.18G092200.1.p	PF03106	PTHR31429				GO:0003700	AT1G62300.1	WRKY6	WRKY family transcription factor
