@@ -138,10 +138,25 @@ class CandidateGene(BaseModel):
     defline: str = ""
 
 
+OrthologRelation = Literal["one2one", "one2many", "many2one", "many2many", "family"]
+OrthologConfidence = Literal["high", "medium", "low"]
+
+
+class OrthologRef(BaseModel):
+    """The ortholog a transferred fact came from and how well it is supported."""
+
+    species: str = Field(min_length=1)
+    gene_id: str = Field(min_length=1)
+    relation: OrthologRelation
+    n_methods: int = Field(ge=0)
+    confidence: OrthologConfidence
+
+
 class EvidenceItem(BaseModel):
     """One fact about a gene with its provenance.
 
     ``evidence_id`` and ``alias`` are assigned by the evidence store.
+    ``via_ortholog`` is set when the fact describes an ortholog, not the gene.
     """
 
     evidence_id: str | None = None
@@ -154,7 +169,7 @@ class EvidenceItem(BaseModel):
     db_version: str
     source_record: str
     primary_citation: str | None = None
-    via_ortholog: str | None = None
+    via_ortholog: OrthologRef | None = None
     evidence_code: str | None = None
     quote: str | None = None
     retrieved_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

@@ -1,29 +1,46 @@
 """Run-scoped evidence ledger backed by one DuckDB file per run.
 
-The file lives at ``${AGRIHUB_RUN_DIR:-<project>/var/runs}/<run_id>/evidence.duckdb``.
-``evidence_id`` is ``sha1(source_db|source_record|gene_id|subtype)[:12]``, so
-the same fact harvested twice collapses to one row. Each run also numbers its
-evidence ``E1, E2, ...`` in insertion order; tools accept either form.
-Findings are numbered ``F1, F2, ...`` and may only cite stored evidence.
+The file lives at ``$AGRIHUB_RUN_DIR/<run_id>/evidence.duckdb``; see
+``agent_platform.core.settings.DataPaths`` for the development default.
+Each run numbers its evidence ``E1, E2, ...`` in insertion order; tools accept
+either the alias or the ``evidence_id``. Findings are numbered ``F1, F2, ...``
+and may only cite stored evidence. Full tool results are kept as outputs
+``O1, O2, ...`` so a wrapper can return a truncated view plus an ``output_ref``.
+
+Evidence id granularity
+-----------------------
+``evidence_id`` is ``sha1(source_db|source_record|gene_id|subtype)[:12]``.
+Two items that agree on those four fields are the same fact and collapse to
+one row; ``value``, ``quote`` and ``retrieved_at`` are not hashed, so a later
+harvest of the same fact returns the stored copy. Every producer must make
+``source_record`` and ``subtype`` specific enough that distinct facts never
+share all four:
+
+- ``source_record`` names the upstream record plus whatever query context
+  makes the fact true: ``qtl_id`` for a QTL, ``study|marker|trait`` for a
+  GWAS hit, ``assembly:chrom:start-end`` for window membership, the target
+  gene for an ortholog call.
+- ``subtype`` names the kind of fact about that record: the QTL overlap type
+  (``qtl:contains``, ``qtl:partial``), the annotation term (``go:GO:0003700``),
+  the ortholog target species.
+- Locus-level facts use the locus id (``L1``) as ``gene_id``.
 """
 
 import hashlib
 import json
-import os
 import re
 import threading
 import uuid
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
 import duckdb
 
-from agrihub.configuration import PROJECT_ROOT
+from agrihub import configuration
 from agrihub.state import EvidenceItem, Finding
 
-RUN_DIR_ENV = "AGRIHUB_RUN_DIR"
-DEFAULT_RUN_DIR = PROJECT_ROOT / "var" / "runs"
 DATABASE_NAME = "evidence.duckdb"
 SNAPSHOT_NAME = "evidence_snapshot.json"
 SNAPSHOT_SCHEMA = "agrihub.evidence-snapshot/v1"
@@ -48,6 +65,9 @@ _EVIDENCE_COLUMN_TYPES = (
 )
 _SAFE_RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 _ALIAS = re.compile(r"^E[1-9][0-9]*$")
+# Above this many ids, binding one parameter per id costs more than staging
+# the ids as NDJSON and semi-joining them against the primary key.
+_INLINE_LOOKUP_LIMIT = 64
 
 _SCHEMA = (
     """
@@ -73,6 +93,14 @@ _SCHEMA = (
         finding VARCHAR NOT NULL
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS outputs (
+        ordinal INTEGER NOT NULL,
+        output_ref VARCHAR PRIMARY KEY,
+        tool VARCHAR NOT NULL,
+        payload VARCHAR NOT NULL
+    )
+    """,
 )
 
 _open_stores: dict[Path, "EvidenceStore"] = {}
@@ -94,7 +122,7 @@ class UnknownEvidenceError(ValueError):
 
 def run_root() -> Path:
     """Return the directory that holds one subdirectory per run."""
-    return Path(os.environ.get(RUN_DIR_ENV) or DEFAULT_RUN_DIR)
+    return configuration.run_root()
 
 
 def evidence_id_for(item: EvidenceItem) -> str:
@@ -106,8 +134,9 @@ def evidence_id_for(item: EvidenceItem) -> str:
 class EvidenceStore:
     """Evidence and findings for one run.
 
-    Calls are serialized with a lock because DuckDB connections are not
-    thread-safe and synchronous LangChain tools run in executor threads.
+    Methods are synchronous and serialized with a lock because one DuckDB
+    connection must not be used from two threads at once. Async callers run
+    them with ``asyncio.to_thread`` so the event loop keeps serving streams.
     """
 
     def __init__(self, run_id: str, *, root: Path | None = None) -> None:
@@ -124,6 +153,7 @@ class EvidenceStore:
         )
         for statement in _SCHEMA:
             self._connection.execute(statement)
+        self._evidence_ordinal = self._max_ordinal(self._connection, "evidence")
 
     @classmethod
     def for_run(cls, run_id: str, *, root: Path | None = None) -> "EvidenceStore":
@@ -151,22 +181,19 @@ class EvidenceStore:
         """Store new evidence and return every item with its id and alias.
 
         Items whose ``evidence_id`` already exists are not inserted again; the
-        stored copy is returned in their place.
+        stored copy is returned in their place. Existing ids are found with a
+        primary-key lookup for small batches and a semi-join against the
+        staged batch for large ones, never by reading every stored id.
         """
         batch = list(items)
+        ids = [evidence_id_for(item) for item in batch]
         with self._lock:
             connection = self._require_connection()
-            ordinal = self._max_ordinal(connection, "evidence")
-            stored: dict[str, EvidenceItem] = {}
-            ids = [evidence_id_for(item) for item in batch]
-            known = {
-                str(row[0])
-                for row in connection.execute("SELECT evidence_id FROM evidence").fetchall()
+            ordinal = self._evidence_ordinal
+            stored: dict[str, EvidenceItem] = {
+                str(existing.evidence_id): existing
+                for existing in self._existing(connection, list(dict.fromkeys(ids)))
             }
-            duplicates = [evidence_id for evidence_id in dict.fromkeys(ids) if evidence_id in known]
-            for existing in self._select_items(connection, "evidence_id", duplicates):
-                if existing.evidence_id:
-                    stored[existing.evidence_id] = existing
             rows: list[dict[str, Any]] = []
             for item, evidence_id in zip(batch, ids, strict=True):
                 if evidence_id in stored:
@@ -191,6 +218,7 @@ class EvidenceStore:
                 )
             if rows:
                 self._bulk_insert(connection, rows)
+                self._evidence_ordinal = ordinal
             return [stored[evidence_id] for evidence_id in ids]
 
     def get(self, ids: Iterable[str]) -> list[EvidenceItem]:
@@ -305,6 +333,38 @@ class EvidenceStore:
             rows = self._require_connection().execute(statement, parameters).fetchall()
         return [Finding.model_validate_json(row[0]) for row in rows]
 
+    def put_output(self, tool: str, payload: dict[str, Any]) -> str:
+        """Keep one full tool result and return its ``O<n>`` reference.
+
+        Outputs are run-local scratch for results a wrapper truncated; they
+        are not part of the snapshot because they can be recomputed.
+        """
+        with self._lock:
+            connection = self._require_connection()
+            ordinal = self._max_ordinal(connection, "outputs") + 1
+            output_ref = f"O{ordinal}"
+            connection.execute(
+                "INSERT INTO outputs VALUES (?, ?, ?, ?)",
+                (
+                    ordinal,
+                    output_ref,
+                    tool,
+                    json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+                ),
+            )
+        return output_ref
+
+    def get_output(self, output_ref: str) -> dict[str, Any] | None:
+        """Return a stored tool result, or ``None`` for an unknown reference."""
+        with self._lock:
+            row = self._require_connection().execute(
+                "SELECT tool, payload FROM outputs WHERE output_ref = ?",
+                [output_ref],
+            ).fetchone()
+        if row is None:
+            return None
+        return {"tool": str(row[0]), **json.loads(row[1])}
+
     def snapshot(self) -> dict[str, Any]:
         """Return the whole ledger as one JSON-compatible object."""
         return {
@@ -352,24 +412,45 @@ class EvidenceStore:
                 found[str(item.alias)] = item
         return found
 
+    def _existing(
+        self,
+        connection: duckdb.DuckDBPyConnection,
+        evidence_ids: list[str],
+    ) -> list[EvidenceItem]:
+        if len(evidence_ids) <= _INLINE_LOOKUP_LIMIT:
+            return self._select_items(connection, "evidence_id", evidence_ids)
+        with self._staged({"evidence_id": value} for value in evidence_ids) as staging:
+            rows = connection.execute(
+                "SELECT e.item FROM evidence AS e SEMI JOIN read_json(?, "
+                "format = 'newline_delimited', columns = {evidence_id: 'VARCHAR'}) "
+                "AS s ON e.evidence_id = s.evidence_id",
+                [str(staging)],
+            ).fetchall()
+        return [EvidenceItem.model_validate_json(row[0]) for row in rows]
+
     def _bulk_insert(
         self,
         connection: duckdb.DuckDBPyConnection,
         rows: list[dict[str, Any]],
     ) -> None:
-        # Binding costs ~0.1 ms per parameter in DuckDB's Python client, so a
-        # harvest of thousands of rows is staged as NDJSON and read in one scan.
-        staging = self.directory / f".insert-{uuid.uuid4().hex}.ndjson"
-        try:
-            with staging.open("w", encoding="utf-8") as handle:
-                for row in rows:
-                    handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+        with self._staged(rows) as staging:
             connection.execute(
                 f"INSERT INTO evidence SELECT {', '.join(_EVIDENCE_COLUMNS)} "
                 "FROM read_json(?, format = 'newline_delimited', columns = "
                 f"{_EVIDENCE_COLUMN_TYPES})",
                 [str(staging)],
             )
+
+    @contextmanager
+    def _staged(self, rows: Iterable[dict[str, Any]]) -> Iterator[Path]:
+        # Binding costs ~0.1 ms per parameter in DuckDB's Python client, so
+        # batches of thousands of rows are staged as NDJSON and read in one scan.
+        staging = self.directory / f".stage-{uuid.uuid4().hex}.ndjson"
+        try:
+            with staging.open("w", encoding="utf-8") as handle:
+                for row in rows:
+                    handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+            yield staging
         finally:
             staging.unlink(missing_ok=True)
 

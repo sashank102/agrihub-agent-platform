@@ -1,11 +1,23 @@
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
 from agent_platform.core.settings import (
+    DEVELOPMENT_DATA_DIR,
     DEVELOPMENT_DATABASE_URI,
+    DEVELOPMENT_RUN_DIR,
     LOCAL_CORS_ORIGINS,
+    DataPaths,
     Settings,
 )
+from agrihub.configuration import StudyConfiguration
+
+PRODUCTION = {
+    "ENVIRONMENT": "production",
+    "DATABASE_URI": "postgresql://agent_platform:production-password@db.internal:5432/agent_platform",
+    "API_KEY_PEPPER": "production-api-key-pepper",
+}
 
 
 def test_development_settings_have_safe_local_database_default():
@@ -99,6 +111,47 @@ def test_request_body_ceiling_defaults_to_ten_megabytes():
         _env_file=None,
     )
     assert settings.API_MAX_REQUEST_BODY_BYTES == 10_485_760
+
+
+def test_agrihub_directories_default_to_the_checkout_outside_production(monkeypatch):
+    monkeypatch.delenv("AGRIHUB_DATA_DIR", raising=False)
+    monkeypatch.delenv("AGRIHUB_RUN_DIR", raising=False)
+    for environment in ("development", "test"):
+        paths = DataPaths(ENVIRONMENT=environment, _env_file=None)
+        assert (paths.data_dir, paths.run_dir) == (DEVELOPMENT_DATA_DIR, DEVELOPMENT_RUN_DIR)
+    assert DEVELOPMENT_DATA_DIR.parent.parent == Path(__file__).resolve().parents[1]
+
+
+def test_production_refuses_repo_relative_agrihub_directories(monkeypatch, tmp_path):
+    monkeypatch.delenv("AGRIHUB_DATA_DIR", raising=False)
+    monkeypatch.delenv("AGRIHUB_RUN_DIR", raising=False)
+    with pytest.raises(ValidationError, match="AGRIHUB_DATA_DIR and AGRIHUB_RUN_DIR must be set"):
+        DataPaths(ENVIRONMENT="production", _env_file=None)
+    with pytest.raises(ValidationError, match="AGRIHUB_RUN_DIR must be set"):
+        Settings(**PRODUCTION, AGRIHUB_DATA_DIR=tmp_path / "data", _env_file=None)
+
+    with pytest.raises(ValidationError, match="AGRIHUB_DATA_DIR and AGRIHUB_RUN_DIR"):
+        Settings(**PRODUCTION, AGRIHUB_DATA_DIR="", AGRIHUB_RUN_DIR=" ", _env_file=None)
+
+    settings = Settings(
+        **PRODUCTION,
+        AGRIHUB_DATA_DIR=tmp_path / "data",
+        AGRIHUB_RUN_DIR=tmp_path / "runs",
+        _env_file=None,
+    )
+    assert (settings.AGRIHUB_DATA_DIR, settings.AGRIHUB_RUN_DIR) == (
+        tmp_path / "data",
+        tmp_path / "runs",
+    )
+
+
+def test_study_configuration_reads_the_data_dir_from_settings_only(monkeypatch, tmp_path):
+    monkeypatch.setenv("AGRIHUB_DATA_DIR", str(tmp_path))
+    configuration = StudyConfiguration.from_runnable_config(
+        {"configurable": {"data_dir": "/etc", "max_rounds": 1}}
+    )
+    assert configuration.data_dir == str(tmp_path)
+    assert configuration.max_rounds == 1
 
 
 def test_database_uri_must_point_to_postgresql():

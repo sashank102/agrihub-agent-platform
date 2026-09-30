@@ -20,3 +20,4 @@ frontend/e2e/.keys.json
 htmlcov
 .pytest_cache
 .ruff_cache
+var

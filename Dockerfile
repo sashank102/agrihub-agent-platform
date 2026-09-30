@@ -20,7 +20,9 @@ COPY alembic ./alembic
 COPY src ./src
 COPY docker/api-entrypoint.sh /entrypoint.sh
 RUN chmod 0555 /entrypoint.sh \
-    && chown -R app:app /app
+    && chown -R app:app /app \
+    && mkdir -p /var/lib/agrihub/data /var/lib/agrihub/runs \
+    && chown app:app /var/lib/agrihub/runs
 USER app
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONUNBUFFERED=1 \

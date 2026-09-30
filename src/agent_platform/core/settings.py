@@ -1,6 +1,7 @@
 """Validated settings for platform-owned infrastructure."""
 
 import uuid
+from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
@@ -14,12 +15,86 @@ LOCAL_CORS_ORIGINS = (
     "http://127.0.0.1:3000",
     "http://localhost:3000",
 )
+# Only meaningful for a source checkout. A non-editable install resolves this
+# inside site-packages, which is why production must set both directories.
+DEVELOPMENT_PROJECT_ROOT = Path(__file__).resolve().parents[3]
+DEVELOPMENT_DATA_DIR = DEVELOPMENT_PROJECT_ROOT / "var" / "data"
+DEVELOPMENT_RUN_DIR = DEVELOPMENT_PROJECT_ROOT / "var" / "runs"
+_SETTINGS_CONFIG = SettingsConfigDict(
+    env_file=".env",
+    env_file_encoding="utf-8",
+    extra="ignore",
+    case_sensitive=False,
+)
+
+
+Environment = Literal["development", "test", "production"]
+
+
+def _blank_path_to_none(value: object) -> object:
+    """Treat ``AGRIHUB_*_DIR=`` from a copied ``.env.example`` as unset."""
+    if isinstance(value, str) and not value.strip():
+        return None
+    return value
+
+
+def _resolve_agrihub_directories(settings: "DataPaths | Settings") -> None:
+    """Fill development defaults, or reject production without explicit paths."""
+    missing = [
+        name
+        for name in ("AGRIHUB_DATA_DIR", "AGRIHUB_RUN_DIR")
+        if getattr(settings, name) is None
+    ]
+    if missing and settings.ENVIRONMENT == "production":
+        raise ValueError(
+            f"{' and '.join(missing)} must be set when ENVIRONMENT=production"
+        )
+    if settings.AGRIHUB_DATA_DIR is None:
+        settings.AGRIHUB_DATA_DIR = DEVELOPMENT_DATA_DIR
+    if settings.AGRIHUB_RUN_DIR is None:
+        settings.AGRIHUB_RUN_DIR = DEVELOPMENT_RUN_DIR
+
+
+class DataPaths(BaseSettings):
+    """Where AgriHub reads species bundles and writes run-scoped stores.
+
+    Development and test fall back to ``var/data`` and ``var/runs`` in the
+    source checkout. Production refuses to start unless both are set.
+    """
+
+    ENVIRONMENT: Environment = "development"
+    AGRIHUB_DATA_DIR: Path | None = None
+    AGRIHUB_RUN_DIR: Path | None = None
+
+    model_config = _SETTINGS_CONFIG
+
+    _blank_directories = field_validator(
+        "AGRIHUB_DATA_DIR", "AGRIHUB_RUN_DIR", mode="before"
+    )(_blank_path_to_none)
+
+    @model_validator(mode="after")
+    def require_production_directories(self) -> "DataPaths":
+        """Resolve the directories for the current environment."""
+        _resolve_agrihub_directories(self)
+        return self
+
+    @property
+    def data_dir(self) -> Path:
+        """Return the directory holding one subdirectory per species bundle."""
+        return Path(str(self.AGRIHUB_DATA_DIR))
+
+    @property
+    def run_dir(self) -> Path:
+        """Return the directory holding one subdirectory per run."""
+        return Path(str(self.AGRIHUB_RUN_DIR))
 
 
 class Settings(BaseSettings):
     """Load database configuration from the process environment."""
 
-    ENVIRONMENT: Literal["development", "test", "production"] = "development"
+    ENVIRONMENT: Environment = "development"
+    AGRIHUB_DATA_DIR: Path | None = None
+    AGRIHUB_RUN_DIR: Path | None = None
     DATABASE_URI: str | None = Field(default=None, repr=False)
     API_HOST: str = "127.0.0.1"
     API_PORT: int = Field(default=8000, ge=1, le=65535)
@@ -49,12 +124,11 @@ class Settings(BaseSettings):
     STUDY_GRAPH_ID: str = "agrihub_study"
     GRAPH_FIXTURE: bool = False
 
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-        case_sensitive=False,
-    )
+    model_config = _SETTINGS_CONFIG
+
+    _blank_directories = field_validator(
+        "AGRIHUB_DATA_DIR", "AGRIHUB_RUN_DIR", mode="before"
+    )(_blank_path_to_none)
 
     @field_validator("DATABASE_URI", mode="before")
     @classmethod
@@ -112,9 +186,15 @@ class Settings(BaseSettings):
             raise ValueError("API_KEY_PREFIX must be lowercase letters")
         if not 2 <= len(self.API_KEY_PREFIX) <= 32:
             raise ValueError("API_KEY_PREFIX must be 2-32 lowercase letters")
+        _resolve_agrihub_directories(self)
         return self
 
 
 def get_settings() -> Settings:
     """Return settings loaded from the current environment."""
     return Settings()
+
+
+def get_data_paths() -> DataPaths:
+    """Return the AgriHub data and run directories without the API secrets."""
+    return DataPaths()

@@ -17,7 +17,7 @@ from agrihub.evidence_store import (
     evidence_id_for,
 )
 from agrihub.graph import build_study_graph
-from agrihub.state import EvidenceItem, Finding
+from agrihub.state import EvidenceItem, Finding, OrthologRef
 from agrihub.tools.store_tools import get_evidence, record_finding
 
 CATEGORIES = ("positional", "ortholog", "expression", "literature")
@@ -197,6 +197,89 @@ def test_snapshot_export_round_trip(store: EvidenceStore, run_dir: Path):
         assert restored.get(["E3"]) == store.get(["E3"])
     finally:
         restored.close()
+
+
+class _RecordingConnection:
+    """Delegate to a DuckDB connection and keep every statement it runs."""
+
+    def __init__(self, connection: Any) -> None:
+        self.connection = connection
+        self.statements: list[str] = []
+
+    def execute(self, statement: str, *args: Any) -> Any:
+        self.statements.append(" ".join(statement.split()))
+        return self.connection.execute(statement, *args)
+
+    def close(self) -> None:
+        self.connection.close()
+
+
+@pytest.mark.parametrize("batch", [3, 500])
+def test_put_items_finds_duplicates_without_reading_every_stored_id(store: EvidenceStore, batch: int):
+    store.put_items(_item(f"old{index}") for index in range(2_000))
+    recorder = _RecordingConnection(store._connection)
+    store._connection = recorder  # type: ignore[assignment]
+
+    mixed = [_item(f"old{index}") for index in range(batch)] + [_item(f"new{index}") for index in range(batch)]
+    saved = store.put_items(mixed)
+
+    assert [item.alias for item in saved[:batch]] == [f"E{index + 1}" for index in range(batch)]
+    assert [item.alias for item in saved[batch:]] == [f"E{2_001 + index}" for index in range(batch)]
+    reads = [statement for statement in recorder.statements if "FROM evidence" in statement]
+    assert store.count() == 2_000 + batch
+    assert reads
+    assert all(
+        "WHERE evidence_id IN" in statement or "SEMI JOIN" in statement for statement in reads
+    ), reads
+    assert not any("max(ordinal)" in statement for statement in recorder.statements)
+
+
+def test_via_ortholog_is_structured_and_round_trips(store: EvidenceStore):
+    ortholog = OrthologRef(
+        species="arabidopsis",
+        gene_id="AT1G80840",
+        relation="one2one",
+        n_methods=3,
+        confidence="high",
+    )
+    saved = store.put_items([_item("Glyma.18G092200", via_ortholog=ortholog)])[0]
+    fetched = store.get([str(saved.alias)])[0]
+    assert fetched.via_ortholog == ortholog
+    assert fetched.model_dump(mode="json")["via_ortholog"]["n_methods"] == 3
+    with pytest.raises(ValueError):
+        _item("g1", via_ortholog="AT1G80840")
+
+
+def test_outputs_keep_full_tool_results(store: EvidenceStore):
+    first = store.put_output("genes_in_window", {"rows": [{"gene_id": "g1"}], "total": 1})
+    second = store.put_output("qtl_overlap", {"rows": []})
+    assert (first, second) == ("O1", "O2")
+    assert store.get_output("O1") == {"tool": "genes_in_window", "rows": [{"gene_id": "g1"}], "total": 1}
+    assert store.get_output("O9") is None
+
+
+def test_store_tools_run_off_the_event_loop(store: EvidenceStore):
+    store.put_items([_item("g1")])
+
+    async def scenario() -> tuple[dict[str, Any], set[str]]:
+        threads: set[str] = set()
+        original = store.get
+
+        def recording_get(ids: Any) -> Any:
+            import threading
+
+            threads.add(threading.current_thread().name)
+            return original(ids)
+
+        store.get = recording_get  # type: ignore[method-assign]
+        try:
+            return await get_evidence.ainvoke({"ids": ["E1"]}, _config()), threads
+        finally:
+            del store.get
+
+    fetched, threads = asyncio.run(scenario())
+    assert [item["alias"] for item in fetched["evidence"]] == ["E1"]
+    assert threads and "MainThread" not in threads
 
 
 def test_checkpoint_stays_flat_with_a_thousand_evidence_items():

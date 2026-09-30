@@ -1,9 +1,14 @@
-"""Agent tools over the run-scoped evidence store."""
+"""Agent tools over the run-scoped evidence store.
 
+Each tool has a synchronous body and a coroutine that runs it with
+``asyncio.to_thread``, so ``ainvoke`` never blocks the event loop on DuckDB.
+"""
+
+import asyncio
 from typing import Any
 
 from langchain_core.runnables import RunnableConfig
-from langchain_core.tools import ToolException, tool
+from langchain_core.tools import StructuredTool, ToolException
 from pydantic import ValidationError
 
 from agrihub.configuration import agent_id_from_config, run_id_from_config
@@ -18,8 +23,7 @@ def store_for_config(config: RunnableConfig) -> EvidenceStore:
     return EvidenceStore.for_run(run_id_from_config(config))
 
 
-@tool
-def get_evidence(ids: list[str], config: RunnableConfig) -> dict[str, Any]:
+def _get_evidence(ids: list[str], config: RunnableConfig) -> dict[str, Any]:
     """Fetch stored evidence by evidence_id or E<n> alias (at most 40 per call)."""
     store = store_for_config(config)
     requested = list(dict.fromkeys(ids))[:MAX_EVIDENCE_PER_CALL]
@@ -34,8 +38,12 @@ def get_evidence(ids: list[str], config: RunnableConfig) -> dict[str, Any]:
     }
 
 
-@tool
-def record_finding(
+async def _aget_evidence(ids: list[str], config: RunnableConfig) -> dict[str, Any]:
+    """Fetch stored evidence by evidence_id or E<n> alias (at most 40 per call)."""
+    return await asyncio.to_thread(_get_evidence, ids, config)
+
+
+def _record_finding(
     target: str,
     claim: str,
     stance: Stance,
@@ -76,7 +84,41 @@ def record_finding(
     }
 
 
-record_finding.handle_tool_error = True
+async def _arecord_finding(
+    target: str,
+    claim: str,
+    stance: Stance,
+    strength: Strength,
+    evidence_ids: list[str],
+    config: RunnableConfig,
+) -> dict[str, Any]:
+    """Record a claim about a gene or locus backed by stored evidence ids.
+
+    Args:
+        target: The gene id, or a locus id such as ``L1``.
+        claim: One sentence stating what the evidence shows.
+        stance: supports, conflicts, or neutral with respect to the trait.
+        strength: weak, moderate, or strong.
+        evidence_ids: evidence_ids or E<n> aliases returned by evidence tools.
+    """
+    return await asyncio.to_thread(
+        _record_finding, target, claim, stance, strength, evidence_ids, config
+    )
+
+
+get_evidence = StructuredTool.from_function(
+    func=_get_evidence,
+    coroutine=_aget_evidence,
+    name="get_evidence",
+    parse_docstring=True,
+)
+record_finding = StructuredTool.from_function(
+    func=_record_finding,
+    coroutine=_arecord_finding,
+    name="record_finding",
+    parse_docstring=True,
+    handle_tool_error=True,
+)
 
 STORE_TOOLS = (get_evidence, record_finding)
 

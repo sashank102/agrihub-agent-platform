@@ -7,7 +7,8 @@ from typing import Any
 from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel, Field
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+from agent_platform.core.settings import get_data_paths
+
 DEFAULT_MODEL = "anthropic:claude-sonnet-4-20250514"
 MODEL_FIELDS = frozenset(
     {
@@ -18,6 +19,19 @@ MODEL_FIELDS = frozenset(
         "qa_model",
     }
 )
+# Filesystem locations come from server settings only; a client-supplied
+# configurable must never redirect bundle reads.
+SERVER_FIELDS = frozenset({"data_dir"})
+
+
+def data_root() -> Path:
+    """Return ``AGRIHUB_DATA_DIR``, which holds one bundle directory per species."""
+    return get_data_paths().data_dir
+
+
+def run_root() -> Path:
+    """Return ``AGRIHUB_RUN_DIR``, which holds one store directory per run."""
+    return get_data_paths().run_dir
 
 
 class StudyConfiguration(BaseModel):
@@ -32,7 +46,7 @@ class StudyConfiguration(BaseModel):
     max_rounds: int = Field(default=2, ge=1)
     max_specialist_steps: int = Field(default=8, ge=1)
     top_k_per_locus: int = Field(default=5, ge=1)
-    data_dir: str = str(PROJECT_ROOT / "var" / "data")
+    data_dir: str = Field(default_factory=lambda: str(data_root()))
 
     @classmethod
     def from_runnable_config(
@@ -42,6 +56,7 @@ class StudyConfiguration(BaseModel):
         """Build configuration from environment and run-level overrides.
 
         Every model role falls back to the shared ``MODEL`` variable.
+        ``data_dir`` always comes from ``AGRIHUB_DATA_DIR``.
         """
         configurable = config.get("configurable", {}) if config else {}
         shared_model = os.environ.get("MODEL")
@@ -50,6 +65,7 @@ class StudyConfiguration(BaseModel):
             or configurable.get(field_name)
             or (shared_model if field_name in MODEL_FIELDS else None)
             for field_name in cls.model_fields
+            if field_name not in SERVER_FIELDS
         }
         return cls(**{key: value for key, value in values.items() if value is not None})
 
