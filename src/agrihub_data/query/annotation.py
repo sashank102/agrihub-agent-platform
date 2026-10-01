@@ -1,7 +1,8 @@
 """Functional annotation of genes and its relevance to a trait profile."""
 
+import re
 from collections import defaultdict
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -15,6 +16,15 @@ EXPERIMENTAL_GO_CODES = frozenset(
 )
 """Codes that count fully in the rubric; IEA/ISS/ISO and similar count 0.3."""
 ANNOTATION_KINDS = ("pfam", "panther", "kog", "ec", "ko", "interpro")
+FAMILY_WEIGHT = 1.0
+KEYWORD_WEIGHT = 0.5
+EXPERIMENTAL_GO_WEIGHT = 1.0
+COMPUTATIONAL_GO_WEIGHT = 0.3
+SHORT_FAMILY_CHARS = 2
+"""Families this short (FT, E1, CO) match symbols only; in free text they collide with words like 'enzyme E1'."""
+SYMBOL_FIELDS = frozenset({"symbol", "arabidopsis_symbol"})
+_TOKEN = re.compile(r"[A-Za-z0-9]+")
+MatchKind = Literal["go", "keyword", "family"]
 
 
 class Term(BaseModel):
@@ -81,10 +91,15 @@ class GeneAnnotation(BaseModel):
 
 
 class RelevanceMatch(BaseModel):
-    """One reason a gene's annotation fits the trait."""
+    """One reason a gene's annotation fits the trait.
 
-    kind: str
-    """``go`` or ``keyword``."""
+    ``field`` says where the match was found. ``symbol`` is the gene's own
+    curated symbol; ``arabidopsis_symbol``, ``arabidopsis_best_hit``,
+    ``tair_description`` and ``tair_curator_summary`` describe its
+    Arabidopsis best hit, so they are ortholog-derived.
+    """
+
+    kind: MatchKind
     term: str
     label: str | None = None
     field: str
@@ -194,24 +209,29 @@ def annotation_relevance(
     profile: TraitProfile,
     assembly: str | None = None,
 ) -> list[GeneRelevance]:
-    """Score how each gene's GO terms and descriptions match a trait profile.
+    """Score how each gene's GO terms, names and descriptions match a trait profile.
 
     GO matches use the profile's terms and their descendants; experimental
-    codes weigh 1.0 and computational ones 0.3. Keyword matches in the
-    defline, domain labels, Arabidopsis best hit and its TAIR description
-    weigh 0.5.
+    codes weigh 1.0 and computational ones 0.3. Seed families match whole
+    symbol tokens, allowing a paralog suffix (``GA20ox`` matches
+    ``GA20OX1``), in the gene's curated symbols (species prefix stripped),
+    its Arabidopsis best hit's TAIR symbols and label, the defline and the
+    domain labels; they weigh 1.0. Families of two characters or fewer match
+    symbols only. Keyword matches in the defline, domain labels, best-hit
+    label, TAIR short description and TAIR curator summary weigh 0.5.
     """
     annotations = gene_annotation(bundle, gene_ids, assembly)
+    prefixes = registry_of(bundle).symbol_prefixes
     best_hits = sorted({a.arabidopsis_best_hit.id for a in annotations if a.arabidopsis_best_hit})
-    descriptions: dict[str, str] = {}
+    tair: dict[str, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
     if best_hits:
         for row in bundle.rows(
-            "SELECT gene_id, string_agg(value, ' ') AS text FROM annotation WHERE species = 'arabidopsis' "
-            f"AND kind IN ('short_description', 'curator_summary') AND gene_id IN ({', '.join('?' for _ in best_hits)}) "
-            "GROUP BY gene_id",
+            "SELECT gene_id, kind, value FROM annotation WHERE species = 'arabidopsis' "
+            "AND kind IN ('symbol', 'short_description', 'curator_summary') "
+            f"AND gene_id IN ({', '.join('?' for _ in best_hits)}) ORDER BY gene_id, kind, value",
             best_hits,
         ):
-            descriptions[row["gene_id"]] = str(row["text"])
+            tair[row["gene_id"]][row["kind"]].append(str(row["value"]))
     wanted_go = set(profile.expanded_ids) | set(profile.go)
     results = []
     for annotation in annotations:
@@ -220,23 +240,42 @@ def annotation_relevance(
         matches: list[RelevanceMatch] = []
         for term in annotation.go:
             if term.id in wanted_go:
-                weight = 1.0 if term.evidence_code in EXPERIMENTAL_GO_CODES else 0.3
+                weight = EXPERIMENTAL_GO_WEIGHT if term.evidence_code in EXPERIMENTAL_GO_CODES else COMPUTATIONAL_GO_WEIGHT
                 matches.append(
                     RelevanceMatch(kind="go", term=term.id, label=term.name, field="go", evidence_code=term.evidence_code, weight=weight)
                 )
         hit = annotation.arabidopsis_best_hit
-        fields = {
+        facts = tair.get(hit.id, {}) if hit else {}
+        hit_symbols, hit_description = _split_best_hit_label(hit.label if hit else None)
+        domains = " ".join(term.label or "" for terms in annotation.domains.values() for term in terms)
+        # The curated symbol comes from the same record as known-gene evidence,
+        # so it is used only when no independent field names the family.
+        family_fields = {
+            "arabidopsis_symbol": " ".join([*facts.get("symbol", []), hit_symbols]),
             "defline": annotation.defline,
-            "domains": " ".join(term.label or "" for terms in annotation.domains.values() for term in terms),
+            "domains": domains,
+            "arabidopsis_best_hit": hit_description,
+            "symbol": " ".join(_strip_prefix(symbol, prefixes) for symbol in annotation.symbols),
+        }
+        found_families: set[str] = set()
+        for field, text in family_fields.items():
+            for family in matched_families(profile.seed_families, text, symbols=field in SYMBOL_FIELDS):
+                if family.casefold() not in found_families:
+                    found_families.add(family.casefold())
+                    matches.append(RelevanceMatch(kind="family", term=family, field=field, weight=FAMILY_WEIGHT))
+        keyword_fields = {
+            "defline": annotation.defline,
+            "domains": domains,
             "arabidopsis_best_hit": hit.label if hit else None,
-            "tair_description": descriptions.get(hit.id) if hit else None,
+            "tair_description": " ".join(facts.get("short_description", [])),
+            "tair_curator_summary": " ".join(facts.get("curator_summary", [])),
         }
         seen: set[str] = set()
-        for field, text in fields.items():
+        for field, text in keyword_fields.items():
             for keyword in profile.matched_keywords(text):
                 if keyword not in seen:
                     seen.add(keyword)
-                    matches.append(RelevanceMatch(kind="keyword", term=keyword, field=field, weight=0.5))
+                    matches.append(RelevanceMatch(kind="keyword", term=keyword, field=field, weight=KEYWORD_WEIGHT))
         results.append(
             GeneRelevance(
                 gene_id=annotation.gene_id,
@@ -249,3 +288,49 @@ def annotation_relevance(
         )
     results.sort(key=lambda relevance: -relevance.score)
     return results
+
+
+def matched_families(families: list[str], text: str | None, *, symbols: bool) -> list[str]:
+    """Return seed families that name a whole token of ``text``.
+
+    A token matches its family exactly or with a paralog suffix: digits and an
+    optional letter after a family ending in a letter (``PRR`` -> ``PRR7``,
+    ``FT`` -> ``FT2a``), one letter after a family ending in a digit (``GID1`` ->
+    ``GID1B``). Outside symbol fields, families of two characters or fewer
+    are skipped.
+    """
+    if not text:
+        return []
+    tokens = {token.casefold() for token in _TOKEN.findall(text)}
+    found = []
+    for family in families:
+        if not symbols and len(family) <= SHORT_FAMILY_CHARS:
+            continue
+        pattern = _family_pattern(family)
+        if any(pattern.fullmatch(token) for token in tokens):
+            found.append(family)
+    return found
+
+
+def _family_pattern(family: str) -> re.Pattern[str]:
+    stem = re.escape(family.casefold())
+    suffix = r"(?:\d+[a-z]?)?" if family[-1:].isalpha() else r"[a-z]?"
+    return re.compile(stem + suffix)
+
+
+def _strip_prefix(symbol: str, prefixes: list[str]) -> str:
+    for prefix in prefixes:
+        rest = symbol[len(prefix) :]
+        if symbol.startswith(prefix) and rest[:1].isupper():
+            return rest
+    return symbol
+
+
+def _split_best_hit_label(label: str | None) -> tuple[str, str | None]:
+    """Split ``TFL-1,TFL1: PEBP family protein`` into its symbol list and description."""
+    if not label:
+        return "", None
+    head, separator, tail = label.partition(":")
+    if separator and head and " " not in head.strip():
+        return head, tail.strip() or None
+    return "", label

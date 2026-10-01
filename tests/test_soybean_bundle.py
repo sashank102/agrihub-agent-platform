@@ -99,6 +99,21 @@ def test_markers_and_chromosome_aliases(bundle):
     assert {normalize_chrom("soybean", name) for name in ("Gm18", "Chr18", "chr18", "18", "glyma.Wm82.gnm2.Gm18")} == {"Gm18"}
 
 
+def test_annotation_relevance_finds_dt1_and_e1_but_not_housekeeping_genes(bundle):
+    height = traits.map_trait("plant height", "soybean", bundle)
+    flowering = traits.map_trait("flowering time", "soybean", bundle)
+    dt1, ribosomal = annotation.annotation_relevance(bundle, ["Glyma.19G194300", "Glyma.01G026100"], height)
+    assert dt1.gene_id == "Glyma.19G194300" and dt1.score > 0
+    assert ("family", "TFL1", "arabidopsis_symbol") in {(match.kind, match.term, match.field) for match in dt1.matches}
+    assert ("keyword", "inflorescence meristem") in {(match.kind, match.term) for match in dt1.matches}
+    assert ribosomal.score == 0
+    e1, enzyme_e1 = annotation.annotation_relevance(bundle, ["Glyma.06G207800", "Glyma.02G229700"], flowering)
+    assert e1.gene_id == "Glyma.06G207800" and e1.score > 0
+    assert [(match.kind, match.term, match.field) for match in e1.matches] == [("family", "E1", "symbol")]
+    assert "enzyme E1" in (annotation.gene_annotation(bundle, ["Glyma.02G229700"])[0].defline or "")
+    assert enzyme_e1.score == 0
+
+
 def test_dt1_ortholog_is_tfl1_with_high_confidence(bundle):
     best = orthology.get_orthologs(bundle, ["Glyma.19G194300"])[0]
     assert (best.target_gene_id, best.confidence) == ("AT5G03840", "high")

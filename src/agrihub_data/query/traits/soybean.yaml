@@ -33,6 +33,7 @@ profiles:
       - semi-determinate
       - stem termination
       - stem growth habit
+      - inflorescence meristem
       - internode length
       - node number
       - gibberellin

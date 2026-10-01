@@ -3,6 +3,7 @@ scientific_name: Glycine max
 common_name: soybean
 taxon_id: 3847
 abbrev: glyma
+symbol_prefixes: [Gm]
 canonical_assembly: Wm82.a2.v1
 default_window:
   flank_bp: 250000

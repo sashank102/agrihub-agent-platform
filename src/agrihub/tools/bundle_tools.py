@@ -631,7 +631,7 @@ async def annotation_relevance(
     config: RunnableConfig,
     species: str = "soybean",
 ) -> tuple[str, dict[str, Any]]:
-    """Score how each gene's GO terms and descriptions match the trait profile (experimental GO 1.0, IEA 0.3, keyword 0.5).
+    """Score how each gene's GO terms, names and descriptions match the trait profile (experimental GO 1.0, IEA 0.3, seed family 1.0, keyword 0.5).
 
     Args:
         gene_ids: Canonical-assembly gene ids.

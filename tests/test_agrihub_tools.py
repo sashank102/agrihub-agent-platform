@@ -138,16 +138,30 @@ def test_map_trait_prefers_curated_profiles_then_tfidf(bundle):
     assert traits.map_trait("zzzz unmatched", "soybean", bundle).terms == []
 
 
-def test_annotation_relevance_weights_go_codes_and_keywords(bundle):
+def test_annotation_relevance_weights_go_codes_families_and_keywords(bundle):
     profile = traits.map_trait("plant height", "soybean", bundle)
     scored = {row.gene_id: row for row in annotation.annotation_relevance(bundle, ["Glyma.19G194300", "Glyma.18G092300"], profile)}
     dt1 = scored["Glyma.19G194300"]
-    assert [(match.kind, match.term, match.weight) for match in dt1.matches] == [
-        ("go", "GO:0010022", 0.3),
-        ("keyword", "determinacy", 0.5),
+    assert [(match.kind, match.term, match.field, match.weight) for match in dt1.matches] == [
+        ("go", "GO:0010022", "go", 0.3),
+        ("family", "TFL1", "arabidopsis_symbol", 1.0),
+        ("keyword", "determinacy", "tair_curator_summary", 0.5),
+        ("keyword", "inflorescence meristem", "tair_curator_summary", 0.5),
     ]
-    assert dt1.matches[1].field == "tair_description"
-    assert dt1.score == 0.8 and scored["Glyma.18G092300"].score == 0
+    assert dt1.score == 2.3 and scored["Glyma.18G092300"].score == 0
+
+
+def test_seed_families_match_whole_symbol_tokens_with_paralog_suffixes():
+    assert annotation.matched_families(["GA20ox", "FT", "E1", "GID1"], "GA20OX1 FT2a GID1B", symbols=True) == [
+        "GA20ox",
+        "FT",
+        "GID1",
+    ]
+    assert annotation.matched_families(["E1", "TFL1"], "ubiquitin-activating enzyme E1; TFL1-like", symbols=False) == [
+        "TFL1"
+    ]
+    assert annotation.matched_families(["TFL1"], "TFL12 ATFL1", symbols=True) == []
+    assert annotation.matched_families(["CO"], "COL1 CONSTANS", symbols=True) == []
 
 
 def test_qtl_overlap_types_placement_and_trait_match(bundle):
@@ -299,7 +313,7 @@ def _evidence_ids(tool: Any, args: dict[str, Any], run_id: str) -> list[str]:
             bundle_tools.annotation_relevance,
             {"gene_ids": ["Glyma.19G194300"], "trait": "plant height"},
             {"gene_ids": ["Glyma.19G194300"], "trait": "flowering time"},
-            2 + 0,
+            4 + 0,
         ),
         (bundle_tools.qtl_overlap, {"windows": [L2]}, {"windows": [INNER]}, 3 + 2),
         (bundle_tools.gwas_catalog_overlap, {"windows": [L2]}, {"windows": [INNER]}, 4 + 4),

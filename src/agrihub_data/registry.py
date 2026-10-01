@@ -158,6 +158,8 @@ class SpeciesRegistry(BaseModel):
     common_name: str
     taxon_id: int
     abbrev: str
+    symbol_prefixes: list[str] = Field(default_factory=list)
+    """Species prefixes of curated gene symbols (``Gm`` in ``GmDT1``), stripped before family matching."""
     canonical_assembly: str
     default_window: Window
     typical_ld_kb: float = Field(gt=0)
