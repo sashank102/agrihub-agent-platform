@@ -40,6 +40,7 @@ EvidenceCategory = Literal[
 ]
 Stance = Literal["supports", "conflicts", "neutral"]
 Strength = Literal["weak", "moderate", "strong"]
+Tier = Literal["T1", "T2", "T3", "T4"]
 
 
 class Window(BaseModel):
@@ -80,6 +81,7 @@ class _StudyBase(BaseModel):
     population_note: str | None = None
     genotype_vcf_ref: str | None = None
     top_k_per_locus: int = Field(default=5, ge=1, le=50)
+    max_genes_per_locus: int = Field(default=200, ge=1, le=2_000)
     specialists_enabled: list[SpecialistName] = Field(
         default_factory=lambda: list(SPECIALISTS),
         min_length=1,
@@ -109,6 +111,14 @@ def parse_study(value: Any) -> SnpStudy | TraitStudy:
     return STUDY_REQUEST.validate_python(value)
 
 
+class StudyWarning(BaseModel):
+    """Something the pipeline changed, dropped or doubts about the input."""
+
+    code: str
+    message: str
+    snp: str | None = None
+
+
 class Locus(BaseModel):
     """A merged genomic interval around one or more SNPs."""
 
@@ -121,10 +131,14 @@ class Locus(BaseModel):
     assembly: str
     window_method: Literal["fixed", "ld"]
     merged_from: list[str] = Field(default_factory=list)
+    lead_pos: int | None = None
+    snp_positions: dict[str, int] = Field(default_factory=dict)
+    n_genes: int = 0
+    genes_capped: bool = False
 
 
 class CandidateGene(BaseModel):
-    """A gene inside a locus with its positional relation to the lead SNP."""
+    """A gene inside a locus with its positional relation to the nearest SNP of the locus."""
 
     gene_id: str
     locus_id: str
@@ -135,6 +149,7 @@ class CandidateGene(BaseModel):
     strand: Literal["+", "-", "."] = "."
     distance_bp: int = Field(ge=0)
     overlaps_snp: bool = False
+    nearest_snp: str | None = None
     defline: str = ""
 
 
@@ -189,13 +204,24 @@ class Finding(BaseModel):
 
 
 class RankedCandidate(BaseModel):
-    """One ranked gene in the report."""
+    """One ranked gene in the report.
+
+    ``category_points`` holds rubric points per category (A-G);
+    ``evidence_ids`` are the credited evidence behind them.
+    """
 
     rank: int = Field(ge=1)
     gene_id: str
     locus_id: str
+    symbol: str | None = None
+    rank_in_locus: int | None = None
     score: float
-    tier: Literal["T1", "T2", "T3", "T4"]
+    share_of_locus: float | None = None
+    tier: Tier
+    category_points: dict[str, float] = Field(default_factory=dict)
+    reasons: list[str] = Field(default_factory=list)
+    stability: str | None = None
+    flags: list[str] = Field(default_factory=list)
     supporting_findings: list[str] = Field(default_factory=list)
     conflicting_findings: list[str] = Field(default_factory=list)
     evidence_ids: list[str] = Field(default_factory=list)
@@ -221,6 +247,9 @@ class Report(BaseModel):
     provenance: dict[str, JsonValue] = Field(default_factory=dict)
     loci: list[Locus] = Field(default_factory=list)
     candidates: list[RankedCandidate] = Field(default_factory=list)
+    stability: dict[str, JsonValue] = Field(default_factory=dict)
+    """Window-sensitivity summary: top genes per locus at each tested flank."""
+    warnings: list[StudyWarning] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
     suggested_validations: list[str] = Field(default_factory=list)
     sources: list[SourceRef] = Field(default_factory=list)
@@ -235,6 +264,7 @@ class StudyState(TypedDict, total=False):
     messages: Annotated[list[AnyMessage], add_messages]
     study: dict[str, Any]
     snps: list[dict[str, Any]]
+    warnings: list[dict[str, Any]]
     model_result: dict[str, Any]
     loci: list[dict[str, Any]]
     candidates: list[dict[str, Any]]
@@ -244,6 +274,7 @@ class StudyState(TypedDict, total=False):
     specialist_results: Annotated[list[dict[str, Any]], operator.add]
     round: int
     ranking: list[dict[str, Any]]
+    scoring: dict[str, Any]
     report: dict[str, Any] | None
     run_status: str
 

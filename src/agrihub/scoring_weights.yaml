@@ -4,6 +4,56 @@
 # its locus.
 
 version: 1
+tau: 8.0
+# Within a category only the best credit counts fully: max + second * 0.25.
+second_best: 0.25
+
+categories:
+  A: {name: Positional/genetic, max: 20}
+  B: {name: Direct same-species functional evidence, max: 25}
+  C: {name: Ortholog-transferred function, max: 20}
+  D: {name: Annotation/pathway relevance, max: 10}
+  E: {name: Expression, max: 10, available: false, note: "no expression atlas in the core bundle yet"}
+  F: {name: Network, max: 10, available: false, note: "no co-expression or interaction network in the core bundle yet"}
+  G: {name: GWAS/QTL convergence, max: 5}
+
+positional:
+  # A = max * exp(-distance / LD50), LD50 = typical_ld_kb of the species * ld_scale.
+  ld_scale: 1.0
+  not_available: "linked-variant impact and promoter/UTR/TFBS hits need variant annotation (a later plan)"
+
+known_gene:
+  # Curated same-species trait genes (category B), by how the record matches the trait.
+  trait: {ontology: 25.0, keyword: 15.0, none: 0.0}
+  # LIS confidence 1-5; unknown confidence takes `default`.
+  confidence: {"5": 1.0, "4": 1.0, "3": 0.8, "2": 0.6, "1": 0.5}
+  default_confidence: 0.8
+
+ortholog:
+  # Ortholog-transferred function (category C): base points per kind of fact,
+  # multiplied by the orthology factor and the phylogenetic factor.
+  phenotype_match: 20.0
+  experimental_go_match: 16.0
+  seed_family: 14.0
+  description_keyword: 8.0
+  # Soybean is paleopolyploid: two homeologs per Arabidopsis gene (many2one)
+  # is the normal case, so it counts more than one2many.
+  relation: {one2one: 1.0, many2one: 0.85, one2many: 0.7, many2many: 0.55, family: 0.4}
+  single_method_one2one: 0.7
+  confidence: {high: 1.0, medium: 0.85, low: 0.5}
+  best_hit_only: 0.4
+  phylogeny: {arabidopsis: 0.9, rice: 0.8}
+  default_phylogeny: 0.7
+  # Paralogs in one locus that inherit credit from the same ortholog share it:
+  # each keeps credit / n ** paralog_share_exponent.
+  paralog_share_exponent: 0.5
+
+annotation:
+  # The gene's own annotation (category D).
+  go_experimental: 10.0
+  go_computational: 3.0
+  family: 6.0
+  keyword: 4.0
 
 qtl:
   # Prior QTL for the trait overlapping the gene (category G).
@@ -29,3 +79,14 @@ gwas:
     - {factor: 0.15, label: window}
   # Hits without a p-value take the last band.
   p_value: [{max: 1.0e-8, factor: 1.0}, {max: 1.0e-5, factor: 0.8}, {factor: 0.6}]
+
+penalties:
+  te_like: 5.0
+  te_terms: [transposon, retrotransposon, transposable element, reverse transcriptase, gag-pol, gag/pol]
+
+tiers:
+  T1: {B: 15.0}
+  T2: {C: 12.0, A: 10.0}
+
+window_sensitivity:
+  flanks_bp: [50000, 100000, 250000]
