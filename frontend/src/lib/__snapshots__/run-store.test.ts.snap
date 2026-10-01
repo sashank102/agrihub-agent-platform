@@ -1,0 +1,112 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`the golden poster run > rebuilds the finished study 1`] = `
+{
+  "artifacts": [
+    "loci_table: Loci",
+    "candidates_table: Ranked candidates",
+    "evidence_snapshot: Evidence ledger",
+    "report: plant height candidate genes in soybean",
+  ],
+  "decisions": [
+    "dispatch",
+    "finish",
+  ],
+  "evidence": {
+    "association": 31,
+    "functional_annotation": 1044,
+    "known_gene": 3,
+    "ortholog": 754,
+    "positional": 123,
+  },
+  "harvest": [
+    "known_genes 123/123",
+    "annotation_relevance 123/123",
+    "functional_annotation 123/123",
+    "orthologs 123/123",
+    "arabidopsis 123/123",
+    "qtl 123/123",
+    "gwas_catalog 123/123",
+  ],
+  "lanes": [
+    {
+      "findings": 15,
+      "model": "stub",
+      "name": "Locus and variant specialist",
+      "specialist": "locus_variant",
+      "status": "completed",
+      "step": "2/8",
+      "tools": 16,
+    },
+    {
+      "findings": 6,
+      "model": "stub",
+      "name": "QTL and GWAS specialist",
+      "specialist": "qtl_gwas",
+      "status": "completed",
+      "step": "2/8",
+      "tools": 7,
+    },
+    {
+      "findings": 5,
+      "model": "stub",
+      "name": "Function and orthology specialist",
+      "specialist": "function_orthology",
+      "status": "completed",
+      "step": "2/8",
+      "tools": 6,
+    },
+    {
+      "findings": 0,
+      "model": "stub",
+      "name": "Expression and network specialist",
+      "specialist": "expression_network",
+      "status": "completed",
+      "step": "2/8",
+      "tools": 1,
+    },
+    {
+      "findings": 0,
+      "model": "stub",
+      "name": "Literature specialist",
+      "specialist": "literature",
+      "status": "completed",
+      "step": "2/8",
+      "tools": 1,
+    },
+  ],
+  "phase": "reporting",
+  "phases": {
+    "harvest": {
+      "detail": "1955 evidence items for 123 genes; triage brief ~1032 tokens",
+      "status": "completed",
+    },
+    "intake": {
+      "detail": "3 valid SNPs of 3 submitted",
+      "status": "completed",
+    },
+    "loci": {
+      "detail": "3 loci, 123 candidate genes",
+      "status": "completed",
+    },
+    "planning": {
+      "detail": "5 specialists dispatched",
+      "status": "completed",
+    },
+    "ranking": {
+      "detail": "15 candidates ranked across 3 loci (rubric v1)",
+      "status": "completed",
+    },
+    "reporting": {
+      "detail": null,
+      "status": "completed",
+    },
+    "specialists": {
+      "detail": "5 specialists returned 26 findings",
+      "status": "completed",
+    },
+  },
+  "plan": 8,
+  "sources": 18,
+}
+`;

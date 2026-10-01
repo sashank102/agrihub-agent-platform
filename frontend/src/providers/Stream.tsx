@@ -20,10 +20,19 @@ import { Label } from "@/components/ui/label";
 import { ArrowRight, Sprout } from "lucide-react";
 import { PasswordInput } from "@/components/ui/password-input";
 import { isUnauthorizedStatus, useApiKey } from "@/lib/api-key";
+import { isRunEvent, type RunEvent } from "@/lib/run-events";
+import { useRunStore } from "@/lib/run-store";
+import { API_URL, CHAT_ASSISTANT_ID, type StudyReport } from "@/lib/study-api";
 import { useThreads } from "./Thread";
 import { toast } from "sonner";
 
-export type StateType = { messages: Message[]; ui?: UIMessage[] };
+export type StateType = {
+  messages: Message[];
+  ui?: UIMessage[];
+  study?: Record<string, unknown>;
+  report?: StudyReport | null;
+  run_status?: string;
+};
 
 const useTypedStream = useStream<
   StateType,
@@ -32,8 +41,9 @@ const useTypedStream = useStream<
       messages?: Message[] | Message | string;
       ui?: (UIMessage | RemoveUIMessage)[] | UIMessage | RemoveUIMessage;
       context?: Record<string, unknown>;
+      study?: Record<string, unknown>;
     };
-    CustomEventType: UIMessage | RemoveUIMessage;
+    CustomEventType: UIMessage | RemoveUIMessage | RunEvent;
   }
 >;
 
@@ -42,8 +52,16 @@ const StreamContext = React.createContext<StreamContextType | undefined>(
   undefined,
 );
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
-const ASSISTANT_ID = process.env.NEXT_PUBLIC_ASSISTANT_ID || "agrihub";
+export type RunCreated = { run_id: string; thread_id: string };
+
+type SessionOptions = {
+  assistantId: string;
+  threadId: string | null;
+  onThreadId: (threadId: string) => void;
+  onCreated?: (run: RunCreated) => void;
+  onRunError?: (error: unknown) => void;
+  fetchStateHistory: boolean;
+};
 
 type ProbeResult = "ok" | "unauthorized" | "unreachable" | "server";
 
@@ -87,14 +105,16 @@ const StreamSession = ({
   apiKey,
   apiUrl,
   assistantId,
-}: {
+  threadId,
+  onThreadId,
+  onCreated,
+  onRunError,
+  fetchStateHistory,
+}: SessionOptions & {
   children: ReactNode;
   apiKey: string;
   apiUrl: string;
-  assistantId: string;
 }) => {
-  const [threadId, setThreadId] = useQueryState("threadId");
-  const { getThreads, setThreads } = useThreads();
   const { clearApiKey, setConnection } = useApiKey();
   const handleFailure = useCallback(
     (error: unknown) => {
@@ -102,21 +122,29 @@ const StreamSession = ({
         clearApiKey("rejected");
         return;
       }
+      if (onRunError) {
+        onRunError(error);
+        return;
+      }
       toast.error("The AgriHub server could not complete that request.", {
         description: "The API key was not included in this message.",
       });
     },
-    [clearApiKey],
+    [clearApiKey, onRunError],
   );
   const streamValue = useTypedStream({
     apiUrl,
     apiKey: apiKey || undefined,
     defaultHeaders: apiKey ? { "X-Api-Key": apiKey } : undefined,
     assistantId,
-    threadId: threadId ?? null,
-    fetchStateHistory: true,
+    threadId,
+    fetchStateHistory,
     onError: handleFailure,
     onCustomEvent: (event, options) => {
+      if (isRunEvent(event)) {
+        useRunStore.getState().enqueue(event, threadId);
+        return;
+      }
       if (isUIMessage(event) || isRemoveUIMessage(event)) {
         options.mutate((prev) => {
           const ui = uiMessageReducer(prev.ui ?? [], event);
@@ -125,8 +153,14 @@ const StreamSession = ({
       }
     },
     onThreadId: (id) => {
-      setThreadId(id);
-      getThreads().then(setThreads).catch(handleFailure);
+      if (id) {
+        onThreadId(id);
+      }
+    },
+    onCreated: (run) => {
+      if (run.run_id && run.thread_id) {
+        onCreated?.({ run_id: run.run_id, thread_id: run.thread_id });
+      }
     },
   });
 
@@ -343,9 +377,10 @@ function ApiKeyGate() {
   );
 }
 
-export const StreamProvider: React.FC<{ children: ReactNode }> = ({
+export function AuthenticatedStream({
   children,
-}) => {
+  ...session
+}: SessionOptions & { children: ReactNode }) {
   const { apiKey, devMode, ready, sessionGeneration } = useApiKey();
   if (!ready) {
     return <div className="min-h-screen" />;
@@ -358,10 +393,38 @@ export const StreamProvider: React.FC<{ children: ReactNode }> = ({
       key={sessionGeneration}
       apiKey={apiKey}
       apiUrl={API_URL}
-      assistantId={ASSISTANT_ID}
+      {...session}
     >
       {children}
     </StreamSession>
+  );
+}
+
+export const StreamProvider: React.FC<{ children: ReactNode }> = ({
+  children,
+}) => {
+  const [threadId, setThreadId] = useQueryState("threadId");
+  const { getThreads, setThreads } = useThreads();
+  const onThreadId = useCallback(
+    (id: string) => {
+      setThreadId(id);
+      getThreads()
+        .then(setThreads)
+        .catch(() =>
+          toast.error("The AgriHub server could not list your threads."),
+        );
+    },
+    [getThreads, setThreadId, setThreads],
+  );
+  return (
+    <AuthenticatedStream
+      assistantId={CHAT_ASSISTANT_ID}
+      threadId={threadId ?? null}
+      onThreadId={onThreadId}
+      fetchStateHistory
+    >
+      {children}
+    </AuthenticatedStream>
   );
 };
 

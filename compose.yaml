@@ -82,11 +82,13 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://127.0.0.1:8000}
-        NEXT_PUBLIC_ASSISTANT_ID: ${NEXT_PUBLIC_ASSISTANT_ID:-agrihub}
+        NEXT_PUBLIC_ASSISTANT_ID: ${NEXT_PUBLIC_ASSISTANT_ID:-agrihub_study}
+        NEXT_PUBLIC_CHAT_ASSISTANT_ID: ${NEXT_PUBLIC_CHAT_ASSISTANT_ID:-agrihub}
     environment:
       API_INTERNAL_URL: http://api:8000
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://127.0.0.1:8000}
-      NEXT_PUBLIC_ASSISTANT_ID: ${NEXT_PUBLIC_ASSISTANT_ID:-agrihub}
+      NEXT_PUBLIC_ASSISTANT_ID: ${NEXT_PUBLIC_ASSISTANT_ID:-agrihub_study}
+      NEXT_PUBLIC_CHAT_ASSISTANT_ID: ${NEXT_PUBLIC_CHAT_ASSISTANT_ID:-agrihub}
     depends_on:
       api:
         condition: service_healthy

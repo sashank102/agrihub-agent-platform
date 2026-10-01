@@ -13,6 +13,7 @@ import {
 const SESSION_KEY = "agrihub.platformApiKey";
 const LOCAL_KEY = "agrihub.platformApiKey";
 const REMEMBER_FLAG = "agrihub.rememberApiKey";
+const DEV_MODE_FLAG = "agrihub.developmentMode";
 
 export type AuthNotice = "rejected" | "unreachable" | "server" | null;
 
@@ -45,9 +46,21 @@ function writeStoredKey(key: string, remember: boolean): void {
   window.localStorage.removeItem(LOCAL_KEY);
 }
 
+function readDevelopmentMode(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  try {
+    return window.sessionStorage.getItem(DEV_MODE_FLAG) === "1";
+  } catch {
+    return false;
+  }
+}
+
 function eraseStoredKey(): void {
   try {
     window.sessionStorage.removeItem(SESSION_KEY);
+    window.sessionStorage.removeItem(DEV_MODE_FLAG);
     window.localStorage.removeItem(LOCAL_KEY);
     window.localStorage.removeItem(REMEMBER_FLAG);
   } catch {
@@ -112,7 +125,9 @@ export function ApiKeyProvider({ children }: { children: ReactNode }) {
   >("unknown");
 
   useEffect(() => {
-    setApiKey(readStoredKey());
+    const storedKey = readStoredKey();
+    setApiKey(storedKey);
+    setDevMode(!storedKey && readDevelopmentMode());
     setReady(true);
   }, []);
 
@@ -149,6 +164,11 @@ export function ApiKeyProvider({ children }: { children: ReactNode }) {
   const enterDevelopmentMode = useCallback(() => {
     forgetTenant();
     eraseStoredKey();
+    try {
+      window.sessionStorage.setItem(DEV_MODE_FLAG, "1");
+    } catch {
+      // Without session storage, development mode lasts until the next reload.
+    }
     setApiKey("");
     setDevMode(true);
     setNotice(null);

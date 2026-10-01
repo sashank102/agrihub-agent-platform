@@ -1,5 +1,6 @@
 import { validate } from "uuid";
 import { isUnauthorizedStatus, useApiKey } from "@/lib/api-key";
+import { API_URL, CHAT_ASSISTANT_ID } from "@/lib/study-api";
 import { Thread } from "@langchain/langgraph-sdk";
 import {
   createContext,
@@ -21,9 +22,6 @@ interface ThreadContextType {
 }
 
 const ThreadContext = createContext<ThreadContextType | undefined>(undefined);
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
-const ASSISTANT_ID = process.env.NEXT_PUBLIC_ASSISTANT_ID || "agrihub";
 
 function getThreadSearchMetadata(
   assistantId: string,
@@ -52,7 +50,7 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
     try {
       return await client.threads.search({
         metadata: {
-          ...getThreadSearchMetadata(ASSISTANT_ID),
+          ...getThreadSearchMetadata(CHAT_ASSISTANT_ID),
         },
         limit: 100,
       });

@@ -9,7 +9,7 @@ import { ArtifactProvider } from "@/components/thread/artifact";
 import { Toaster } from "@/components/ui/sonner";
 import React from "react";
 
-export default function DemoPage(): React.ReactNode {
+export default function ChatPage(): React.ReactNode {
   return (
     <React.Suspense fallback={<div>Loading (layout)...</div>}>
       <Toaster />
