@@ -440,6 +440,39 @@ class RunManager:
             raise LookupError("run not found")
         return view
 
+    async def list_runs(
+        self,
+        thread_id: uuid.UUID,
+        owner_user_id: uuid.UUID,
+    ) -> list[RunView]:
+        """Return an owned thread's runs, newest first.
+
+        Raises:
+            LookupError: when the thread is missing, deleted or not owned.
+        """
+        foreign_thread = False
+        views: list[RunView] | None = None
+        async with session_scope(self.session_factory) as session:
+            threads = ThreadRepository(session)
+            thread = await threads.get_for_owner(thread_id, owner_user_id)
+            if thread is not None and thread.status != "deleted":
+                runs = await RunRepository(session).list_for_thread(
+                    thread_id,
+                    owner_user_id,
+                )
+                views = [RunView.from_run(run) for run in reversed(runs)]
+            else:
+                raw_thread = await threads.get_by_id(thread_id)
+                foreign_thread = (
+                    raw_thread is not None
+                    and raw_thread.owner_user_id != owner_user_id
+                )
+        if views is None:
+            if foreign_thread:
+                await self._audit_denial(owner_user_id, "thread", str(thread_id))
+            raise LookupError("thread not found")
+        return views
+
     async def stream_events(
         self,
         *,

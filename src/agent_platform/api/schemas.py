@@ -158,6 +158,15 @@ class ThreadHistoryRequest(BaseModel):
     checkpoint: dict[str, Any] | None = None
 
 
+class RunSummaryResponse(BaseModel):
+    """One run of a thread, enough to rejoin or replay its event stream."""
+
+    run_id: str
+    status: str
+    created_at: datetime
+    finished_at: datetime | None = None
+
+
 class RunStreamRequest(BaseModel):
     """Run fields sent by current LangGraph SDK clients."""
 

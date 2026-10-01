@@ -346,6 +346,58 @@ def test_a_failed_study_run_closes_its_evidence_store(
     asyncio.run(scenario())
 
 
+def test_thread_runs_are_listed_newest_first_for_their_owner_only(postgres_database_uri: str, run_dir: Path):
+    async def scenario() -> None:
+        app = create_app(
+            settings=Settings(
+                ENVIRONMENT="test",
+                DATABASE_URI=postgres_database_uri,
+                AUTH_MODE="api_key",
+                API_KEY_PEPPER="study-runs-pepper-0123456789",
+                _env_file=None,
+            ),
+            graph_builder=_echo_builder,
+        )
+        async with app.router.lifespan_context(app):
+            accounts = app.state.accounts
+            owner = await accounts.create_user(display_name="Study owner")
+            other = await accounts.create_user(display_name="Someone else")
+            owner_key = (await accounts.issue_api_key(user_id=owner.id, label="owner")).plaintext
+            other_key = (await accounts.issue_api_key(user_id=other.id, label="other")).plaintext
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test",
+                headers={"X-Api-Key": owner_key},
+            ) as client:
+                thread, first, first_run = await _run_study(client, STUDY)
+                thread_id = thread["thread_id"]
+                second = await client.post(
+                    f"/threads/{thread_id}/runs/stream",
+                    json={"assistant_id": "agrihub_study", "input": {"study": {**STUDY, "snps": []}}},
+                )
+                second_run = second.headers["x-run-id"]
+                assert first[-1]["event"] == "end" and _parse_sse(second.text)[-1]["event"] == "error"
+
+                listed = await client.get(f"/threads/{thread_id}/runs")
+                assert listed.status_code == 200
+                runs = listed.json()
+                assert [item["run_id"] for item in runs] == [second_run, first_run]
+                assert [item["status"] for item in runs] == ["failed", "completed"]
+                assert set(runs[0]) == {"run_id", "status", "created_at", "finished_at"}
+                assert all(item["finished_at"] for item in runs)
+                assert runs[0]["created_at"] >= runs[1]["created_at"]
+
+                foreign = await client.get(f"/threads/{thread_id}/runs", headers={"X-Api-Key": other_key})
+                missing = await client.get(f"/threads/{uuid.uuid4()}/runs")
+                anonymous = await client.get(f"/threads/{thread_id}/runs", headers={"X-Api-Key": ""})
+                assert (foreign.status_code, foreign.json()) == (404, {"detail": "thread not found"})
+                assert missing.status_code == 404
+                assert anonymous.status_code == 401
+                assert (await client.get("/threads/not-a-uuid/runs")).status_code == 422
+
+    asyncio.run(scenario())
+
+
 def test_retention_removes_run_directories_only_after_their_snapshot_is_exported(
     postgres_database_uri: str,
     run_dir: Path,

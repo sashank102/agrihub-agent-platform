@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
 from agent_platform.api.dependencies import get_principal, require_ready
-from agent_platform.api.schemas import RunStreamRequest
+from agent_platform.api.schemas import RunStreamRequest, RunSummaryResponse
 from agent_platform.services.accounts import AuthenticatedPrincipal
 from agent_platform.services.errors import (
     ActiveRunConflict,
@@ -64,6 +64,29 @@ def _run_http_error(exc: Exception) -> HTTPException:
             },
         )
     raise exc
+
+
+@router.get("/{thread_id}/runs", response_model=list[RunSummaryResponse])
+async def list_runs(
+    thread_id: uuid.UUID,
+    request: Request,
+    principal: Annotated[AuthenticatedPrincipal, Depends(get_principal)],
+) -> list[RunSummaryResponse]:
+    """List an owned thread's runs, newest first, so a client can rejoin the latest."""
+    manager = request.app.state.run_manager
+    try:
+        views = await manager.list_runs(thread_id, principal.user_id)
+    except Exception as exc:
+        raise _run_http_error(exc) from exc
+    return [
+        RunSummaryResponse(
+            run_id=str(view.id),
+            status=view.status,
+            created_at=view.created_at,
+            finished_at=view.finished_at,
+        )
+        for view in views
+    ]
 
 
 @router.post("/{thread_id}/runs/stream")
