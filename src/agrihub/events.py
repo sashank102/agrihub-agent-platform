@@ -20,8 +20,9 @@ yields the same events in the same order.
 Event types and their ``data``:
 
 - ``run.phase``: ``phase`` (intake, model, loci, harvest, planning,
-  specialists, ranking, reporting), ``status`` (started, completed, skipped)
-  and optional ``detail``.
+  specialists, ranking, reporting), ``status`` (started, completed, skipped,
+  failed), optional ``detail`` and optional ``warnings[]`` of
+  ``{code, message, snp}``.
 - ``orchestrator.plan``: ``summary`` and ``steps[]``.
 - ``orchestrator.decision``: ``kind`` (dispatch, reflect, followup, finish),
   ``rationale`` (a stated summary, never raw reasoning), ``dispatched[]`` of
@@ -38,8 +39,8 @@ Event types and their ``data``:
   a truncated ``output_summary``, ``evidence_ids[]`` and ``output_ref``.
 - ``source.discovered``: ``source_id``, ``name``, ``version``, ``url`` and
   ``license``.
-- ``evidence.progress``: ``counts`` per evidence category, ``done`` and
-  ``total`` genes.
+- ``evidence.progress``: ``category`` (the harvest step), ``done`` and
+  ``total`` genes for it, and ``counts`` of stored evidence per category.
 - ``artifact.created``: ``kind`` (loci_table, candidates_table, report,
   evidence_snapshot), ``title``, optional ``artifact_id`` and inline ``rows``.
 
@@ -81,7 +82,7 @@ Phase = Literal[
     "ranking",
     "reporting",
 ]
-PhaseStatus = Literal["started", "completed", "skipped"]
+PhaseStatus = Literal["started", "completed", "skipped", "failed"]
 AgentKind = Literal["pipeline", "orchestrator", "specialist", "verifier", "writer", "model"]
 DecisionKind = Literal["dispatch", "reflect", "followup", "finish"]
 CauseType = Literal["toolCall", "send", "edge"]
@@ -161,11 +162,14 @@ def phase(
     status: PhaseStatus = "started",
     *,
     detail: str | None = None,
+    warnings: list[dict[str, Any]] | None = None,
 ) -> RunEvent:
-    """Mark a study phase as started, completed, or skipped."""
+    """Mark a study phase as started, completed, skipped, or failed."""
     data: dict[str, Any] = {"phase": name, "status": status}
     if detail:
         data["detail"] = detail
+    if warnings:
+        data["warnings"] = list(warnings)
     return emit("run.phase", data, agent=PIPELINE)
 
 
@@ -332,13 +336,18 @@ def source_discovered(
     )
 
 
-def evidence_progress(counts: dict[str, int], *, done: int, total: int) -> RunEvent:
-    """Report harvest counters per evidence category."""
-    return emit(
-        "evidence.progress",
-        {"counts": dict(counts), "done": done, "total": total},
-        agent=PIPELINE,
-    )
+def evidence_progress(
+    counts: dict[str, int],
+    *,
+    done: int,
+    total: int,
+    category: str | None = None,
+) -> RunEvent:
+    """Report how many genes one harvest step has covered, with stored evidence counts."""
+    data: dict[str, Any] = {"counts": dict(counts), "done": done, "total": total}
+    if category is not None:
+        data["category"] = category
+    return emit("evidence.progress", data, agent=PIPELINE)
 
 
 def artifact_created(
