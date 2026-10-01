@@ -201,12 +201,13 @@ def _markdown(
                 "",
                 f"## {locus.locus_id} candidates",
                 "",
-                "| # | Gene | Tier | Score | Share | Evidence | Stability |",
-                "| --- | --- | --- | --- | --- | --- | --- |",
+                "| # | Gene | Position | Distance | Tier | Score | Share | Evidence | Stability |",
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
             ]
         )
         lines.extend(
-            f"| {item.rank_in_locus} | {item.gene_id}{f' ({item.symbol})' if item.symbol else ''} | {item.tier} | "
+            f"| {item.rank_in_locus} | {item.gene_id}{f' ({item.symbol})' if item.symbol else ''} | "
+            f"{_position(item)} | {_distance(item)} | {item.tier} | "
             f"{item.score:g} | {item.share_of_locus or 0:.2f} | {'; '.join(item.reasons[:3])} | {item.stability or ''} |"
             for item in rows
         )
@@ -216,3 +217,17 @@ def _markdown(
     lines.extend(["", "## Limitations", ""])
     lines.extend(f"- {item}" for item in limitations)
     return "\n".join(lines)
+
+
+def _position(item: RankedCandidate) -> str:
+    if item.chrom is None or item.start is None or item.end is None:
+        return ""
+    return f"{item.chrom}:{item.start}-{item.end} ({item.strand})"
+
+
+def _distance(item: RankedCandidate) -> str:
+    if item.distance_bp is None:
+        return ""
+    if item.overlaps_snp:
+        return f"overlaps {item.nearest_snp or item.lead_snp or 'SNP'}"
+    return f"{item.distance_bp / 1000:.1f} kb to {item.nearest_snp or item.lead_snp or 'SNP'}"

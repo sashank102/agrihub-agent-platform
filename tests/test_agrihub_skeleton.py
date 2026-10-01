@@ -168,6 +168,16 @@ def test_final_state_has_a_report_and_artifacts_follow_the_ledger():
     received, values, run_id = _run(SNP_STUDY, sink=sink)
     report = Report.model_validate(values["report"])
     assert report.candidates and report.loci
+    loci = {locus.locus_id: locus for locus in report.loci}
+    for candidate in report.candidates:
+        locus = loci[candidate.locus_id]
+        assert candidate.chrom == locus.chrom and candidate.lead_snp == locus.lead_snp
+        assert candidate.start is not None and candidate.end is not None and candidate.start <= candidate.end
+        assert locus.start <= candidate.end and candidate.start <= locus.end
+        assert candidate.distance_bp is not None and candidate.overlaps_snp == (candidate.distance_bp == 0)
+        assert candidate.nearest_snp in locus.snp_positions
+    assert any(candidate.defline for candidate in report.candidates)
+    assert f"{report.candidates[0].chrom}:{report.candidates[0].start}-" in report.markdown
     assert report.finding_count == len(values["findings"])
     assert isinstance(values["messages"][-1], AIMessage)
     assert values["messages"][-1].content == report.markdown
@@ -180,6 +190,9 @@ def test_final_state_has_a_report_and_artifacts_follow_the_ledger():
     assert cited <= {item["evidence_id"] for item in snapshot["evidence"]}
 
     artifacts = [event for event in received if event["type"] == "artifact.created"]
+    final_table = [event for event in artifacts if event["data"]["kind"] == "candidates_table"][-1]
+    assert final_table["data"]["rows"][0]["gene_id"] == report.candidates[0].gene_id
+    assert {"chrom", "start", "end", "distance_bp", "lead_snp", "defline"} <= set(final_table["data"]["rows"][0])
     assert [event["data"]["kind"] for event in artifacts] == [
         "loci_table",
         "candidates_table",

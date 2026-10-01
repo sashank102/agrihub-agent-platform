@@ -219,13 +219,24 @@ class RankedCandidate(BaseModel):
     """One ranked gene in the report.
 
     ``category_points`` holds rubric points per category (A-G);
-    ``evidence_ids`` are the credited evidence behind them.
+    ``evidence_ids`` are the credited evidence behind them. The gene's
+    position, its distance to the nearest SNP of the locus (``nearest_snp``)
+    and the locus's ``lead_snp`` let a table render without further calls.
     """
 
     rank: int = Field(ge=1)
     gene_id: str
     locus_id: str
     symbol: str | None = None
+    chrom: str | None = None
+    start: int | None = Field(default=None, ge=0)
+    end: int | None = Field(default=None, ge=0)
+    strand: Literal["+", "-", "."] = "."
+    distance_bp: int | None = Field(default=None, ge=0)
+    overlaps_snp: bool = False
+    nearest_snp: str | None = None
+    lead_snp: str | None = None
+    defline: str = ""
     rank_in_locus: int | None = None
     score: float
     share_of_locus: float | None = None

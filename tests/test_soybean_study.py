@@ -77,6 +77,13 @@ def test_poster_study_ranks_real_loci_with_explanations_in_under_30_seconds():
     candidates = {ref["gene_id"]: ref for ref in values["candidates"]}
     assert candidates["Glyma.18G092200"]["locus_id"] == wrky_locus
     assert candidates["Glyma.18G092200"]["distance_bp"] == 0
+    ranked = {item["gene_id"]: item for item in report["candidates"]}
+    wrky_ranked = ranked["Glyma.18G092200"]
+    assert wrky_ranked["chrom"] == "Gm18" and wrky_ranked["start"] <= 9_263_941 <= wrky_ranked["end"]
+    assert wrky_ranked["distance_bp"] == 0 and wrky_ranked["overlaps_snp"] is True
+    assert wrky_ranked["lead_snp"] == wrky_ranked["nearest_snp"] == "S18_9263941"
+    assert "WRKY" in wrky_ranked["defline"].upper()
+    assert all(item["chrom"] and item["distance_bp"] is not None for item in report["candidates"])
     explanations = store.get_output(report["provenance"]["score_explanations_ref"])
     wrky = next(row for row in explanations["rows"] if row["gene_id"] == "Glyma.18G092200")
     assert wrky["locus_id"] == wrky_locus and wrky["categories"]["A"]["points"] == 20

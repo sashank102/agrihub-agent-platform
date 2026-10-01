@@ -19,6 +19,26 @@ from agrihub.nodes.locus_builder import genes_at_flank, load_candidates
 from agrihub.state import CandidateGene, Finding, Locus, RankedCandidate, StudyState
 from agrihub_data.registry import load_species
 
+TABLE_COLUMNS = (
+    "rank",
+    "gene_id",
+    "locus_id",
+    "symbol",
+    "rank_in_locus",
+    "score",
+    "tier",
+    "stability",
+    "chrom",
+    "start",
+    "end",
+    "distance_bp",
+    "overlaps_snp",
+    "nearest_snp",
+    "lead_snp",
+    "defline",
+)
+"""The ``candidates_table`` artifact columns, a subset of ``RankedCandidate``."""
+
 
 async def rank_verify(state: StudyState, config: RunnableConfig) -> dict[str, Any]:
     """Score every candidate, keep the top genes of each locus, and report their stability."""
@@ -32,10 +52,7 @@ async def rank_verify(state: StudyState, config: RunnableConfig) -> dict[str, An
     events.artifact_created(
         "candidates_table",
         title="Ranked candidates",
-        rows=[
-            {key: item[key] for key in ("rank", "gene_id", "locus_id", "symbol", "rank_in_locus", "score", "tier", "stability")}
-            for item in ranking
-        ],
+        rows=[{key: item[key] for key in TABLE_COLUMNS} for item in ranking],
     )
     events.phase(
         "ranking",
@@ -77,10 +94,11 @@ def _rank(
         },
     )
     findings = store.findings()
+    positions = {gene.gene_id: gene for gene in candidates}
     ranked: list[RankedCandidate] = []
     for locus in loci:
         for gene in scores.ranked(locus.locus_id)[:top_k]:
-            ranked.append(_candidate(gene, findings, sensitivity))
+            ranked.append(_candidate(gene, findings, sensitivity, positions.get(gene.gene_id), locus))
     order = {locus.locus_id: index for index, locus in enumerate(loci)}
     ranked.sort(key=lambda item: (-item.score, order.get(item.locus_id, 0), item.rank_in_locus or 0, item.gene_id))
     ranking = [item.model_copy(update={"rank": rank}).model_dump(mode="json") for rank, item in enumerate(ranked, start=1)]
@@ -99,14 +117,30 @@ def _candidate(
     gene: scoring.GeneScore,
     findings: list[Finding],
     sensitivity: scoring.WindowSensitivity,
+    position: CandidateGene | None,
+    locus: Locus,
 ) -> RankedCandidate:
     own = [finding for finding in findings if finding.target == gene.gene_id]
     stability = sensitivity.genes.get(gene.gene_id)
+    placed: dict[str, Any] = {}
+    if position is not None:
+        placed = {
+            "chrom": position.chrom or locus.chrom,
+            "start": position.start,
+            "end": position.end,
+            "strand": position.strand,
+            "distance_bp": position.distance_bp,
+            "overlaps_snp": position.overlaps_snp,
+            "nearest_snp": position.nearest_snp,
+            "defline": position.defline,
+        }
     return RankedCandidate(
         rank=1,
         gene_id=gene.gene_id,
         locus_id=gene.locus_id,
         symbol=gene.symbol,
+        lead_snp=locus.lead_snp,
+        **placed,
         rank_in_locus=gene.rank_in_locus,
         score=gene.score,
         share_of_locus=gene.share_of_locus,
