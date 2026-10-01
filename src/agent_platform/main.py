@@ -12,7 +12,7 @@ from sqlalchemy import select
 
 from agent_platform.api.middleware import RequestContextMiddleware, install_redaction
 from agent_platform.api.request_limit import RequestSizeLimitMiddleware
-from agent_platform.api.routes import health, info, registry, runs, threads
+from agent_platform.api.routes import health, info, registry, runs, studies, threads
 from agent_platform.core.settings import Settings, get_settings
 from agent_platform.db.models import Agent
 from agent_platform.db.repositories import AgentRepository, UserRepository
@@ -254,6 +254,7 @@ def create_app(
     application.include_router(threads.router)
     application.include_router(runs.router)
     application.include_router(registry.router)
+    application.include_router(studies.router)
     return application
 
 

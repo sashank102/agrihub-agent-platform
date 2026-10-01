@@ -57,6 +57,39 @@ class SpeciesResponse(BaseModel):
     sources: list[SourceResponse]
 
 
+class StudyWarningResponse(BaseModel):
+    """Something intake would change, drop or doubt about the study input."""
+
+    code: str
+    message: str
+    snp: str | None = None
+
+
+class StudyIssueResponse(BaseModel):
+    """A reason the study cannot run, located in the request (``["snps", 2, "pos"]``)."""
+
+    loc: list[str | int]
+    message: str
+
+
+class StudyPreviewResponse(BaseModel):
+    """Fixed-window loci the study would build and their distinct candidate genes."""
+
+    loci: list[dict[str, Any]]
+    genes: int
+
+
+class StudyValidationResponse(BaseModel):
+    """The server's dry run of a study: intake validation, placement and a locus preview."""
+
+    study_normalized: dict[str, Any] | None
+    placed_snps: list[dict[str, Any]]
+    warnings: list[StudyWarningResponse]
+    errors: list[StudyIssueResponse]
+    detail: str
+    preview: StudyPreviewResponse
+
+
 class ThreadCreateRequest(BaseModel):
     """Fields accepted by the LangGraph SDK thread creator."""
 

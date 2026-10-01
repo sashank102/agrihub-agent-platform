@@ -128,32 +128,70 @@ def _build(
     cap: int,
     store: EvidenceStore,
 ) -> tuple[list[Locus], list[CandidateGene], list[StudyWarning]]:
-    loci = build_loci(species, assembly, snps, flank_bp)
-    if not loci:
-        return [], [], []
-    bundle = open_bundle(species)
     built: list[Locus] = []
     candidates: list[CandidateGene] = []
     warnings: list[StudyWarning] = []
+    for locus, genes, in_window, warning in _assign_genes(species, assembly, snps, flank_bp, cap):
+        store.put_items(item for gene in in_window for item in gene.evidence())
+        candidates.extend(genes)
+        built.append(locus)
+        if warning is not None:
+            warnings.append(warning)
+    return built, candidates, warnings
+
+
+def preview_loci(
+    species: str,
+    assembly: str,
+    snps: list[SnpInput],
+    flank_bp: int,
+    cap: int,
+) -> tuple[list[Locus], list[StudyWarning]]:
+    """Return the loci a study would build, with gene counts, without storing evidence.
+
+    Raises:
+        BundleMissingError: when the species bundle is not built.
+    """
+    loci: list[Locus] = []
+    warnings: list[StudyWarning] = []
+    for locus, _, _, warning in _assign_genes(species, assembly, snps, flank_bp, cap):
+        loci.append(locus)
+        if warning is not None:
+            warnings.append(warning)
+    return loci, warnings
+
+
+def _assign_genes(
+    species: str,
+    assembly: str,
+    snps: list[SnpInput],
+    flank_bp: int,
+    cap: int,
+) -> list[tuple[Locus, list[CandidateGene], list[GeneInWindow], StudyWarning | None]]:
+    """Give each gene to the first locus that holds it and cap each locus at its nearest genes."""
+    loci = build_loci(species, assembly, snps, flank_bp)
+    if not loci:
+        return []
+    bundle = open_bundle(species)
+    assigned: list[tuple[Locus, list[CandidateGene], list[GeneInWindow], StudyWarning | None]] = []
     placed: set[str] = set()
     for locus in loci:
         pairs = [pair for pair in zip(*locus_genes(bundle, locus), strict=True) if pair[0].gene_id not in placed]
         genes = [pair[0] for pair in pairs]
         in_window = [pair[1] for pair in pairs]
         capped = len(genes) > cap
+        warning = None
         if capped:
-            warnings.append(
-                StudyWarning(
-                    code="genes_capped",
-                    message=f"{locus.locus_id} has {len(genes)} genes; kept the {cap} nearest to its SNPs",
-                )
+            warning = StudyWarning(
+                code="genes_capped",
+                message=f"{locus.locus_id} has {len(genes)} genes; kept the {cap} nearest to its SNPs",
             )
             genes, in_window = genes[:cap], in_window[:cap]
-        store.put_items(item for gene in in_window for item in gene.evidence())
         placed.update(gene.gene_id for gene in genes)
-        candidates.extend(genes)
-        built.append(locus.model_copy(update={"n_genes": len(genes), "genes_capped": capped}))
-    return built, candidates, warnings
+        assigned.append(
+            (locus.model_copy(update={"n_genes": len(genes), "genes_capped": capped}), genes, in_window, warning)
+        )
+    return assigned
 
 
 def snp_windows(species: str, assembly: str, snps: list[SnpInput], flank_bp: int) -> list[SnpWindow]:
