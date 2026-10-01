@@ -1,0 +1,106 @@
+{
+  "id": "Wm82.a2.v1",
+  "prefixes": ["Gm", "Chr", "Chromosome"],
+  "chromosomes": [
+    {
+      "name": "Gm01",
+      "length": 56831624,
+      "aliases": []
+    },
+    {
+      "name": "Gm02",
+      "length": 48577505,
+      "aliases": []
+    },
+    {
+      "name": "Gm03",
+      "length": 45779781,
+      "aliases": []
+    },
+    {
+      "name": "Gm04",
+      "length": 52389146,
+      "aliases": []
+    },
+    {
+      "name": "Gm05",
+      "length": 42234498,
+      "aliases": []
+    },
+    {
+      "name": "Gm06",
+      "length": 51416486,
+      "aliases": []
+    },
+    {
+      "name": "Gm07",
+      "length": 44630646,
+      "aliases": []
+    },
+    {
+      "name": "Gm08",
+      "length": 47837940,
+      "aliases": []
+    },
+    {
+      "name": "Gm09",
+      "length": 50189764,
+      "aliases": []
+    },
+    {
+      "name": "Gm10",
+      "length": 51566898,
+      "aliases": []
+    },
+    {
+      "name": "Gm11",
+      "length": 34766867,
+      "aliases": []
+    },
+    {
+      "name": "Gm12",
+      "length": 40091314,
+      "aliases": []
+    },
+    {
+      "name": "Gm13",
+      "length": 45874162,
+      "aliases": []
+    },
+    {
+      "name": "Gm14",
+      "length": 49042192,
+      "aliases": []
+    },
+    {
+      "name": "Gm15",
+      "length": 51756343,
+      "aliases": []
+    },
+    {
+      "name": "Gm16",
+      "length": 37887014,
+      "aliases": []
+    },
+    {
+      "name": "Gm17",
+      "length": 41641366,
+      "aliases": []
+    },
+    {
+      "name": "Gm18",
+      "length": 58018742,
+      "aliases": []
+    },
+    {
+      "name": "Gm19",
+      "length": 50746916,
+      "aliases": []
+    },
+    {
+      "name": "Gm20",
+      "length": 47904181,
+      "aliases": []
+    }
+  ]
+}
