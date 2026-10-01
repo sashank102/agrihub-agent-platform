@@ -170,7 +170,8 @@ def test_qtl_overlap_types_placement_and_trait_match(bundle):
     assert set(hits) == {"Plant height 1-1", "Plant height 2-1", "Seed oil 1-1"}
     assert (hits["Plant height 1-1"].overlap_type, hits["Plant height 1-1"].trait_match) == ("partial", "ontology")
     assert hits["Plant height 2-1"].trait_match == "keyword"
-    assert (hits["Seed oil 1-1"].overlap_type, hits["Seed oil 1-1"].trait_match) == ("window_contains_qtl", "none")
+    assert (hits["Seed oil 1-1"].overlap_type, hits["Seed oil 1-1"].trait_match) == ("marker_within", "none")
+    assert hits["Seed oil 1-1"].kind == "marker" and hits["Plant height 1-1"].kind == "interval"
     assert hits["Plant height 1-1"].n_markers_placed == 2 and not hits["Plant height 1-1"].wide
     inner = overlap.qtl_overlap(bundle, _region(INNER), profile, trait_only=True)
     assert [(hit.qtl_name, hit.overlap_type) for hit in inner] == [
@@ -180,6 +181,38 @@ def test_qtl_overlap_types_placement_and_trait_match(bundle):
     assert [hit.qtl_name for hit in overlap.qtl_overlap(bundle, _region(L1), profile)] == ["Plant height 1-2"]
     with pytest.raises(AssemblyMismatchError, match="Lift the region over first"):
         overlap.qtl_overlap(bundle, _region({**L2, "assembly": "Wm82.a4.v1"}), profile)
+
+
+def test_gene_mode_keys_overlaps_to_genes_with_distances_to_the_gene_body(bundle):
+    profile = traits.map_trait("plant height", "soybean", bundle)
+    wrky, sec13 = loci.gene_regions(bundle, ["Glyma.18G092200", "Glyma.18G092300"], flank_bp=overlap.GWAS_GENE_FLANK_BP)
+    assert (wrky.label, wrky.core, wrky.start, wrky.end) == (
+        "Glyma.18G092200",
+        (9_262_392, 9_267_008),
+        9_212_392,
+        9_317_008,
+    )
+    by_gene = {
+        region.label: overlap.gwas_catalog_overlap(bundle, region, profile, trait_only=True) for region in (wrky, sec13)
+    }
+    assert {(hit.source_db, hit.distance_to_core) for hit in by_gene["Glyma.18G092200"]} == {
+        ("GWAS Atlas", 0),
+        ("LIS/SoyBase GWAS", 12_391),
+        ("SoyBase GWAS", 0),
+    }
+    assert {item.gene_id for hit in by_gene["Glyma.18G092300"] for item in hit.evidence()} == {"Glyma.18G092300"}
+    gene = loci.gene_regions(bundle, ["Glyma.18G092000"])[0]
+    near = overlap.qtl_overlap(bundle, gene, profile, marker_flank_bp=overlap.QTL_MARKER_FLANK_BP)
+    assert [(hit.qtl_name, hit.kind, hit.overlap_type) for hit in near] == [
+        ("Plant height 2-1", "interval", "qtl_contains_window"),
+        ("Plant height 1-1", "interval", "qtl_contains_window"),
+    ]
+    wider = overlap.qtl_overlap(bundle, gene, profile, marker_flank_bp=200_000)
+    assert [(hit.qtl_name, hit.overlap_type, hit.distance_to_core) for hit in wider if hit.kind == "marker"] == [
+        ("Seed oil 1-1", "marker_within", 136_499)
+    ]
+    with pytest.raises(ValueError, match="not genes on Wm82.a2.v1"):
+        loci.gene_regions(bundle, ["L1"])
 
 
 def test_gwas_catalog_overlap_never_mixes_assemblies(bundle):

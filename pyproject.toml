@@ -71,6 +71,7 @@ packages = [
 
 [tool.setuptools.package-data]
 "*" = ["py.typed"]
+"agrihub" = ["scoring_weights.yaml"]
 "agrihub_data" = ["schema.sql", "registry/*.yaml"]
 "agrihub_data.query" = ["traits/*.yaml"]
 

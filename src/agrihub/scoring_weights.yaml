@@ -1,0 +1,31 @@
+# Deterministic candidate-gene rubric (master plan section 6). Tune here, not
+# in code. Category maxima add up to 100; a gene's score is the sum of its
+# categories minus penalties, and share_of_locus = softmax(score / tau) within
+# its locus.
+
+version: 1
+
+qtl:
+  # Prior QTL for the trait overlapping the gene (category G).
+  base: 5.0
+  trait: {ontology: 1.0, keyword: 0.6, none: 0.0}
+  overlap: {qtl_contains_window: 1.0, window_contains_qtl: 1.0, partial: 0.7}
+  # QTLs placed from two or more flanking markers, by markers placed.
+  markers: [{at_least: 3, factor: 1.0}, {at_least: 2, factor: 0.85}]
+  # Interval span; spans above 5 Mb are flagged wide and count little.
+  span: [{max_bp: 1000000, factor: 1.0}, {max_bp: 5000000, factor: 0.5}, {factor: 0.15}]
+  # A QTL placed from one marker is a point, scored as marker proximity.
+  single_marker: [{max_bp: 0, factor: 0.5}, {max_bp: 10000, factor: 0.35}, {max_bp: 50000, factor: 0.2}]
+
+gwas:
+  # Published catalog GWAS hits near the gene (category G).
+  base: 5.0
+  trait: {ontology: 1.0, keyword: 0.5, none: 0.0}
+  # Distance from the hit to the gene body.
+  distance:
+    - {max_bp: 0, factor: 1.0, label: in_gene}
+    - {max_bp: 10000, factor: 0.7, label: within_10kb}
+    - {max_bp: 50000, factor: 0.4, label: within_50kb}
+    - {factor: 0.15, label: window}
+  # Hits without a p-value take the last band.
+  p_value: [{max: 1.0e-8, factor: 1.0}, {max: 1.0e-5, factor: 0.8}, {factor: 0.6}]

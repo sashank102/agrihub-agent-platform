@@ -204,28 +204,7 @@ def _windows_or_genes(
 ) -> list[Region]:
     regions = [window.region() for window in _as(WindowInput, windows)]
     if gene_ids:
-        registry = load_species(bundle.species)
-        target = registry.assembly(assembly).id
-        wanted = list(dict.fromkeys(gene_ids))
-        rows = bundle.rows(
-            'SELECT gene_id, chrom, start, "end" FROM genes WHERE assembly = ? '
-            f"AND gene_id IN ({', '.join('?' for _ in wanted)})",
-            [target, *wanted],
-        )
-        found = {row["gene_id"]: row for row in rows}
-        missing = [gene for gene in wanted if gene not in found]
-        if missing:
-            raise ValueError(f"not genes on {target}: {', '.join(missing[:10])}; use map_gene_ids first")
-        regions.extend(
-            Region(
-                label=gene,
-                chrom=found[gene]["chrom"],
-                start=max(1, int(found[gene]["start"]) - flank_bp),
-                end=int(found[gene]["end"]) + flank_bp,
-                assembly=target,
-            )
-            for gene in wanted
-        )
+        regions.extend(loci.gene_regions(bundle, list(gene_ids), assembly, flank_bp))
     if not regions:
         raise ValueError("give windows or gene_ids")
     return regions
@@ -674,6 +653,9 @@ async def qtl_overlap(
 ) -> tuple[str, dict[str, Any]]:
     """Find marker-placed QTLs overlapping windows or genes, with overlap type, span and trait match.
 
+    Single-marker QTLs are points: they are reported as marker_within with a
+    distance, and for genes they count within 50 kb of the gene.
+
     Args:
         windows: Windows (label them with locus ids); evidence is keyed to the label.
         gene_ids: Genes to test instead of or besides windows; evidence is keyed to the gene.
@@ -689,7 +671,14 @@ async def qtl_overlap(
         rows = [
             hit
             for region in _windows_or_genes(bundle, windows, gene_ids, assembly)
-            for hit in overlap.qtl_overlap(bundle, region, profile, assembly=assembly, trait_only=trait_only)
+            for hit in overlap.qtl_overlap(
+                bundle,
+                region,
+                profile,
+                assembly=assembly,
+                trait_only=trait_only,
+                marker_flank_bp=overlap.QTL_MARKER_FLANK_BP if region.core_start is not None else 0,
+            )
         ]
         matching = sum(1 for row in rows if row.trait_match != "none")
         return _respond(
@@ -700,6 +689,7 @@ async def qtl_overlap(
             lambda hit: (
                 f"[{hit.label}] {hit.qtl_name} '{hit.trait_name}' {hit.chrom}:{hit.start}-{hit.end} "
                 f"span={hit.span_bp / 1e6:.2f}Mb {hit.overlap_type} markers={hit.n_markers_placed}/{hit.n_markers}"
+                + (f" dist={hit.distance_to_core}" if hit.distance_to_core else "")
                 + f" match={hit.trait_match}"
                 + (" WIDE" if hit.wide else "")
                 + f" study={hit.study_id}"
@@ -727,7 +717,7 @@ async def gwas_catalog_overlap(
 
     Args:
         windows: Windows (label them with locus ids); evidence is keyed to the label.
-        gene_ids: Genes to test; evidence is keyed to the gene.
+        gene_ids: Genes to test (gene ± 50 kb); evidence is keyed to the gene with the hit's distance to it.
         trait: Trait text; flags hits whose trait terms or names match.
         max_p: Drop hits with a larger p-value; hits without p-values are kept.
         species: Registered species, e.g. soybean.
@@ -740,7 +730,7 @@ async def gwas_catalog_overlap(
         profile = _profile(bundle, trait)
         rows = [
             hit
-            for region in _windows_or_genes(bundle, windows, gene_ids, assembly)
+            for region in _windows_or_genes(bundle, windows, gene_ids, assembly, overlap.GWAS_GENE_FLANK_BP)
             for hit in overlap.gwas_catalog_overlap(
                 bundle, region, profile, max_p=max_p, assembly=assembly, trait_only=trait_only
             )
@@ -755,6 +745,7 @@ async def gwas_catalog_overlap(
                 f"[{hit.label}] {hit.source_db} '{hit.trait_name}' {hit.chrom}:{hit.pos}"
                 + (f" p={hit.p_value:.2g}" if hit.p_value is not None else "")
                 + (f" dist={hit.distance_to_snp}" if hit.distance_to_snp is not None else "")
+                + (f" gene_dist={hit.distance_to_core}" if hit.label in (gene_ids or []) else "")
                 + f" match={hit.trait_match} study={_clip(hit.study_id, 40)}"
                 + (f" PMID:{hit.pmid}" if hit.pmid else "")
             ),

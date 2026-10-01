@@ -128,6 +128,53 @@ def define_locus(
     )
 
 
+def gene_regions(
+    bundle: Bundle,
+    gene_ids: list[str],
+    assembly: str | None = None,
+    flank_bp: int = 0,
+) -> list[Region]:
+    """Return one region per gene, labeled with the gene id, flanked and clamped to the chromosome.
+
+    The gene body is kept as the region's core so overlaps report gene distances.
+
+    Raises:
+        ValueError: when an id is not a gene on the assembly.
+    """
+    registry = registry_of(bundle)
+    target = registry.assembly(assembly)
+    wanted = list(dict.fromkeys(gene for gene in gene_ids if gene))
+    if not wanted:
+        return []
+    rows = bundle.rows(
+        'SELECT gene_id, chrom, start, "end" FROM genes WHERE assembly = ? '
+        f"AND gene_id IN ({', '.join('?' for _ in wanted)})",
+        [target.id, *wanted],
+    )
+    found = {row["gene_id"]: row for row in rows}
+    missing = [gene for gene in wanted if gene not in found]
+    if missing:
+        raise ValueError(f"not genes on {target.id}: {', '.join(missing[:10])}; use map_gene_ids first")
+    regions = []
+    for gene in wanted:
+        row = found[gene]
+        start, end = int(row["start"]), int(row["end"])
+        chromosome = target.chromosome(str(row["chrom"]))
+        upper = end + flank_bp if chromosome is None else min(chromosome.length, end + flank_bp)
+        regions.append(
+            Region(
+                label=gene,
+                chrom=str(row["chrom"]),
+                start=max(1, start - flank_bp),
+                end=max(upper, end),
+                assembly=target.id,
+                core_start=start,
+                core_end=end,
+            )
+        )
+    return regions
+
+
 def genes_in_window(
     bundle: Bundle,
     region: Region,

@@ -3,6 +3,11 @@
 Every overlap is computed on one assembly. QTL, GWAS hits and known genes
 keep the assembly they were placed on, and a region on another assembly is
 refused with :class:`AssemblyMismatchError` rather than compared.
+
+Gene mode: a region labeled with a gene id and carrying the gene body as its
+core (:func:`agrihub_data.query.loci.gene_regions`) keys every fact to that
+gene and reports distances to the gene body. Harvest uses gene mode so every
+evidence item names a real gene.
 """
 
 from typing import Any, Literal
@@ -21,12 +26,22 @@ from agrihub_data.query.common import (
 from agrihub_data.query.traits import TraitProfile
 
 WIDE_QTL_BP = 5_000_000
-OverlapType = Literal["qtl_contains_window", "window_contains_qtl", "partial"]
+GWAS_GENE_FLANK_BP = 50_000
+"""Gene-mode flank for catalog GWAS hits: in the gene, within 10 kb or within 50 kb."""
+QTL_MARKER_FLANK_BP = 50_000
+"""Gene-mode distance within which a single-marker QTL counts as near the gene."""
+OverlapType = Literal["qtl_contains_window", "window_contains_qtl", "partial", "marker_within"]
+QtlKind = Literal["interval", "marker"]
 TraitMatch = Literal["ontology", "keyword", "none"]
 
 
 class QtlHit(BaseModel):
-    """A placed QTL overlapping a region."""
+    """A placed QTL overlapping a region.
+
+    ``kind="marker"`` is a QTL placed from one marker: a point, reported as
+    ``marker_within`` with its distance to the region core, never as an
+    interval overlap.
+    """
 
     label: str
     qtl_id: str
@@ -42,8 +57,10 @@ class QtlHit(BaseModel):
     n_markers: int
     n_markers_placed: int
     placement: str
+    kind: QtlKind = "interval"
     overlap_type: OverlapType
     overlap_bp: int
+    distance_to_core: int = 0
     wide: bool
     trait_match: TraitMatch
     matched: list[str] = Field(default_factory=list)
@@ -83,6 +100,8 @@ class GwasCatalogHit(BaseModel):
     pos: int
     p_value: float | None
     distance_to_snp: int | None
+    distance_to_core: int = 0
+    """Distance from the hit to the gene body in gene mode; 0 inside it."""
     pmid: str | None
     doi: str | None
     reported_genes: list[str]
@@ -160,20 +179,32 @@ def qtl_overlap(
     *,
     assembly: str | None = None,
     trait_only: bool = False,
+    marker_flank_bp: int = 0,
 ) -> list[QtlHit]:
-    """Return placed QTLs overlapping ``region``, trait matches first, narrowest first."""
+    """Return placed QTLs overlapping ``region``, trait matches first, narrowest first.
+
+    QTLs placed from two or more markers must overlap the region. A QTL placed
+    from one marker is a point: it is returned as ``marker_within`` when the
+    marker lies in the region or within ``marker_flank_bp`` of it.
+    """
     resolved = _resolve(bundle, region, assembly)
     data_assembly = _assembly_of(bundle, "qtl", resolved)
     require_same_assembly(resolved, data_assembly, "QTL spans")
     rows = bundle.rows(
         'SELECT * FROM qtl WHERE assembly = ? AND chrom = ? AND "end" >= ? AND start <= ?',
-        [data_assembly, resolved.chrom, resolved.start, resolved.end],
+        [data_assembly, resolved.chrom, max(1, resolved.start - marker_flank_bp), resolved.end + marker_flank_bp],
     )
     hits = []
     for row in rows:
         start, end = int(row["start"]), int(row["end"])
-        if start <= resolved.start and end >= resolved.end:
-            overlap: OverlapType = "qtl_contains_window"
+        kind: QtlKind = "marker" if row["placement"] == "single_marker" else "interval"
+        overlaps_region = end >= resolved.start and start <= resolved.end
+        if kind == "interval" and not overlaps_region:
+            continue
+        if kind == "marker":
+            overlap: OverlapType = "marker_within"
+        elif start <= resolved.start and end >= resolved.end:
+            overlap = "qtl_contains_window"
         elif start >= resolved.start and end <= resolved.end:
             overlap = "window_contains_qtl"
         else:
@@ -197,8 +228,10 @@ def qtl_overlap(
                 n_markers=int(row["n_markers"]),
                 n_markers_placed=int(row["n_markers_placed"]),
                 placement=row["placement"],
+                kind=kind,
                 overlap_type=overlap,
-                overlap_bp=min(end, resolved.end) - max(start, resolved.start) + 1,
+                overlap_bp=max(0, min(end, resolved.end) - max(start, resolved.start) + 1),
+                distance_to_core=resolved.distance_to_core(start, end),
                 wide=int(row["span_bp"]) > WIDE_QTL_BP,
                 trait_match=match,
                 matched=matched,
@@ -207,7 +240,7 @@ def qtl_overlap(
                 source_version=row["source_version"],
             )
         )
-    hits.sort(key=lambda hit: (hit.trait_match == "none", hit.wide, hit.span_bp, hit.qtl_id))
+    hits.sort(key=lambda hit: (hit.trait_match == "none", hit.kind == "marker", hit.wide, hit.span_bp, hit.qtl_id))
     return hits
 
 
@@ -258,6 +291,7 @@ def gwas_catalog_overlap(
                 pos=pos,
                 p_value=float(p_value) if p_value is not None else None,
                 distance_to_snp=abs(pos - resolved.snp_pos) if resolved.snp_pos else None,
+                distance_to_core=resolved.distance_to_core(pos),
                 pmid=row["pmid"],
                 doi=row["doi"],
                 reported_genes=list(row["reported_genes"] or []),
