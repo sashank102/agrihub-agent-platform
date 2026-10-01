@@ -10,6 +10,14 @@ class UnsupportedRunOption(Exception):
         super().__init__(detail)
 
 
+class RunInputError(Exception):
+    """A graph rejected its input; the message is safe to show the run's owner.
+
+    The run still fails, but its terminal ``error`` event and stored error
+    message carry this message instead of the generic graph failure.
+    """
+
+
 class ActiveRunConflict(Exception):
     """The thread already has a pending or running run."""
 

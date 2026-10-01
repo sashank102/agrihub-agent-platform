@@ -311,6 +311,7 @@ def test_a_failed_study_run_closes_its_evidence_store(
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
                 _, streamed, run_id = await _run_study(client, STUDY)
                 assert streamed[-1]["event"] == "error"
+                assert streamed[-1]["data"]["message"] == "Graph execution failed"
                 phases = [event["data"]["phase"] for event in _run_events(streamed) if event["type"] == "run.phase"]
                 assert phases[-1] == "harvest"
                 assert (run_dir / run_id / "evidence.duckdb").exists()
@@ -326,6 +327,18 @@ def test_a_failed_study_run_closes_its_evidence_store(
                 ]
                 assert failure and failure[0]["phase"] == "intake"
                 assert "none of the 1 SNPs could be placed" in failure[0]["detail"]
+                assert failed_intake[-1]["data"]["message"] == failure[0]["detail"]
+                _, malformed, _ = await _run_study(client, {**STUDY, "snps": [{"raw": "S5_1", "chrom": "5"}]})
+                assert malformed[-1]["event"] == "error"
+                assert malformed[-1]["data"]["message"].startswith("the study request is invalid: snps.0:")
+                rejected = next(
+                    event["data"]
+                    for event in _run_events(malformed)
+                    if event["type"] == "run.phase" and event["data"]["status"] == "failed"
+                )
+                assert rejected["errors"] == [
+                    {"loc": ["snps", 0], "message": "Value error, chrom and pos must be given together"}
+                ]
             async with session_scope(app.state.session_factory) as session:
                 statuses = {str(run.id): run.status for run in (await session.scalars(select(Run))).all()}
             assert statuses[run_id] == "failed"

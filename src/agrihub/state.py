@@ -52,7 +52,12 @@ class Window(BaseModel):
 
 
 class SnpInput(BaseModel):
-    """One user-supplied SNP, either positioned or awaiting marker lookup."""
+    """One user-supplied SNP: positioned, a marker id, or raw text placed at intake.
+
+    With neither ``chrom``/``pos`` nor ``marker_id``, intake parses ``raw``
+    as a positional id (``S18_9263941``, ``Chr18:9263941``) and otherwise
+    resolves it as a marker name.
+    """
 
     raw: str = Field(min_length=1)
     marker_id: str | None = None
@@ -63,12 +68,12 @@ class SnpInput(BaseModel):
     method: str | None = None
 
     @model_validator(mode="after")
-    def require_position_or_marker(self) -> "SnpInput":
-        """Accept a chromosome position or a marker id that needs lookup."""
+    def require_complete_position(self) -> "SnpInput":
+        """Reject a chromosome without a position and a position without a chromosome."""
         if (self.chrom is None) != (self.pos is None):
             raise ValueError("chrom and pos must be given together")
-        if self.chrom is None and not self.marker_id:
-            raise ValueError("a SNP needs chrom and pos, or a marker_id to resolve")
+        if not self.raw.strip():
+            raise ValueError("raw must not be blank")
         return self
 
 
@@ -117,6 +122,13 @@ class StudyWarning(BaseModel):
     code: str
     message: str
     snp: str | None = None
+
+
+class StudyInputIssue(BaseModel):
+    """A reason the study cannot run; ``loc`` points into the request (``["snps", 2, "pos"]``)."""
+
+    loc: list[str | int] = Field(default_factory=list)
+    message: str
 
 
 class Locus(BaseModel):

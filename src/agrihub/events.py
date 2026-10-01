@@ -21,8 +21,9 @@ Event types and their ``data``:
 
 - ``run.phase``: ``phase`` (intake, model, loci, harvest, planning,
   specialists, ranking, reporting), ``status`` (started, completed, skipped,
-  failed), optional ``detail`` and optional ``warnings[]`` of
-  ``{code, message, snp}``.
+  failed), optional ``detail``, optional ``warnings[]`` of
+  ``{code, message, snp}`` and, on a failed intake, optional ``errors[]`` of
+  ``{loc, message}``.
 - ``orchestrator.plan``: ``summary`` and ``steps[]``.
 - ``orchestrator.decision``: ``kind`` (dispatch, reflect, followup, finish),
   ``rationale`` (a stated summary, never raw reasoning), ``dispatched[]`` of
@@ -163,6 +164,7 @@ def phase(
     *,
     detail: str | None = None,
     warnings: list[dict[str, Any]] | None = None,
+    errors: list[dict[str, Any]] | None = None,
 ) -> RunEvent:
     """Mark a study phase as started, completed, skipped, or failed."""
     data: dict[str, Any] = {"phase": name, "status": status}
@@ -170,6 +172,8 @@ def phase(
         data["detail"] = detail
     if warnings:
         data["warnings"] = list(warnings)
+    if errors:
+        data["errors"] = list(errors)
     return emit("run.phase", data, agent=PIPELINE)
 
 

@@ -36,6 +36,7 @@ from agent_platform.db.session import AsyncSessionFactory, session_scope
 from agent_platform.services.errors import (
     ActiveRunConflict,
     CancellationNotSettled,
+    RunInputError,
     UnsupportedRunOption,
 )
 from agent_platform.services.graph_registry import GraphRegistry
@@ -636,6 +637,11 @@ class RunManager:
             if finalized or outcome_chosen:
                 return
             outcome_chosen = True
+            message = (
+                str(exc)
+                if isinstance(exc, RunInputError) and str(exc)
+                else "Graph execution failed"
+            )
             finalized = await self._commit_terminal(
                 run_id=run_id,
                 owner_user_id=owner_user_id,
@@ -644,13 +650,13 @@ class RunManager:
                 status_kwargs={
                     "finished_at": datetime.now(UTC),
                     "error_code": type(exc).__name__,
-                    "error_message": "Graph execution failed",
+                    "error_message": message,
                     "touch_thread": True,
                 },
                 event_type="error",
                 event_payload={
                     "error": "run_failed",
-                    "message": "Graph execution failed",
+                    "message": message,
                     "run_id": str(run_id),
                     "thread_id": str(thread_id),
                 },

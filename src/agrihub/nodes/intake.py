@@ -2,15 +2,19 @@
 
 import asyncio
 from collections import defaultdict
+from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Overwrite
+from pydantic import ValidationError
 
+from agent_platform.services.errors import RunInputError
 from agrihub import events
 from agrihub.state import (
     SnpInput,
     SnpStudy,
+    StudyInputIssue,
     StudyState,
     StudyWarning,
     TraitStudy,
@@ -28,10 +32,89 @@ from agrihub_data.registry import (
 )
 
 MAX_DETAIL_WARNINGS = 5
+_UNION_TAG_ERRORS = frozenset({"union_tag_invalid", "union_tag_not_found"})
 
 
-class StudyInputError(ValueError):
-    """Nothing in the study can be placed on its species and assembly."""
+class StudyInputError(ValueError, RunInputError):
+    """The study request is malformed, names an unknown species or assembly, or has no placeable SNP."""
+
+
+@dataclass
+class StudyCheck:
+    """The outcome of validating a study request and placing its SNPs.
+
+    ``study`` is normalized to the registry's species and assembly ids;
+    ``placed`` are the deduplicated SNPs on that assembly. Any ``errors``
+    mean the study cannot run, and ``detail`` says why in one line.
+    """
+
+    study: SnpStudy | TraitStudy | None = None
+    placed: list[SnpInput] = field(default_factory=list)
+    warnings: list[StudyWarning] = field(default_factory=list)
+    errors: list[StudyInputIssue] = field(default_factory=list)
+    detail: str = ""
+
+
+def check_study(raw: Any) -> StudyCheck:
+    """Validate a study request and place its SNPs without running anything.
+
+    This is intake's validation, shared with the ``/studies/validate`` dry
+    run. It reads the species registry and, for marker ids, the bundle; it
+    writes nothing.
+    """
+    if not raw:
+        issue = StudyInputIssue(loc=["study"], message="agrihub_study input needs a 'study' object")
+        return StudyCheck(errors=[issue], detail=issue.message)
+    try:
+        study = parse_study(raw)
+    except ValidationError as exc:
+        errors = schema_issues(exc, raw)
+        reasons = "; ".join(_issue_text(issue) for issue in errors[:MAX_DETAIL_WARNINGS])
+        return StudyCheck(errors=errors, detail=f"the study request is invalid: {reasons}")
+    try:
+        registry = load_species(study.species)
+        assembly = registry.assembly(study.assembly).id
+    except (UnknownSpeciesError, UnknownAssemblyError) as exc:
+        message = str(exc.args[0]) if isinstance(exc, KeyError) and exc.args else str(exc)
+        loc: list[str | int] = ["species"] if isinstance(exc, UnknownSpeciesError) else ["assembly"]
+        return StudyCheck(errors=[StudyInputIssue(loc=loc, message=message)], detail=message)
+    study = study.model_copy(update={"species": registry.species, "assembly": assembly})
+    warnings = window_warnings(registry, study)
+    if not isinstance(study, SnpStudy):
+        return StudyCheck(study=study, warnings=warnings, detail="trait mode: SNPs come from the model step")
+    placed, snp_warnings = place_snps(study, study.snps)
+    warnings.extend(snp_warnings)
+    if not placed:
+        reasons = "; ".join(warning.message for warning in snp_warnings[:MAX_DETAIL_WARNINGS])
+        detail = f"none of the {len(study.snps)} SNPs could be placed on {assembly}: {reasons}"
+        return StudyCheck(
+            study=study,
+            warnings=warnings,
+            errors=[StudyInputIssue(loc=["snps"], message=detail)],
+            detail=detail,
+        )
+    detail = f"{len(placed)} valid SNPs of {len(study.snps)} submitted"
+    if warnings:
+        detail += f"; {len(warnings)} warnings"
+    return StudyCheck(study=study, placed=placed, warnings=warnings, detail=detail)
+
+
+def schema_issues(exc: ValidationError, raw: Any) -> list[StudyInputIssue]:
+    """Turn Pydantic errors into ``{loc, message}`` issues located in the request.
+
+    The ``mode`` discriminator tag that Pydantic prefixes to every location
+    is dropped, so ``loc`` reads ``["snps", 0, "pos"]``.
+    """
+    mode = raw.get("mode") if isinstance(raw, dict) else None
+    issues = []
+    for error in exc.errors(include_url=False):
+        loc: list[str | int] = list(error.get("loc") or ())
+        if error.get("type") in _UNION_TAG_ERRORS:
+            loc = ["mode"]
+        elif loc and mode is not None and loc[0] == mode:
+            loc = loc[1:]
+        issues.append(StudyInputIssue(loc=loc, message=str(error.get("msg") or "invalid value")))
+    return issues
 
 
 async def intake(state: StudyState, config: RunnableConfig) -> dict[str, Any]:
@@ -39,45 +122,30 @@ async def intake(state: StudyState, config: RunnableConfig) -> dict[str, Any]:
 
     The form guarantees completeness, so there is no clarification step.
     Dropped or doubtful inputs become warnings in state and in the
-    ``run.phase(intake)`` event. When no SNP is left the phase fails with a
-    readable event and the run stops.
+    ``run.phase(intake)`` event. A malformed request, an unknown species or
+    assembly, or a study with no placeable SNP fails the phase with a
+    readable event carrying ``errors[]``, and the run stops.
 
     Raises:
-        StudyInputError: when the species or assembly is unknown, or no SNP is valid.
+        StudyInputError: when the study cannot run.
     """
     events.phase("intake")
-    raw = state.get("study")
-    if not raw:
-        raise ValueError("agrihub_study input needs a 'study' object")
-    study = parse_study(raw)
-    try:
-        registry = load_species(study.species)
-        assembly = registry.assembly(study.assembly).id
-    except (UnknownSpeciesError, UnknownAssemblyError) as exc:
-        message = str(exc.args[0]) if isinstance(exc, KeyError) and exc.args else str(exc)
-        events.phase("intake", "failed", detail=message)
-        raise StudyInputError(message) from exc
-    study = study.model_copy(update={"species": registry.species, "assembly": assembly})
-    warnings = window_warnings(registry, study)
-    snps: list[dict[str, Any]] = []
-    detail = "trait mode: SNPs come from the model step"
-    if isinstance(study, SnpStudy):
-        placed, snp_warnings = await asyncio.to_thread(place_snps, study, study.snps)
-        warnings.extend(snp_warnings)
-        snps = [snp.model_dump(mode="json") for snp in placed]
-        if not placed:
-            reasons = "; ".join(warning.message for warning in snp_warnings[:MAX_DETAIL_WARNINGS])
-            detail = f"none of the {len(study.snps)} SNPs could be placed on {assembly}: {reasons}"
-            events.phase("intake", "failed", detail=detail, warnings=_dump(warnings))
-            raise StudyInputError(detail)
-        detail = f"{len(placed)} valid SNPs of {len(study.snps)} submitted"
-        if warnings:
-            detail += f"; {len(warnings)} warnings"
-    events.phase("intake", "completed", detail=detail, warnings=_dump(warnings))
+    check = await asyncio.to_thread(check_study, state.get("study"))
+    if check.errors or check.study is None:
+        events.phase(
+            "intake",
+            "failed",
+            detail=check.detail,
+            warnings=_dump(check.warnings),
+            errors=[issue.model_dump() for issue in check.errors],
+        )
+        raise StudyInputError(check.detail)
+    study = check.study
+    events.phase("intake", "completed", detail=check.detail, warnings=_dump(check.warnings))
     return {
         "study": study.model_dump(mode="json"),
-        "snps": snps,
-        "warnings": _dump(warnings),
+        "snps": [snp.model_dump(mode="json") for snp in check.placed],
+        "warnings": _dump(check.warnings),
         "model_result": {},
         "loci": [],
         "candidates": [],
@@ -121,9 +189,11 @@ def place_snps(study: SnpStudy | TraitStudy, snps: list[SnpInput]) -> tuple[list
     """Normalize chromosomes, resolve marker ids, check bounds and dedupe.
 
     Every returned SNP has a canonical chromosome and a position on the
-    study assembly. Positions are never taken from another assembly: a BARC
-    name's embedded Wm82.a1 position is ignored in favour of the marker-set
-    placement on the study assembly, and flagged.
+    study assembly. A SNP given only as ``raw`` text is parsed as a
+    positional id first and resolved as a marker name otherwise. Positions
+    are never taken from another assembly: a BARC name's embedded Wm82.a1
+    position is ignored in favour of the marker-set placement on the study
+    assembly, and flagged.
     """
     registry = load_species(study.species)
     target = registry.assembly(study.assembly)
@@ -152,13 +222,15 @@ def place_snps(study: SnpStudy | TraitStudy, snps: list[SnpInput]) -> tuple[list
                     )
                 )
         else:
-            if not bundle_checked:
-                bundle_checked = True
-                try:
-                    bundle = open_bundle(registry.species)
-                except BundleMissingError:
-                    bundle = None
-            located = _resolve(registry, target.id, snp, bundle, warnings)
+            located = None if snp.marker_id else parse_positional(registry.species, snp.raw, target.id)
+            if located is None:
+                if not bundle_checked:
+                    bundle_checked = True
+                    try:
+                        bundle = open_bundle(registry.species)
+                    except BundleMissingError:
+                        bundle = None
+                located = _resolve(registry, target.id, snp, bundle, warnings)
             if located is None:
                 continue
             chrom, pos = located
@@ -208,7 +280,7 @@ def _resolve(
     bundle: Bundle | None,
     warnings: list[StudyWarning],
 ) -> tuple[str, int] | None:
-    marker = str(snp.marker_id)
+    marker = (snp.marker_id or snp.raw).strip()
     hits = resolve_marker(registry.species, marker, assembly, bundle)
     on_target = [hit for hit in hits if hit.assembly == assembly]
     if any("a1_embedded_position" in hit.flags for hit in hits):
@@ -247,3 +319,8 @@ def _resolve(
 
 def _dump(warnings: list[StudyWarning]) -> list[dict[str, Any]]:
     return [warning.model_dump(exclude_none=True) for warning in warnings]
+
+
+def _issue_text(issue: StudyInputIssue) -> str:
+    where = ".".join(str(part) for part in issue.loc)
+    return f"{where}: {issue.message}" if where else issue.message

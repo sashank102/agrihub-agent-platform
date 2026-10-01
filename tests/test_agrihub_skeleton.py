@@ -204,11 +204,47 @@ def test_disabled_specialists_are_rejected_in_the_decision():
     ]
 
 
-def test_invalid_study_is_rejected_at_intake():
-    with pytest.raises(ValidationError):
-        _run({**SNP_STUDY, "snps": []})
-    with pytest.raises(ValidationError):
-        _run({**SNP_STUDY, "mode": "genome"})
+def _failed_intake(study: Any) -> dict[str, Any]:
+    received: list[dict[str, Any]] = []
+    with pytest.raises(StudyInputError, match="the study request is invalid") as raised:
+        _run(study, received=received)
+    assert not isinstance(raised.value, ValidationError)
+    failed = [event["data"] for event in received if event["type"] == "run.phase" and event["data"]["status"] == "failed"]
+    assert [event["phase"] for event in failed] == ["intake"]
+    assert failed[0]["detail"] == str(raised.value)
+    return failed[0]
+
+
+def test_a_malformed_study_fails_intake_with_located_errors():
+    empty = _failed_intake({**SNP_STUDY, "snps": []})
+    assert [error["loc"] for error in empty["errors"]] == [["snps"]]
+    assert "at least 1 item" in empty["errors"][0]["message"]
+    assert _failed_intake({**SNP_STUDY, "mode": "genome"})["errors"][0]["loc"] == ["mode"]
+    half = _failed_intake({**SNP_STUDY, "snps": [{"raw": "S5_1", "chrom": "5"}], "top_k_per_locus": 0})
+    assert sorted(error["loc"] for error in half["errors"]) == [["snps", 0], ["top_k_per_locus"]]
+    assert any("chrom and pos must be given together" in error["message"] for error in half["errors"])
+
+
+def test_raw_only_snps_are_parsed_and_placed_at_intake():
+    study = {
+        **SNP_STUDY,
+        "snps": [
+            {"raw": "S5_2899164"},
+            {"raw": "Chr18:9263941"},
+            {"raw": "chr18_9263941"},
+            {"raw": "BARC_123"},
+        ],
+    }
+    received, values, _ = _run(study)
+    assert [(snp["raw"], snp["chrom"], snp["pos"]) for snp in values["snps"]] == [
+        ("S5_2899164", "Gm05", 2_899_164),
+        ("Chr18:9263941", "Gm18", 9_263_941),
+    ]
+    assert {(warning["code"], warning.get("snp")) for warning in values["warnings"]} == {
+        ("duplicate", "chr18_9263941"),
+        ("unresolved_marker", "BARC_123"),
+    }
+    assert values["report"]["loci"] and _started_phases(received) == SNP_PHASES
 
 
 def test_a_study_with_no_placeable_snp_fails_intake_with_a_readable_event():

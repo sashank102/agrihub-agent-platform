@@ -160,6 +160,15 @@ def test_a_window_wider_than_twice_the_typical_ld_is_flagged():
             ],
             {"position_mismatch", "a1_position", "duplicate"},
         ),
+        (
+            [
+                {"raw": "18 9263941"},
+                {"raw": "BARC_1.01_Gm18_9199987_A_G"},
+                {"raw": "ss715631025"},
+                {"raw": "S18_99999999"},
+            ],
+            {"a1_position", "duplicate", "out_of_bounds"},
+        ),
     ],
 )
 def test_intake_placement_warnings(fixture_env: FixtureBundle, snps: list[dict[str, Any]], codes: set[str]):
@@ -170,3 +179,5 @@ def test_intake_placement_warnings(fixture_env: FixtureBundle, snps: list[dict[s
     if "a1_position" in codes:
         barc = next(snp for snp in placed if snp.raw.startswith("BARC"))
         assert (barc.chrom, barc.pos) == ("Gm18", 9_250_001)
+    if "out_of_bounds" in codes:
+        assert ("18 9263941", "Gm18", 9_263_941) in {(snp.raw, snp.chrom, snp.pos) for snp in placed}
