@@ -13,7 +13,7 @@ import asyncio
 import json
 import logging
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -65,6 +65,8 @@ MAX_PAYLOAD_STRING_BYTES = 8 * 1024
 DROPPED_PAYLOAD_KEYS = frozenset({"raw_notes", "raw_content"})
 
 EventPayload = dict[str, Any] | list[Any]
+RunFinishedHook = Callable[[uuid.UUID], Awaitable[None]]
+"""Called once per executed run after its terminal status is committed."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,12 +171,19 @@ class RunManager:
         subscriber_queue_size: int = 16,
         terminal_retry_delays: tuple[float, ...] = (0.0, 0.05),
         stream_subgraph_updates: bool = False,
+        on_run_finished: RunFinishedHook | None = None,
     ) -> None:
-        """Create an empty task registry and the process-wide run semaphore."""
+        """Create an empty task registry and the process-wide run semaphore.
+
+        ``on_run_finished`` releases per-run resources, such as an open
+        evidence store, on every terminal status: completed, failed,
+        cancelled or interrupted. Its errors are logged, never raised.
+        """
         self.session_factory = session_factory
         self.registry = registry
         self.subscriber_queue_size = subscriber_queue_size
         self.stream_subgraph_updates = stream_subgraph_updates
+        self._on_run_finished = on_run_finished
         self._terminal_retry_delays = terminal_retry_delays or (0.0,)
         self._semaphore = asyncio.Semaphore(max_concurrent_runs)
         self._lock = asyncio.Lock()
@@ -750,11 +759,17 @@ class RunManager:
             except Exception:
                 logger.exception("Could not finalize run %s", run_id)
             finally:
-                current = asyncio.current_task()
-                async with self._lock:
-                    entry = self._runs.get(run_id)
-                    if entry is not None and entry.task is current:
-                        self._runs.pop(run_id, None)
+                try:
+                    if self._on_run_finished is not None:
+                        await self._on_run_finished(run_id)
+                except Exception:
+                    logger.exception("Could not release resources of run %s", run_id)
+                finally:
+                    current = asyncio.current_task()
+                    async with self._lock:
+                        entry = self._runs.get(run_id)
+                        if entry is not None and entry.task is current:
+                            self._runs.pop(run_id, None)
 
     async def _commit_terminal(
         self,

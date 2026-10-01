@@ -1,11 +1,13 @@
-"""Persist ``agrihub_study`` artifacts under the executing run's identity."""
+"""Persist ``agrihub_study`` artifacts and release run resources under the run's identity."""
 
+import asyncio
 import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 from agent_platform.db.repositories import ArtifactRepository
 from agent_platform.db.session import AsyncSessionFactory, session_scope
+from agrihub.evidence_store import close_run
 
 StudyArtifactSink = Callable[..., Awaitable[str | None]]
 
@@ -46,3 +48,8 @@ def study_artifact_sink(session_factory: AsyncSessionFactory) -> StudyArtifactSi
             return str(artifact.id)
 
     return sink
+
+
+async def close_study_store(run_id: uuid.UUID) -> None:
+    """Close the run's evidence store if this process still holds it open."""
+    await asyncio.to_thread(close_run, str(run_id))

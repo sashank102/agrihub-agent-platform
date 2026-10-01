@@ -1,18 +1,27 @@
-"""Operator retention for events, keys, audit rows, and checkpoints.
+"""Operator retention for events, keys, audit rows, checkpoints, and run directories.
 
 Checkpoint pruning always deletes ``checkpoint_writes``, ``checkpoint_blobs``,
 and ``checkpoints`` for the same thread ids in one transaction. It never
 removes one of those tables on its own. Store rows are removed only by whole
 prefix, together with that checkpoint family.
+
+Run directories (``$AGRIHUB_RUN_DIR/<run_id>``, the run's evidence DuckDB) are
+removed only for terminal runs whose ``evidence_snapshot`` artifact exists, so
+the evidence stays recoverable from PostgreSQL.
 """
 
+import asyncio
+import shutil
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from agent_platform.core.settings import get_data_paths
 from agent_platform.db.session import AsyncSessionFactory, session_scope
 
 _TERMINAL_SQL = (
@@ -36,6 +45,7 @@ class RetentionReport:
     audit_rows: int = 0
     api_keys: int = 0
     checkpoint_threads: int = 0
+    run_directories: int = 0
 
     def as_dict(self) -> dict[str, Any]:
         """Return a JSON-ready summary with no row contents."""
@@ -46,6 +56,7 @@ class RetentionReport:
             "audit_rows": self.audit_rows,
             "api_keys": self.api_keys,
             "checkpoint_threads": self.checkpoint_threads,
+            "run_directories": self.run_directories,
         }
 
 
@@ -68,15 +79,23 @@ async def apply_retention(
     expired_keys_days: int | None = None,
     checkpoint_days: int | None = None,
     include_security_audit: bool = False,
+    run_dirs_days: int | None = None,
+    run_root: Path | None = None,
 ) -> RetentionReport:
-    """Count matching rows, and delete them only when ``apply`` is true."""
+    """Count matching rows and run directories, and delete them only when ``apply`` is true.
+
+    Run directories are deleted before terminal runs, while the snapshot
+    artifact that proves the export still exists.
+    """
     moment = now or datetime.now(UTC)
     if terminal_runs_days is not None and checkpoint_days is None:
         raise ValueError(
             "terminal run deletion requires --checkpoint-days so checkpoints, "
             "blobs, and writes are removed together"
         )
+    root = run_root or get_data_paths().run_dir
     async with session_scope(session_factory) as session:
+        run_dirs = await _exported_run_dirs(session, _cutoff(run_dirs_days, moment), root)
         report = RetentionReport(
             dry_run=not apply,
             run_events=await _count_events(session, _cutoff(run_events_days, moment)),
@@ -91,9 +110,12 @@ async def apply_retention(
                 session,
                 _cutoff(checkpoint_days, moment),
             ),
+            run_directories=len(run_dirs),
         )
         if not apply:
             return report
+        for directory in run_dirs:
+            await asyncio.to_thread(shutil.rmtree, directory)
         if run_events_days is not None:
             await _delete_events(session, _cutoff(run_events_days, moment))
         if checkpoint_days is not None:
@@ -109,6 +131,41 @@ async def apply_retention(
         if expired_keys_days is not None:
             await _delete_keys(session, _cutoff(expired_keys_days, moment))
         return report
+
+
+async def _exported_run_dirs(
+    session: AsyncSession,
+    cutoff: datetime | None,
+    root: Path,
+) -> list[Path]:
+    """Return run directories of old terminal runs whose evidence snapshot artifact exists."""
+    if cutoff is None:
+        return []
+    rows = await session.execute(
+        text(
+            f"""
+            SELECT run.id::text
+            FROM platform.runs AS run
+            WHERE run.status IN ({_TERMINAL_SQL})
+              AND run.finished_at IS NOT NULL
+              AND run.finished_at < :cutoff
+              AND EXISTS (
+                  SELECT 1 FROM platform.artifacts AS artifact
+                  WHERE artifact.run_id = run.id
+                    AND artifact.kind = 'evidence_snapshot'
+              )
+            ORDER BY run.id
+            """
+        ),
+        {"cutoff": cutoff},
+    )
+    base = root.resolve()
+    found = []
+    for (run_id,) in rows:
+        directory = base / str(uuid.UUID(run_id))
+        if directory.is_dir() and not directory.is_symlink() and directory.resolve().parent == base:
+            found.append(directory)
+    return found
 
 
 async def _count_events(session: AsyncSession, cutoff: datetime | None) -> int:

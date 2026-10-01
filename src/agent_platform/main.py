@@ -28,7 +28,10 @@ from agent_platform.process_lock import ApiProcessLock
 from agent_platform.services.accounts import AccountService
 from agent_platform.services.graph_registry import GraphRegistry
 from agent_platform.services.run_manager import RunManager
-from agent_platform.services.study_artifacts import study_artifact_sink
+from agent_platform.services.study_artifacts import (
+    close_study_store,
+    study_artifact_sink,
+)
 from agent_platform.services.tenant_store import TenantStore
 from agrihub.graph import build_study_graph
 from open_deep_research.configuration import Configuration, SearchAPI
@@ -202,6 +205,7 @@ def create_app(
                     subscriber_queue_size=(
                         active_settings.API_STREAM_SUBSCRIBER_QUEUE_SIZE
                     ),
+                    on_run_finished=close_study_store,
                 )
                 await manager.reconcile_orphaned_runs(reason="process_restart")
                 await manager.repair_terminal_events()

@@ -125,6 +125,23 @@ def run_root() -> Path:
     return configuration.run_root()
 
 
+def close_run(run_id: str, *, root: Path | None = None) -> bool:
+    """Close the process's cached store for a run, if one is open, without opening it.
+
+    The run manager calls this on every terminal status, so failed and
+    cancelled runs do not keep their DuckDB handle open.
+    """
+    if not _SAFE_RUN_ID.match(run_id):
+        return False
+    path = ((root or run_root()) / run_id / DATABASE_NAME).resolve()
+    with _open_lock:
+        store = _open_stores.get(path)
+    if store is None:
+        return False
+    store.close()
+    return True
+
+
 def evidence_id_for(item: EvidenceItem) -> str:
     """Return the content-derived id that deduplicates repeated facts."""
     key = "|".join((item.source_db, item.source_record, item.gene_id, item.subtype))

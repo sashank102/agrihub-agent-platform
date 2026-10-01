@@ -118,6 +118,7 @@ async def _run(service: AccountService, args: argparse.Namespace) -> dict[str, A
                 args.audit_days,
                 args.expired_keys_days,
                 args.checkpoint_days,
+                args.run_dirs_days,
             )
         ):
             raise ValueError("retain requires at least one retention window")
@@ -130,6 +131,7 @@ async def _run(service: AccountService, args: argparse.Namespace) -> dict[str, A
             expired_keys_days=args.expired_keys_days,
             checkpoint_days=args.checkpoint_days,
             include_security_audit=args.include_security_audit,
+            run_dirs_days=args.run_dirs_days,
         )
         return report.as_dict()
     if command == "update-global-agent":
@@ -203,7 +205,8 @@ def _parser() -> argparse.ArgumentParser:
         "retain",
         help=(
             "Count or delete old run events, terminal runs, audit rows, "
-            "expired keys, and checkpoint families. Dry-run unless --apply."
+            "expired keys, checkpoint families, and exported run directories. "
+            "Dry-run unless --apply."
         ),
     )
     retain.add_argument(
@@ -216,6 +219,11 @@ def _parser() -> argparse.ArgumentParser:
     retain.add_argument("--audit-days", type=int)
     retain.add_argument("--expired-keys-days", type=int)
     retain.add_argument("--checkpoint-days", type=int)
+    retain.add_argument(
+        "--run-dirs-days",
+        type=int,
+        help="Delete AGRIHUB_RUN_DIR/<run_id> of terminal runs whose evidence snapshot artifact exists.",
+    )
     retain.add_argument("--include-security-audit", action="store_true")
 
     update = commands.add_parser("update-global-agent")
