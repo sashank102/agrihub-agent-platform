@@ -25,7 +25,7 @@ const keys = JSON.parse(
 ) as Keys;
 
 async function signIn(page: Page, apiKey: string): Promise<void> {
-  await page.goto("/");
+  await page.goto("/chat");
   await page.getByLabel("Platform API key").fill(apiKey);
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(
@@ -34,7 +34,7 @@ async function signIn(page: Page, apiKey: string): Promise<void> {
 }
 
 test("requires a platform key before showing the chat", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/chat");
   await expect(page.getByLabel("Platform API key")).toBeVisible();
   await expect(
     page.getByPlaceholder("Enter a species, trait, and optional SNP list..."),
@@ -45,7 +45,7 @@ test("requires a platform key before showing the chat", async ({ page }) => {
 test("rejects invalid, revoked, expired, and deleted credentials", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/chat");
   await page
     .getByLabel("Platform API key")
     .fill("aghub_notarealkey0123456789abc");

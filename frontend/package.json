@@ -12,7 +12,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test:e2e": "playwright test",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e:study": "playwright test -c playwright.study.config.ts"
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.1.1",

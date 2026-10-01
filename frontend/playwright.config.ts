@@ -24,6 +24,7 @@ const apiEnv = {
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: ["study.spec.ts"],
   timeout: 60_000,
   fullyParallel: false,
   workers: 1,
@@ -31,6 +32,9 @@ export default defineConfig({
   use: {
     baseURL: "http://127.0.0.1:3000",
     trace: "retain-on-failure",
+    launchOptions: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
+      ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE }
+      : {},
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [
@@ -48,7 +52,8 @@ export default defineConfig({
       env: {
         ...process.env,
         NEXT_PUBLIC_API_URL: "http://127.0.0.1:8000",
-        NEXT_PUBLIC_ASSISTANT_ID: "agrihub",
+        NEXT_PUBLIC_ASSISTANT_ID: "agrihub_study",
+        NEXT_PUBLIC_CHAT_ASSISTANT_ID: "agrihub",
       },
       url: "http://127.0.0.1:3000",
       reuseExistingServer: false,
