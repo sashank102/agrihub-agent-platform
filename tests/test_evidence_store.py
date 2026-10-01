@@ -8,12 +8,14 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from agrihub_fixtures import FixtureBundle
 from langgraph.checkpoint.memory import InMemorySaver
 
 from agrihub.evidence_store import (
     DATABASE_NAME,
     EvidenceStore,
     UnknownEvidenceError,
+    close_run,
     evidence_id_for,
 )
 from agrihub.graph import build_study_graph
@@ -62,6 +64,19 @@ def test_store_lives_in_the_run_directory(store: EvidenceStore, run_dir: Path):
     assert EvidenceStore.for_run("run-a") is store
     with pytest.raises(ValueError):
         EvidenceStore("../escape")
+
+
+def test_close_run_releases_the_cached_handle_without_opening_one(store: EvidenceStore, run_dir: Path):
+    store.put_items([_item("g1")])
+    assert close_run("run-a") is True
+    with pytest.raises(RuntimeError, match="closed"):
+        store.count()
+    assert close_run("run-a") is False and close_run("never-opened") is False
+    assert not (run_dir / "never-opened").exists()
+    assert close_run("../escape") is False
+    reopened = EvidenceStore.for_run("run-a")
+    assert reopened is not store and reopened.count() == 1
+    reopened.close()
 
 
 def test_duplicate_evidence_collapses_to_one_id_and_alias(store: EvidenceStore):
@@ -282,7 +297,7 @@ def test_store_tools_run_off_the_event_loop(store: EvidenceStore):
     assert threads and "MainThread" not in threads
 
 
-def test_checkpoint_stays_flat_with_a_thousand_evidence_items():
+def test_checkpoint_stays_flat_with_a_thousand_evidence_items(fixture_env: FixtureBundle):
     study = {
         "mode": "snps",
         "species": "soybean",
