@@ -1,7 +1,12 @@
 "use client";
 
 import type { Thread } from "@langchain/langgraph-sdk";
-import { MotionConfig } from "framer-motion";
+import {
+  AnimatePresence,
+  LayoutGroup,
+  MotionConfig,
+  motion,
+} from "framer-motion";
 import { ArrowLeft, Network, Rows3 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -17,6 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { isUnauthorizedStatus, useApiKey } from "@/lib/api-key";
+import type { CandidateRow } from "@/lib/run-events";
 import { useRunStore, type TerminalStatus } from "@/lib/run-store";
 import {
   ApiError,
@@ -26,10 +32,12 @@ import {
 } from "@/lib/study-api";
 import { useStreamContext } from "@/providers/Stream";
 import { AgentLanes } from "./agent-lanes";
+import { CandidatesTable } from "./candidates-table";
 import { HarvestLane } from "./harvest-lane";
 import { LiveSummary } from "./live-summary";
 import { OrchestratorPanel } from "./orchestrator-panel";
 import { PhaseStepper } from "./phase-stepper";
+import { ResearchTrace } from "./research-trace";
 import { RunHeader, type StudyChips } from "./run-header";
 
 const DelegationGraph = dynamic(
@@ -78,6 +86,7 @@ export function StudyRunPage({ threadId }: { threadId: string }) {
   const [missing, setMissing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [view, setView] = useState<"lanes" | "graph">("lanes");
+  const [traceOpen, setTraceOpen] = useState(false);
 
   const streamRef = useRef(stream);
   const following = useRef<string | null>(null);
@@ -89,8 +98,16 @@ export function StudyRunPage({ threadId }: { threadId: string }) {
     state.threadId === threadId ? state.runId : null,
   );
   const terminal = useRunStore((state) => state.terminal);
+  const hasReport = useRunStore(
+    (state) => state.artifacts.report !== undefined,
+  );
   const hasLanes = useRunStore((state) => state.agentOrder.length > 0);
   const lastTs = useRunStore((state) => state.lastTs);
+  const fallbackRows = useRunStore(
+    (state) =>
+      (state.artifacts.candidates_table?.rows as CandidateRow[] | undefined) ??
+      null,
+  );
 
   useEffect(() => {
     streamRef.current = stream;
@@ -251,6 +268,9 @@ export function StudyRunPage({ threadId }: { threadId: string }) {
     terminal?.status ??
     latest?.status ??
     (stream.isLoading ? "running" : "pending");
+  const collapsed = hasReport || terminal?.status === "completed";
+  const report = stream.values?.report ?? null;
+
   const workspace = (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
@@ -282,6 +302,7 @@ export function StudyRunPage({ threadId }: { threadId: string }) {
       <div
         className="flex flex-col gap-5"
         data-testid="run-view"
+        data-collapsed={collapsed || undefined}
       >
         <RunHeader
           chips={studyChips(stream.values, thread)}
@@ -299,36 +320,68 @@ export function StudyRunPage({ threadId }: { threadId: string }) {
             This study has no runs yet.
           </p>
         )}
-        {wide ? (
-          <ResizablePanelGroup
-            orientation="horizontal"
-            className="items-start gap-0"
+        <LayoutGroup>
+          <AnimatePresence
+            mode="popLayout"
+            initial={false}
           >
-            <ResizablePanel
-              defaultSize="28%"
-              minSize="18%"
-              maxSize="45%"
-            >
-              <div className="pr-4">
-                <OrchestratorPanel />
-              </div>
-            </ResizablePanel>
-            <ResizableHandle withHandle />
-            <ResizablePanel>
-              <div className="pl-4">{workspace}</div>
-            </ResizablePanel>
-          </ResizablePanelGroup>
-        ) : (
-          <div className="flex flex-col gap-6">
-            <OrchestratorPanel />
-            {workspace}
-          </div>
-        )}
-        {terminal && !hasLanes && terminal.status !== "completed" && (
-          <p className="text-muted-foreground text-sm">
-            The study stopped before any specialist was dispatched.
-          </p>
-        )}
+            {collapsed ? (
+              <motion.div
+                key="report"
+                className="flex flex-col gap-6"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35 }}
+              >
+                <ResearchTrace
+                  open={traceOpen}
+                  onOpenChange={setTraceOpen}
+                />
+                <CandidatesTable
+                  report={report}
+                  fallbackRows={fallbackRows}
+                />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="live"
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.25 }}
+              >
+                {wide ? (
+                  <ResizablePanelGroup
+                    orientation="horizontal"
+                    className="items-start gap-0"
+                  >
+                    <ResizablePanel
+                      defaultSize="28%"
+                      minSize="18%"
+                      maxSize="45%"
+                    >
+                      <div className="pr-4">
+                        <OrchestratorPanel />
+                      </div>
+                    </ResizablePanel>
+                    <ResizableHandle withHandle />
+                    <ResizablePanel>
+                      <div className="pl-4">{workspace}</div>
+                    </ResizablePanel>
+                  </ResizablePanelGroup>
+                ) : (
+                  <div className="flex flex-col gap-6">
+                    <OrchestratorPanel />
+                    {workspace}
+                  </div>
+                )}
+                {terminal && !hasLanes && terminal.status !== "completed" && (
+                  <p className="text-muted-foreground mt-4 text-sm">
+                    The study stopped before any specialist was dispatched.
+                  </p>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </LayoutGroup>
       </div>
     </MotionConfig>
   );
