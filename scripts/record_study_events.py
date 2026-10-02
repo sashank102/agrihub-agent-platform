@@ -2,27 +2,32 @@
 
 Runs the poster study (S5_2899164, S18_9263941, S18_51620945; plant height;
 soybean Wm82.a2.v1) in-process on the built soybean bundle, without
-PostgreSQL or language models, and writes one custom-stream event per line to
+PostgreSQL, and writes one custom-stream event per line to
 ``frontend/src/lib/__fixtures__/poster-run.ndjson``. The frontend reducer tests
 replay that file, and ``tests/test_event_fixture.py`` fails when the events
 the graph emits drift from it.
+
+With ``--fake-llm`` every agent uses the scripted ``agrihub-fake:poster``
+model and the run executes one task at a time (``max_concurrency=1``), so
+evidence aliases, finding ids and event order are reproducible; the fixture
+is recorded this way. Without it the configured ``MODEL`` runs the agents.
 
 Run-specific values are normalized so re-recording only changes what the
 pipeline changed:
 
 - ``event_id`` becomes ``evt-0001``, ``evt-0002``, ... in emission order;
-- ``ts`` is rebased to ``2026-01-01T00:00:00+00:00`` keeping the real offsets
-  between events, so durations and ordering stay realistic;
-- specialist agent ids ``call_<hex>`` become ``call_<specialist>``, including
-  inside tool-call ids and dispatch payloads;
+- specialist agent ids become ``call_<specialist>`` (``call_<specialist>_r2``
+  in a follow-up round), including inside tool-call ids;
 - checkpoint namespace parts ``<node>:<uuid>`` become ``<node>:<n>``, numbered
-  by first appearance.
-
-``duration_ms`` and the timing offsets are left as measured.
+  by first appearance;
+- ``ts`` is rebased to ``2026-01-01T00:00:00+00:00``. Real runs keep the
+  measured offsets and ``duration_ms``. ``--fake-llm`` runs interleave the
+  specialist lanes of each round round-robin (as a parallel run would show
+  them), place events 100 ms apart, and derive ``duration_ms`` from that clock.
 
 Usage::
 
-    uv run python scripts/record_study_events.py [--output PATH]
+    uv run python scripts/record_study_events.py [--fake-llm] [--output PATH]
 """
 
 import argparse
@@ -33,7 +38,7 @@ import re
 import sys
 import tempfile
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -50,12 +55,13 @@ POSTER_STUDY: dict[str, Any] = {
         {"raw": "S18_51620945", "chrom": "18", "pos": 51_620_945},
     ],
 }
+FAKE_MODEL = "agrihub-fake:poster"
 BASE_TS = datetime(2026, 1, 1, tzinfo=UTC)
-_AGENT_ID = re.compile(r"call_[0-9a-f]{24}")
+TICK = timedelta(milliseconds=100)
 _NAMESPACE = re.compile(r"^(?P<node>[^:]+):[0-9a-f-]{36}$")
 
 
-async def record_events(study: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+async def record_events(study: dict[str, Any] | None = None, *, fake_llm: bool = False) -> list[dict[str, Any]]:
     """Run a study in-process and return its custom-stream events as emitted."""
     from langgraph.checkpoint.memory import InMemorySaver
 
@@ -63,7 +69,11 @@ async def record_events(study: dict[str, Any] | None = None) -> list[dict[str, A
 
     run_id = uuid.uuid4().hex
     graph = build_study_graph(checkpointer=InMemorySaver())
-    config = {"configurable": {"thread_id": run_id, "run_id": run_id}}
+    configurable: dict[str, Any] = {"thread_id": run_id, "run_id": run_id}
+    config: dict[str, Any] = {"configurable": configurable}
+    if fake_llm:
+        configurable.update(orchestrator_model=FAKE_MODEL, specialist_model=FAKE_MODEL)
+        config["max_concurrency"] = 1
     return [
         part["data"]
         async for part in graph.astream(
@@ -76,24 +86,65 @@ async def record_events(study: dict[str, Any] | None = None) -> list[dict[str, A
     ]
 
 
-def normalize(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def normalize(events: list[dict[str, Any]], *, fixed_clock: bool = False) -> list[dict[str, Any]]:
     """Replace run-specific ids and timestamps as described in the module docstring."""
     agents: dict[str, str] = {}
     for event in events:
         if event["type"] == "orchestrator.decision":
+            round_number = int(event["data"].get("round") or 1)
             for item in event["data"].get("dispatched") or []:
-                agents.setdefault(str(item["agent_id"]), f"call_{item['specialist']}")
+                suffix = "" if round_number == 1 else f"_r{round_number}"
+                agents.setdefault(str(item["agent_id"]), f"call_{item['specialist']}{suffix}")
+    pattern = re.compile("|".join(re.escape(agent) for agent in sorted(agents, key=len, reverse=True))) if agents else None
+    ordered = interleave_lanes(events) if fixed_clock else list(events)
     namespaces: dict[str, str] = {}
-    first = datetime.fromisoformat(events[0]["ts"]) if events else BASE_TS
+    first = datetime.fromisoformat(ordered[0]["ts"]) if ordered else BASE_TS
     normalized = []
-    for index, event in enumerate(events, start=1):
-        text = _AGENT_ID.sub(lambda match: agents.get(match.group(0), match.group(0)), json.dumps(event))
+    for index, event in enumerate(ordered, start=1):
+        text = json.dumps(event)
+        if pattern is not None:
+            text = pattern.sub(lambda match: agents[match.group(0)], text)
         item = json.loads(text)
         item["event_id"] = f"evt-{index:04d}"
-        item["ts"] = (BASE_TS + (datetime.fromisoformat(event["ts"]) - first)).isoformat()
+        if fixed_clock:
+            item["ts"] = (BASE_TS + TICK * (index - 1)).isoformat()
+        else:
+            item["ts"] = (BASE_TS + (datetime.fromisoformat(event["ts"]) - first)).isoformat()
         item["ns"] = [_namespace(part, namespaces) for part in item.get("ns") or []]
         normalized.append(item)
+    if fixed_clock:
+        started = {event["agent"]["id"]: event["ts"] for event in normalized if event["type"] == "agent.started"}
+        for event in normalized:
+            if event["type"] == "agent.completed" and event["agent"]["id"] in started:
+                elapsed = datetime.fromisoformat(event["ts"]) - datetime.fromisoformat(started[event["agent"]["id"]])
+                event["data"]["duration_ms"] = int(elapsed.total_seconds() * 1000)
     return normalized
+
+
+def interleave_lanes(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Merge each run of consecutive specialist events round-robin by lane, keeping each lane's order."""
+    result: list[dict[str, Any]] = []
+    block: list[dict[str, Any]] = []
+
+    def flush() -> None:
+        lanes: dict[str, list[dict[str, Any]]] = {}
+        for event in block:
+            lanes.setdefault(event["agent"]["id"], []).append(event)
+        queues = list(lanes.values())
+        while any(queues):
+            for queue in queues:
+                if queue:
+                    result.append(queue.pop(0))
+        block.clear()
+
+    for event in events:
+        if event["agent"]["kind"] == "specialist":
+            block.append(event)
+            continue
+        flush()
+        result.append(event)
+    flush()
+    return result
 
 
 def write_ndjson(events: list[dict[str, Any]], path: Path) -> None:
@@ -122,10 +173,11 @@ def main() -> int:
     """Record the poster study and write the fixture."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--fake-llm", action="store_true", help=f"use the scripted {FAKE_MODEL} model and run serially")
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="agrihub-record-") as run_dir:
         os.environ["AGRIHUB_RUN_DIR"] = run_dir
-        events = normalize(asyncio.run(record_events()))
+        events = normalize(asyncio.run(record_events(fake_llm=args.fake_llm)), fixed_clock=args.fake_llm)
     write_ndjson(events, args.output)
     sys.stdout.write(f"wrote {len(events)} events to {args.output}\n")
     return 0

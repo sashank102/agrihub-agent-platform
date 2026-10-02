@@ -64,14 +64,12 @@ export function CandidatesTable({
         >
           <Info className="mt-0.5 size-4 shrink-0" />
           <span>
-            <span className="font-medium">
-              Positional evidence only — functional evidence pending
-              specialists.
-            </span>{" "}
-            Every candidate is tier T4: the ranking rests on distance to the SNP
-            and annotation relevance, because the specialist agents are
-            deterministic stubs in this build. Treat the order within a locus as
-            a shortlist, not a call.
+            <span className="font-medium">Positional evidence only.</span> Every
+            candidate is tier T4: the rubric found no curated or
+            ortholog-transferred trait evidence, so the ranking rests on
+            distance to the SNP and annotation relevance. Specialist findings
+            are listed in the trace but do not change scores. Treat the order
+            within a locus as a shortlist, not a call.
           </span>
         </p>
       )}

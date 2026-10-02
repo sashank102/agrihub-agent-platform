@@ -76,6 +76,8 @@ export type Dispatch = {
   specialist: SpecialistName | string;
   focus_gene_ids: string[];
   focus_loci: string[];
+  instructions: string;
+  rationale: string;
 };
 
 export type Rejection = {
@@ -85,6 +87,7 @@ export type Rejection = {
 
 export type OrchestratorDecisionData = {
   kind: DecisionKind;
+  round: number;
   rationale: string;
   dispatched: Dispatch[];
   rejected: Rejection[];
@@ -94,6 +97,8 @@ export type AgentFocus = {
   gene_ids?: string[];
   loci?: string[];
   instructions?: string;
+  rationale?: string;
+  round?: number;
   [key: string]: unknown;
 };
 

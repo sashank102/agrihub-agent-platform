@@ -10,6 +10,7 @@ import {
   initialRunState,
   selectLanes,
   terminateRun,
+  tokenTotals,
   useRunStore,
   type RunState,
   type RunStore,
@@ -103,8 +104,20 @@ describe("the golden poster run", () => {
     const lanes = selectLanes(state);
     expect(lanes).toHaveLength(5);
     expect(lanes.every((lane) => lane.status === "completed")).toBe(true);
-    expect(new Set(lanes.map((lane) => lane.specialist)).size).toBe(5);
+    expect(new Set(lanes.map((lane) => lane.specialist)).size).toBe(4);
     expect(lanes.every((lane) => lane.dispatchEventId !== null)).toBe(true);
+    expect(state.decisions.map((decision) => decision.kind)).toEqual([
+      "dispatch",
+      "followup",
+      "finish",
+    ]);
+    expect(state.decisions.map((decision) => decision.round)).toEqual([
+      1, 2, 2,
+    ]);
+    expect(state.orchestratorUsage?.model).toBe("agrihub-fake:poster");
+    expect(tokenTotals(state).input).toBeGreaterThan(
+      state.orchestratorUsage?.inputTokens ?? 0,
+    );
     expect(harvestProgress(state).ratio).toBe(1);
     expect(
       Object.values(state.harvest).every((item) => item.done === item.total),
@@ -132,6 +145,27 @@ describe("the golden poster run", () => {
     expect(state.artifacts.report).toBeDefined();
     expect(Object.keys(state.seen)).toHaveLength(golden.length);
     expect(digest(state)).toMatchSnapshot();
+  });
+
+  it("dispatches each specialist on its own genes with a rationale", () => {
+    const [first, followup] = live(golden).decisions;
+    expect(first.dispatched.length).toBeGreaterThanOrEqual(3);
+    const focus = first.dispatched.map((item) =>
+      [...item.focus_gene_ids].sort().join(","),
+    );
+    expect(new Set(focus).size).toBe(focus.length);
+    expect(
+      first.dispatched.every(
+        (item) => item.rationale.length > 0 && item.instructions.length > 0,
+      ),
+    ).toBe(true);
+    expect(first.rejected).toContainEqual(
+      expect.objectContaining({ specialist: "expression_network" }),
+    );
+    expect(followup.dispatched).toHaveLength(1);
+    expect(followup.dispatched[0].agent_id).toBe("call_literature_r2");
+    const state = live(golden);
+    expect(state.agents.call_literature_r2.focus?.round).toBe(2);
   });
 
   it("ignores duplicates and converges for out-of-order delivery", () => {

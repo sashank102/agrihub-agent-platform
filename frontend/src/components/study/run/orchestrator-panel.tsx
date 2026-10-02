@@ -179,6 +179,9 @@ function DispatchChip({
           <p className="text-muted-foreground mb-2">{lane.label}</p>
         )}
         {focus?.instructions && <p className="mb-2">{focus.instructions}</p>}
+        {focus?.rationale && (
+          <p className="text-muted-foreground mb-2">Why: {focus.rationale}</p>
+        )}
         {focus?.gene_ids && focus.gene_ids.length > 0 && (
           <p className="font-mono break-words">
             {focus.gene_ids.slice(0, 12).join(", ")}
@@ -232,9 +235,20 @@ function DecisionItem({ decision }: { decision: DecisionState }) {
     >
       <div className="flex items-center gap-2">
         <GitBranch className="text-muted-foreground size-4" />
-        <Badge variant={decision.kind === "dispatch" ? "info" : "outline"}>
-          {decision.kind}
+        <Badge
+          variant={
+            decision.kind === "dispatch" || decision.kind === "followup"
+              ? "info"
+              : "outline"
+          }
+        >
+          {decision.kind === "followup" ? "follow-up" : decision.kind}
         </Badge>
+        {decision.round > 1 && (
+          <span className="text-muted-foreground text-xs">
+            round {decision.round}
+          </span>
+        )}
         <time
           className="text-muted-foreground ml-auto text-xs tabular-nums"
           dateTime={decision.ts}
@@ -244,15 +258,32 @@ function DecisionItem({ decision }: { decision: DecisionState }) {
       </div>
       <p className="text-sm">{decision.rationale}</p>
       {decision.dispatched.length > 0 && (
-        <div className="flex flex-wrap gap-1">
+        <ul className="flex flex-col gap-1.5">
           {decision.dispatched.map((item) => (
-            <DispatchChip
+            <li
               key={item.agent_id}
-              agentId={item.agent_id}
-              lane={agents[item.agent_id]}
-            />
+              className="flex flex-col items-start gap-0.5"
+            >
+              <span className="flex items-center gap-1.5">
+                <DispatchChip
+                  agentId={item.agent_id}
+                  lane={agents[item.agent_id]}
+                />
+                <span className="text-muted-foreground text-xs tabular-nums">
+                  {item.focus_gene_ids.length} genes
+                  {item.focus_loci.length > 0
+                    ? `, ${item.focus_loci.join(" ")}`
+                    : ""}
+                </span>
+              </span>
+              {item.rationale && (
+                <p className="text-muted-foreground text-xs">
+                  {item.rationale}
+                </p>
+              )}
+            </li>
           ))}
-        </div>
+        </ul>
       )}
       {decision.rejected.length > 0 && (
         <ul className="text-muted-foreground text-xs">

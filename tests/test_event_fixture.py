@@ -1,8 +1,9 @@
 """The poster study's events must keep the shape pinned by the frontend's golden fixture.
 
-When this fails on purpose, re-record with
-``uv run python scripts/record_study_events.py`` and update the frontend types
-and reducer tests in the same change.
+The fixture is recorded with the scripted fake LLM. When this fails on
+purpose, re-record with
+``uv run python scripts/record_study_events.py --fake-llm`` and update the
+frontend types and reducer tests in the same change.
 """
 
 import asyncio
@@ -21,6 +22,7 @@ FIXTURE = PROJECT_ROOT / "frontend" / "src" / "lib" / "__fixtures__" / "poster-r
 BUNDLE = get_data_paths().data_dir / "soybean" / "bundle.duckdb"
 
 pytestmark = [
+    pytest.mark.usefixtures("fake_llm"),
     pytest.mark.bundle,
     pytest.mark.skipif(not BUNDLE.exists(), reason=f"no soybean bundle at {BUNDLE}"),
 ]
@@ -60,10 +62,14 @@ def run_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     close_bundles()
 
 
+def _record(recorder: Any) -> list[dict[str, Any]]:
+    return recorder.normalize(asyncio.run(recorder.record_events(fake_llm=True)), fixed_clock=True)
+
+
 def test_poster_events_match_the_golden_fixture(run_env: None):
     recorder = _recorder()
     golden = recorder.read_ndjson(FIXTURE)
-    current = recorder.normalize(asyncio.run(recorder.record_events()))
+    current = _record(recorder)
 
     assert all(event["schema"] == events.SCHEMA for event in golden)
     assert {event["type"] for event in current} == {event["type"] for event in golden}
@@ -72,3 +78,16 @@ def test_poster_events_match_the_golden_fixture(run_env: None):
         assert actual[part] == expected[part], part
     assert sorted(event["type"] for event in current) == sorted(event["type"] for event in golden)
     assert [event["event_id"] for event in golden] == [f"evt-{index:04d}" for index in range(1, len(golden) + 1)]
+
+
+def test_fake_llm_recordings_are_identical_after_normalization(run_env: None):
+    recorder = _recorder()
+    first, second = _record(recorder), _record(recorder)
+    assert first == second
+    decisions = [event["data"] for event in first if event["type"] == "orchestrator.decision"]
+    assert [decision["kind"] for decision in decisions] == ["dispatch", "followup", "finish"]
+    dispatched = decisions[0]["dispatched"]
+    assert len(dispatched) >= 3
+    assert len({tuple(sorted(item["focus_gene_ids"])) for item in dispatched}) == len(dispatched)
+    assert all(item["rationale"] and item["instructions"] for item in dispatched)
+    assert first == recorder.read_ndjson(FIXTURE)

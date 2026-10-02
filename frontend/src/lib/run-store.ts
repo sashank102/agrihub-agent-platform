@@ -98,6 +98,13 @@ export type ArtifactState = {
   eventId: string;
 };
 
+export type OrchestratorUsage = {
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  ts: string;
+};
+
 export type RunState = {
   threadId: string | null;
   runId: string | null;
@@ -105,6 +112,7 @@ export type RunState = {
   phase: Phase | null;
   plan: (OrchestratorPlanData & { ts: string }) | null;
   decisions: DecisionState[];
+  orchestratorUsage: OrchestratorUsage | null;
   agents: Record<string, AgentState>;
   agentOrder: string[];
   tools: Record<string, ToolState>;
@@ -150,6 +158,7 @@ export function initialRunState(
     phase: null,
     plan: null,
     decisions: [],
+    orchestratorUsage: null,
     agents: {},
     agentOrder: [],
     tools: {},
@@ -504,6 +513,23 @@ function applyToDraft(draft: Draft<RunState>, event: RunEvent): void {
     case "orchestrator.decision":
       applyDecision(draft, event);
       return;
+    case "agent.usage":
+      if (event.agent.kind === "orchestrator") {
+        const previous = draft.orchestratorUsage;
+        if (!previous || compareTs(event.ts, previous.ts) >= 0) {
+          draft.orchestratorUsage = {
+            model: event.data.model,
+            inputTokens: event.data.input_tokens,
+            outputTokens: event.data.output_tokens,
+            ts: event.ts,
+          };
+        }
+        return;
+      }
+      if (LANE_KINDS.has(event.agent.kind)) {
+        applyAgentEvent(draft, event);
+      }
+      return;
     case "source.discovered":
       draft.sources[event.data.source_id] = event.data;
       return;
@@ -630,12 +656,15 @@ export function harvestProgress(
   return { done, total, ratio };
 }
 
-export function tokenTotals(state: Pick<RunState, "agents">): {
+export function tokenTotals(
+  state: Pick<RunState, "agents"> &
+    Partial<Pick<RunState, "orchestratorUsage">>,
+): {
   input: number;
   output: number;
 } {
-  let input = 0;
-  let output = 0;
+  let input = state.orchestratorUsage?.inputTokens ?? 0;
+  let output = state.orchestratorUsage?.outputTokens ?? 0;
   for (const lane of Object.values(state.agents)) {
     input += lane.inputTokens;
     output += lane.outputTokens;

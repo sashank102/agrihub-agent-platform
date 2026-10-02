@@ -51,7 +51,8 @@ export function RunHeader({
   onCancel: () => void;
 }) {
   const agents = useRunStore((state) => state.agents);
-  const tokens = tokenTotals({ agents });
+  const orchestratorUsage = useRunStore((state) => state.orchestratorUsage);
+  const tokens = tokenTotals({ agents, orchestratorUsage });
   const stub = Object.values(agents).some((lane) => lane.model === "stub");
   return (
     <header className="flex flex-wrap items-start gap-4">
