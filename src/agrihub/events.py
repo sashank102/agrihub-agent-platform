@@ -26,12 +26,15 @@ Event types and their ``data``:
   ``{loc, message}``.
 - ``orchestrator.plan``: ``summary`` and ``steps[]``.
 - ``orchestrator.decision``: ``kind`` (dispatch, reflect, followup, finish),
-  ``rationale`` (a stated summary, never raw reasoning), ``dispatched[]`` of
-  ``{agent_id, specialist, focus_gene_ids, focus_loci}`` and ``rejected[]`` of
-  ``{specialist, reason}``.
-- ``agent.started``: ``focus`` and ``max_steps``. ``agent.id`` is the lane key.
+  ``round`` (1 for the first dispatch, 2 for a follow-up), ``rationale`` (a
+  stated summary, never raw reasoning), ``dispatched[]`` of ``{agent_id,
+  specialist, focus_gene_ids, focus_loci, instructions, rationale}`` and
+  ``rejected[]`` of ``{specialist, reason}``.
+- ``agent.started``: ``focus`` (``gene_ids``, ``loci``, ``instructions``,
+  ``rationale``, ``round``) and ``max_steps``. ``agent.id`` is the lane key.
 - ``agent.step``: ``step``, ``max_steps`` and ``title``.
-- ``agent.usage``: ``model``, ``input_tokens`` and ``output_tokens``.
+- ``agent.usage``: ``model``, ``input_tokens`` and ``output_tokens``, cumulative
+  for the agent; the orchestrator reports its own usage too.
 - ``agent.completed``: ``status`` (completed, failed), ``summary``,
   ``findings`` and ``duration_ms``.
 - ``tool.started``: ``tool_call_id``, ``name`` and a truncated
@@ -190,6 +193,7 @@ def decision(
     kind: DecisionKind,
     rationale: str,
     *,
+    round: int = 1,
     dispatched: list[dict[str, Any]] | None = None,
     rejected: list[dict[str, Any]] | None = None,
 ) -> RunEvent:
@@ -198,7 +202,8 @@ def decision(
         "orchestrator.decision",
         {
             "kind": kind,
-            "rationale": rationale,
+            "round": round,
+            "rationale": _summary(rationale),
             "dispatched": list(dispatched or []),
             "rejected": list(rejected or []),
         },

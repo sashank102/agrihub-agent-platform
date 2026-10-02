@@ -295,6 +295,8 @@ class StudyState(TypedDict, total=False):
     dispatches: list[dict[str, Any]]
     findings: Annotated[list[str], operator.add]
     specialist_results: Annotated[list[dict[str, Any]], operator.add]
+    orchestrator_usage: Annotated[list[dict[str, Any]], operator.add]
+    delta_brief: dict[str, Any]
     round: int
     ranking: list[dict[str, Any]]
     scoring: dict[str, Any]
@@ -313,3 +315,5 @@ class SpecialistTask(TypedDict):
     instructions: str
     rationale: str
     study: dict[str, Any]
+    context: dict[str, Any]
+    """Per focus gene and locus: position, provisional score and reasons from the triage."""
