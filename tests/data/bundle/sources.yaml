@@ -231,3 +231,24 @@ sources:
     files:
       - {url: "{base}/lis_expression_libault/glyma.Wm82.gnm2.ann1.expr.Wm82.Libault_Farmer_2010.values.tsv.gz", path: glyma.Wm82.gnm2.ann1.expr.Wm82.Libault_Farmer_2010.values.tsv.gz}
       - {url: "{base}/lis_expression_libault/glyma.Wm82.gnm2.ann1.expr.Wm82.Libault_Farmer_2010.samples.tsv.gz", path: glyma.Wm82.gnm2.ann1.expr.Wm82.Libault_Farmer_2010.samples.tsv.gz}
+  - id: string_soybean
+    name: STRING fixture
+    tier: extended
+    version: STRING v12.5
+    license: CC-BY-4.0
+    assemblies: [Wm82.a2.v1]
+    parser: string
+    files:
+      - {url: "{base}/string_soybean/3847.protein.links.detailed.v12.5.txt.gz", path: 3847.protein.links.detailed.v12.5.txt.gz}
+      - {url: "{base}/string_soybean/3847.protein.aliases.v12.5.txt.gz", path: 3847.protein.aliases.v12.5.txt.gz}
+      - {url: "{base}/string_soybean/3847.protein.info.v12.5.txt.gz", path: 3847.protein.info.v12.5.txt.gz}
+  - id: atted_soybean
+    name: ATTED-II fixture
+    tier: extended
+    version: ATTED-II Gma-u.vtest
+    license: Free download
+    assemblies: [Wm82.a2.v1, Wm82.a4.v1]
+    parser: atted
+    files:
+      - {url: "{base}/atted_soybean/Gma-u.vtest.G6-S6.combat_pca.subagging.z.d.zip", path: Gma-u.vtest.G6-S6.combat_pca.subagging.z.d.zip}
+      - {url: "{base}/atted_soybean/Gma-u.c5-0_gene_xref.tsv.zip", path: Gma-u.c5-0_gene_xref.tsv.zip}

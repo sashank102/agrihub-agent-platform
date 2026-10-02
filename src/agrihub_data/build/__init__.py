@@ -35,6 +35,7 @@ from agrihub_data.build.lis_genome import (
     build_lis_pangenes,
 )
 from agrihub_data.build.ncbi_gene import build_ncbi_gene
+from agrihub_data.build.networks import build_atted, build_string
 from agrihub_data.build.ontology import build_ontology
 from agrihub_data.build.orthology import build_ensembl_compara, build_plaza_orthology
 from agrihub_data.build.tair import build_tair
@@ -76,6 +77,8 @@ PARSERS: tuple[Parser, ...] = (
     Parser("tair", build_tair),
     Parser("ncbi_gene", build_ncbi_gene, after=("lis_annotation",)),
     Parser("lis_expression", build_lis_expression, after=("lis_annotation", "lis_pangenes")),
+    Parser("string", build_string, after=("lis_annotation",)),
+    Parser("atted", build_atted, after=("lis_annotation", "lis_pangenes")),
 )
 
 

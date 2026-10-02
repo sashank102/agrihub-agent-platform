@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from agrihub.tools.bundle_tools import _bundle, _clip, _respond, _run
 from agrihub_data.availability import domain_status
 from agrihub_data.bundle import Bundle
-from agrihub_data.query import expression, traits
+from agrihub_data.query import expression, network, traits
 
 
 class DatasetTissues(BaseModel):
@@ -155,7 +155,152 @@ async def tissue_specificity(
     return await _run(work)
 
 
+def _seeds(bundle: Bundle, trait: str | None, seeds: list[str] | None) -> tuple[str, list[network.Seed]]:
+    if seeds:
+        return "custom", [network.Seed(gene_id=gene, reason="given") for gene in seeds]
+    if not trait:
+        return "any", []
+    profile = traits.map_trait(trait, bundle.species, bundle)
+    return profile.key, network.trait_seeds(bundle, profile)
+
+
+def _neighbors(
+    config: RunnableConfig,
+    tool_name: str,
+    species: str,
+    gene_ids: list[str],
+    graph: network.Network,
+    trait: str | None,
+    min_score: float | None,
+    limit: int,
+) -> tuple[str, dict[str, Any]]:
+    bundle = _bundle(species)
+    trait_key, seeds = _seeds(bundle, trait, None)
+    seed_ids = {seed.gene_id for seed in seeds}
+    rows = network.network_neighbors(bundle, gene_ids, graph, min_score, limit, seed_ids, trait_key if trait else None)
+    covered = {row.gene_id for row in rows}
+    missing = [gene for gene in gene_ids if gene not in covered]
+    threshold = network.DEFAULT_MIN_SCORE[graph] if min_score is None else min_score
+    unit = "z" if graph == "atted" else "score"
+    return _respond(
+        config,
+        tool_name,
+        f"{tool_name} {graph} ({unit} >= {threshold:g}): {len(rows)} neighbours of {len(covered)} genes"
+        + (f"; {sum(1 for row in rows if row.neighbor_is_seed)} are {trait_key} seed genes" if trait else ""),
+        rows,
+        lambda row: (
+            f"{row.gene_id} -> {row.neighbor_id} {unit}={row.score:g}"
+            + (f" rank={row.rank}" if row.rank else "")
+            + (" SEED" if row.neighbor_is_seed else "")
+            + (f" [{','.join(name for name, value in (row.channels or {}).items() if value)}]" if row.channels else "")
+            + f" | {_clip(row.neighbor_defline, 60)}"
+        ),
+        evidence=True,
+        notes=[
+            *([f"no {graph} neighbours above the threshold: {', '.join(missing)}"] if missing else []),
+            *_gap(bundle, "coexpression" if graph == "atted" else "network"),
+        ],
+    )
+
+
+@tool(response_format="content_and_artifact", parse_docstring=True)
+async def network_neighbors(
+    gene_ids: list[str],
+    config: RunnableConfig,
+    trait: str | None = None,
+    min_score: float | None = None,
+    limit: int = 10,
+    species: str = "soybean",
+) -> tuple[str, dict[str, Any]]:
+    """Return each gene's strongest STRING neighbours (no text mining; score 0-1, default >= 0.7), flagging trait seed genes.
+
+    Args:
+        gene_ids: Canonical-assembly gene ids.
+        trait: Trait text; neighbours that are curated trait genes or have a trait-matched Arabidopsis ortholog are marked SEED.
+        min_score: Minimum combined score; 0.4 medium, 0.7 high, 0.9 highest confidence.
+        limit: Neighbours per gene, at most 25.
+        species: Registered species, e.g. soybean.
+    """
+    return await _run(lambda: _neighbors(config, "network_neighbors", species, gene_ids, "string", trait, min_score, min(limit, 25)))
+
+
+@tool(response_format="content_and_artifact", parse_docstring=True)
+async def coexpression_neighbors(
+    gene_ids: list[str],
+    config: RunnableConfig,
+    trait: str | None = None,
+    min_z: float | None = None,
+    limit: int = 10,
+    species: str = "soybean",
+) -> tuple[str, dict[str, Any]]:
+    """Return each gene's top ATTED-II co-expression partners (z-score, default >= 3), flagging trait seed genes.
+
+    Args:
+        gene_ids: Canonical-assembly gene ids.
+        trait: Trait text; partners that are trait seed genes are marked SEED.
+        min_z: Minimum co-expression z-score.
+        limit: Partners per gene, at most 25.
+        species: Registered species, e.g. soybean.
+    """
+    return await _run(lambda: _neighbors(config, "coexpression_neighbors", species, gene_ids, "atted", trait, min_z, min(limit, 25)))
+
+
+@tool(response_format="content_and_artifact", parse_docstring=True)
+async def seed_propagation(
+    gene_ids: list[str],
+    config: RunnableConfig,
+    trait: str | None = None,
+    seeds: list[str] | None = None,
+    network_name: network.Network = "string",
+    species: str = "soybean",
+) -> tuple[str, dict[str, Any]]:
+    """Rank candidates by random-walk-with-restart proximity to trait seed genes, with an empirical p from 1000 degree-matched random seed sets.
+
+    Seeds default to the trait's curated genes plus genes whose Arabidopsis
+    ortholog has a trait-matching phenotype or experimental GO; a candidate
+    that is a seed is scored without itself.
+
+    Args:
+        gene_ids: Candidate gene ids (canonical assembly).
+        trait: Trait text that picks the seeds; required unless seeds are given.
+        seeds: Explicit seed gene ids instead of the trait seeds.
+        network_name: string (protein associations) or atted (co-expression).
+        species: Registered species, e.g. soybean.
+    """
+
+    def work() -> tuple[str, dict[str, Any]]:
+        bundle = _bundle(species)
+        trait_key, chosen = _seeds(bundle, trait, seeds)
+        if not chosen:
+            raise ValueError("give a trait with seed genes or explicit seeds")
+        rows = network.seed_propagation(bundle, gene_ids, [seed.gene_id for seed in chosen], network_name, trait_key=trait_key)
+        absent = [row.gene_id for row in rows if not row.in_network]
+        first = next(iter(rows), None)
+        return _respond(
+            config,
+            "seed_propagation",
+            f"seed_propagation {network_name} from {len(chosen)} {trait_key} seeds"
+            + (f" ({first.n_seeds_in_network} in the network)" if first else "")
+            + f": {len(rows) - len(absent)} of {len(rows)} candidates scored",
+            [row for row in rows if row.in_network],
+            lambda row: (
+                f"{row.gene_id} rank={row.rank or '-'} p={row.empirical_p if row.empirical_p is not None else 'n/a'} degree={row.degree}"
+                + (" (is a seed; scored without itself)" if row.is_seed else "")
+                + (f" nearest seeds: {', '.join(f'{seed.seed} {seed.share:.0%}' for seed in row.top_seeds)}" if row.top_seeds else "")
+            ),
+            evidence=True,
+            notes=[
+                f"seeds: {', '.join(f'{seed.gene_id} ({seed.reason})' for seed in chosen[:6])}" + (f" and {len(chosen) - 6} more" if len(chosen) > 6 else ""),
+                *([f"not in the {network_name} network: {', '.join(absent)}"] if absent else []),
+                *_gap(bundle, "coexpression" if network_name == "atted" else "network"),
+            ],
+        )
+
+    return await _run(work)
+
+
 EXPRESSION_TOOLS: tuple[BaseTool, ...] = (trait_relevant_tissues, expression_profile, tissue_specificity)
-EXTENDED_TOOLS: tuple[BaseTool, ...] = (*EXPRESSION_TOOLS,)
+NETWORK_TOOLS: tuple[BaseTool, ...] = (network_neighbors, coexpression_neighbors, seed_propagation)
+EXTENDED_TOOLS: tuple[BaseTool, ...] = (*EXPRESSION_TOOLS, *NETWORK_TOOLS)
 for _tool in EXTENDED_TOOLS:
     _tool.handle_tool_error = True

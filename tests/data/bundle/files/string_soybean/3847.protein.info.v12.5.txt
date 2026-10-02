@@ -1,0 +1,7 @@
+#string_protein_id	preferred_name	protein_size	annotation
+3847.P1	P1	300	fixture protein.
+3847.P2	P2	300	fixture protein.
+3847.P3	P3	300	fixture protein.
+3847.P4	P4	300	fixture protein.
+3847.P5	P5	300	fixture protein.
+3847.P6	P6	300	fixture protein.

@@ -3,13 +3,14 @@
 import asyncio
 from typing import Any
 
+import numpy as np
 import pytest
 from agrihub_fixtures import FixtureBundle
 
 from agrihub.evidence_store import evidence_id_for
 from agrihub.tools import extended_tools
 from agrihub_data.bundle import open_bundle
-from agrihub_data.query import expression
+from agrihub_data.query import expression, network
 from agrihub_data.query.traits import map_trait
 
 
@@ -88,6 +89,72 @@ def test_expression_tools_store_evidence_and_render_aliases(bundle):
     assert len(artifact["evidence_ids"]) == 2 and content.splitlines()[2].startswith("E")
     content, artifact = _tool(extended_tools.tissue_specificity, {"gene_ids": ["Glyma.05G032200"], "tissues": ["seed"]})
     assert "tau=1.0 top=seed" in content and "TRAIT-TISSUE-TOP" in content and len(artifact["aliases"]) == 1
+
+
+def test_string_drops_text_mining_and_atted_keeps_top_partners(heavy_bundle: FixtureBundle):
+    stats = heavy_bundle.build_report.stats
+    assert stats["string_soybean"] == {"edges": 3, "genes_mapped": 5, "proteins_mapped": 5}
+    assert stats["atted_soybean"] == {"edges": 5, "genes_mapped": 4, "unmapped_source_genes": 1, "xref_without_locus_tag": 1}
+    bundle = open_bundle("soybean", heavy_bundle.data_dir)
+    string = {(row["gene_a"], row["gene_b"]): row["score"] for row in bundle.rows("SELECT gene_a, gene_b, score FROM edges WHERE network = 'string'")}
+    assert string[("Glyma.18G092200", "Glyma.19G194300")] == pytest.approx(0.8, abs=1e-3)
+    assert string[("Glyma.05G032200", "Glyma.18G273600")] == pytest.approx(0.45, abs=1e-3)
+    assert ("Glyma.18G092200", "Glyma.18G092300") not in string
+    atted = bundle.rows("SELECT gene_a, gene_b, score, rank FROM edges WHERE network = 'atted' ORDER BY gene_a, rank")
+    assert [(row["gene_a"], row["gene_b"], row["rank"]) for row in atted if row["gene_a"] == "Glyma.18G092200"] == [
+        ("Glyma.18G092200", "Glyma.19G194300", 1),
+        ("Glyma.18G092200", "Glyma.18G092300", 2),
+    ]
+
+
+def test_network_and_coexpression_neighbors(bundle):
+    strong = network.network_neighbors(bundle, ["Glyma.18G092200", "Glyma.18G273600"], "string", seeds={"Glyma.19G194300"})
+    assert [(row.gene_id, row.neighbor_id, row.neighbor_is_seed) for row in strong] == [
+        ("Glyma.18G092200", "Glyma.19G194300", True),
+        ("Glyma.18G273600", "Glyma.19G194300", True),
+    ]
+    assert strong[0].channels == {"experimental": 0.8}
+    medium = network.network_neighbors(bundle, ["Glyma.18G273600"], "string", min_score=0.4)
+    assert [row.neighbor_id for row in medium] == ["Glyma.19G194300", "Glyma.05G032200"]
+    coex = network.network_neighbors(bundle, ["Glyma.18G092200"], "atted")
+    assert [(row.neighbor_id, row.score, row.rank) for row in coex] == [("Glyma.19G194300", 6.5, 1), ("Glyma.18G092300", 3.2, 2)]
+    for rows in (strong, medium, coex):
+        _unique_ids(rows)
+
+
+def test_rwr_rows_match_the_closed_form():
+    graph = network.build_graph([("a", "b", 1.0), ("b", "c", 0.5), ("c", "d", 1.0), ("a", "c", 0.2), ("d", "e", 1.0)])
+    restart = 0.5
+    rows = graph.rwr_rows(np.arange(len(graph.genes)), restart)
+    transition = graph.transition.T.toarray()
+    closed = restart * np.linalg.inv(np.eye(len(graph.genes)) - (1 - restart) * transition)
+    assert np.allclose(rows, closed.T, atol=1e-6)
+
+
+def test_seed_propagation_ranks_seed_neighbours_above_distant_genes():
+    ring = [(f"g{index}", f"g{(index + 1) % 60}", 1.0) for index in range(60)]
+    chords = [(f"g{index}", f"g{(index + 30) % 60}", 1.0) for index in range(0, 60, 7)]
+    graph = network.build_graph(ring + chords)
+    scores = network.propagate(graph, ["g2", "g31", "g0", "missing"], ["g0", "g1", "g3", "g4"], network="string", trait_key="t", min_score=0.7, n_perm=500)
+    by_gene = {score.gene_id: score for score in scores}
+    assert by_gene["g2"].empirical_p is not None and by_gene["g2"].empirical_p <= 0.05
+    assert by_gene["g31"].empirical_p is not None and by_gene["g31"].empirical_p > 0.2
+    assert by_gene["g2"].rank == 1 and by_gene["g0"].is_seed and by_gene["g0"].n_seeds_in_network == 4
+    assert not by_gene["missing"].in_network and by_gene["missing"].evidence() == []
+    assert by_gene["g2"].top_seeds[0].seed in {"g1", "g3"}
+    repeat = network.propagate(graph, ["g2"], ["g0", "g1", "g3", "g4"], network="string", trait_key="t", min_score=0.7, n_perm=500)
+    assert repeat[0].empirical_p == by_gene["g2"].empirical_p
+
+
+def test_seed_propagation_tool_on_the_fixture_network(bundle):
+    content, artifact = _tool(
+        extended_tools.seed_propagation,
+        {"gene_ids": ["Glyma.18G092200", "Glyma.18G273600", "Glyma.05G032200"], "seeds": ["Glyma.19G194300"]},
+    )
+    assert "from 1 custom seeds (1 in the network): 2 of 3 candidates scored" in content
+    assert "not in the string network: Glyma.05G032200" in content and len(artifact["evidence_ids"]) == 2
+    content, artifact = _tool(extended_tools.coexpression_neighbors, {"gene_ids": ["Glyma.19G194300"], "min_z": 2.0})
+    assert "Glyma.19G194300 -> Glyma.18G092200 z=6.5 rank=1" in content and len(artifact["aliases"]) == 2
 
 
 def test_specificity_of_flat_and_single_tissue_profiles():
