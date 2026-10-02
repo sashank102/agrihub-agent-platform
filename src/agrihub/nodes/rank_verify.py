@@ -14,7 +14,12 @@ from langchain_core.runnables import RunnableConfig
 from agrihub import events, scoring
 from agrihub.configuration import run_id_from_config
 from agrihub.evidence_store import EvidenceStore
-from agrihub.nodes.harvest import HarvestContext, harvest_context, harvest_genes
+from agrihub.nodes.harvest import (
+    HarvestContext,
+    brief_domains,
+    harvest_context,
+    harvest_genes,
+)
 from agrihub.nodes.locus_builder import genes_at_flank, load_candidates
 from agrihub.state import CandidateGene, Finding, Locus, RankedCandidate, StudyState
 from agrihub_data.registry import load_species
@@ -27,6 +32,7 @@ TABLE_COLUMNS = (
     "rank_in_locus",
     "score",
     "tier",
+    "category_points",
     "stability",
     "chrom",
     "start",
@@ -108,6 +114,8 @@ def _rank(
         "window_sensitivity": sensitivity.model_dump(mode="json"),
         "known_gene_records": _known_gene_counts(context),
         "skipped_steps": [] if context.canonical else ["orthologs", "arabidopsis", "known_genes"],
+        "categories": sorted(context.categories),
+        "domains": brief_domains(context.domains),
         "tiers": {tier: sum(1 for gene in scores.genes.values() if gene.tier == tier) for tier in ("T1", "T2", "T3", "T4")},
     }
     return ranking, summary

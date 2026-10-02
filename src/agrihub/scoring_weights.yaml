@@ -19,8 +19,8 @@ categories:
 
 positional:
   # A = max * exp(-distance / LD50), LD50 = typical_ld_kb of the species * ld_scale,
-  # or max * r2 when the gene has an LD r2 with its lead SNP (LD panel or study VCF),
-  # plus the bonuses below, capped at the category maximum.
+  # or max * r2 when the gene's LD r2 with its lead SNP (LD panel or study VCF) gives
+  # more, plus the bonuses below, capped at the category maximum.
   ld_scale: 1.0
   not_available: "variant location classes need gene parts; rebuild the bundle"
   # A HIGH or MODERATE predicted consequence (VEP/SnpEff) of a lead or linked SNP in the gene.
@@ -66,8 +66,9 @@ annotation:
 
 expression:
   # Expression in the trait-relevant tissues (category E), per atlas.
-  # Maximum TPM in a trait tissue, highest band first.
-  trait_tpm: [{at_least: 10.0, points: 5.0}, {at_least: 1.0, points: 3.0}]
+  # Maximum TPM in a trait tissue, highest band first. Being expressed there is
+  # necessary but common, so it counts little; specificity carries E.
+  trait_tpm: [{at_least: 10.0, points: 2.0}, {at_least: 1.0, points: 1.0}]
   # The top tissue is a trait tissue and tau >= specific_tau.
   specific: 8.0
   specific_tau: 0.8

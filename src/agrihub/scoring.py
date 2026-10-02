@@ -4,7 +4,8 @@ Every gene gets 0-100 points in seven categories:
 
 - A positional: ``max * exp(-d / LD50)`` from the distance to the nearest SNP
   of its locus, LD50 being the species' typical LD distance, or ``max * r2``
-  when the gene has an LD r2 with its lead SNP; plus a bonus for a HIGH or
+  when the gene's LD r2 with its lead SNP gives more (the LD panel is not the
+  study population, so LD only raises A); plus a bonus for a HIGH or
   MODERATE predicted consequence and one for a UTR, splice, upstream, TFBS
   or conserved-element hit of a lead SNP.
 - B same-species functional: curated known trait genes, by trait match and
@@ -794,7 +795,7 @@ def _finalize(credits: _GeneCredits, rubric: Rubric, available: set[str] | None 
         if code == "A":
             base, reason = credits.positional_points, f"{credits.candidate.distance_bp} bp from {credits.candidate.nearest_snp or 'the lead SNP'}"
             evidence_ids = list(credits.positional_ids)
-            if credits.ld is not None:
+            if credits.ld is not None and spec.max * credits.ld.points > base:
                 base, reason = spec.max * credits.ld.points, credits.ld.reason
                 evidence_ids.append(credits.ld.evidence_id)
             bonuses = []

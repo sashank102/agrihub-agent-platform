@@ -135,7 +135,10 @@ def _report(state: StudyState, store: EvidenceStore, sources: list[SourceRef]) -
 def _limitations(study: dict[str, Any], scoring: dict[str, Any], warnings: list[StudyWarning]) -> list[str]:
     rubric = load_rubric()
     known = scoring.get("known_gene_records") or {}
-    missing = [f"{code} ({spec.name.lower()})" for code, spec in rubric.categories.items() if not spec.available]
+    categories = set(scoring.get("categories") or [code for code, spec in rubric.categories.items() if spec.available])
+    domains = scoring.get("domains") or {}
+    unavailable = domains.get("unavailable") or {}
+    missing = [f"{code} ({spec.name.lower()})" for code, spec in rubric.categories.items() if code not in categories and code != "A"]
     window = study.get("window") or {}
     items = [
         (
@@ -144,21 +147,38 @@ def _limitations(study: dict[str, Any], scoring: dict[str, Any], warnings: list[
             "could not be downloaded. Tier T1 needs such a record, so T1 is rare, and a gene without one is "
             "not evidence against it."
         ),
-        (
-            f"Categories {', '.join(missing)} have no data in the core bundle yet; they score 0 for every gene "
-            "and are reported as not available, not as negative evidence."
-        ),
-        f"Category A uses distance only; {rubric.positional.not_available}.",
-        (
-            f"Loci use fixed ±{int(window.get('flank_bp') or 0) // 1000} kb windows; LD-based windows need a "
-            "genotype VCF. Window sensitivity at 50/100/250 kb is reported per candidate."
-        ),
-        (
-            "The orchestrator and specialists are language-model agents whose findings cite stored evidence; findings "
-            "are listed per candidate but do not change scores. The verifier agent is not built yet, so the ranking "
-            "is the rubric alone and no claim has been independently re-checked."
-        ),
     ]
+    if missing:
+        items.append(
+            f"Categories {', '.join(missing)} have no data in this bundle; they score 0 for every gene "
+            "and are reported as not available, not as negative evidence."
+        )
+    if "A" in categories:
+        items.append(
+            "Category A uses LD r2 with the lead SNP where it was computed and distance decay elsewhere, plus bonuses for "
+            "a HIGH/MODERATE consequence (needs REF/ALT alleles) and for UTR, splice, upstream, TFBS or conserved-element hits."
+        )
+    else:
+        items.append(f"Category A uses distance only; {rubric.positional.not_available}.")
+    if window.get("mode") == "ld":
+        items.append(
+            f"Loci use LD windows (r2 >= {window.get('r2', 0.2)}) where the genotype panel covers the lead SNP and fixed "
+            f"±{int(window.get('flank_bp') or 0) // 1000} kb windows elsewhere; window sensitivity at 50/100/250 kb is reported per candidate."
+        )
+    else:
+        items.append(
+            f"Loci use fixed ±{int(window.get('flank_bp') or 0) // 1000} kb windows"
+            + ("; LD windows are available for this species" if "ld" in (domains.get("available") or []) else "")
+            + ". Window sensitivity at 50/100/250 kb is reported per candidate."
+        )
+    gaps = [f"{key.replace('_', ' ')} ({reason})" for key, reason in unavailable.items() if key not in {"cross_species_convergence", "protein_records", "gene_family", "rice_orthologs"}]
+    if gaps:
+        items.append("Not available in this build: " + "; ".join(gaps) + ".")
+    items.append(
+        "The orchestrator and specialists are language-model agents whose findings cite stored evidence; findings "
+        "are listed per candidate but do not change scores. The verifier agent is not built yet, so the ranking "
+        "is the rubric alone and no claim has been independently re-checked."
+    )
     if scoring.get("skipped_steps"):
         items.append(
             "Orthology, TAIR and curated-gene evidence are keyed to the canonical assembly and were skipped for "

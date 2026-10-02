@@ -86,8 +86,8 @@ class LdWindow(BaseModel):
     source_version: str
 
     def gene_r2(self, gene_start: int, gene_end: int, flank_bp: int = 0) -> tuple[float, LdPartner | None]:
-        """Return the best r2 of partners inside a gene (± ``flank_bp``), 1.0 when the tested variant is inside."""
-        if gene_start - flank_bp <= self.tested_pos <= gene_end + flank_bp:
+        """Return the best r2 of partners inside a gene (± ``flank_bp``), 1.0 when the lead or the tested variant is inside."""
+        if any(gene_start - flank_bp <= pos <= gene_end + flank_bp for pos in (self.lead_pos, self.tested_pos)):
             return 1.0, None
         inside = [partner for partner in self.partners if gene_start - flank_bp <= partner.pos <= gene_end + flank_bp]
         best = max(inside, key=lambda partner: partner.r2, default=None)
@@ -115,7 +115,7 @@ class GeneLd(BaseModel):
     lead: str
     r2: float
     via: str | None
-    """The partner SNP in the gene, or ``None`` when the tested variant is inside it."""
+    """The partner SNP in the gene, or ``None`` when the lead or the tested variant is inside it."""
     genotypes: str
     r2_threshold: float
     source_version: str

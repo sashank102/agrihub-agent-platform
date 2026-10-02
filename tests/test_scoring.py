@@ -290,8 +290,8 @@ def test_expression_scores_trait_tissue_level_and_specificity():
         *_expression("silent", tau=None, top=False, z=None, trait_max_value=0.1, max_value=0.2),
     ]
     scores = _score(genes, items, {"A", "E", "F"})
-    assert scores.genes["specific"].categories["E"].points == 8 + 0.25 * 5
-    assert scores.genes["enriched"].categories["E"].points == 5 + 0.25 * 3
+    assert scores.genes["specific"].categories["E"].points == 8 + 0.25 * 2
+    assert scores.genes["enriched"].categories["E"].points == 5 + 0.25 * 1
     assert scores.genes["low"].categories["E"].points == 0
     assert [penalty.points for penalty in scores.genes["silent"].penalties] == [3.0]
     assert scores.genes["specific"].categories["E"].available and scores.genes["specific"].tier == "T3"
@@ -326,6 +326,9 @@ def test_ld_r2_replaces_distance_and_variants_add_bonuses():
     distance_only = _score([_gene("far", 120_000)], []).genes["far"].categories["A"].points
     assert scores.genes["utr"].categories["A"].points == pytest.approx(round(20 * 2.718281828 ** (-60_000 / 150_000) + 2, 2), abs=0.01)
     assert scores.genes["intron"].categories["A"].points == 20.0 and distance_only < 10
+    weak_ld = _item("near", "positional", "ld_r2:Song_Hyten_2015", {"r2": 0.3, "lead": "S18_9263941", "genotypes": "Song_Hyten_2015"})
+    near = _score([_gene("near", 0)], [weak_ld]).genes["near"].categories["A"]
+    assert near.points == 20.0 and weak_ld.evidence_id not in near.evidence_ids
 
 
 def test_trait_matching_pathways_score_in_d():
