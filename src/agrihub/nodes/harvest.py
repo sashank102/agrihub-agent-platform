@@ -3,7 +3,8 @@
 Harvest calls the query functions directly (no LLM wrappers). Each step
 runs over the candidates in chunks in a worker thread, stores the rows'
 ``evidence()`` and reports ``evidence.progress`` for its category; the
-steps run concurrently. QTL, GWAS and known-gene overlaps are queried in
+steps run concurrently, at most ``max_concurrency`` of the run config at a
+time when it is set. QTL, GWAS and known-gene overlaps are queried in
 gene mode, so every stored item is keyed to a gene on the study assembly.
 Locus-level QTL and GWAS context goes into the triage brief only.
 
@@ -130,7 +131,13 @@ async def harvest(state: StudyState, config: RunnableConfig) -> dict[str, Any]:
     _announce_sources(context)
     gene_ids = [gene.gene_id for gene in candidates]
     skipped = [step.category for step in STEPS if step.canonical_only and not context.canonical]
-    await asyncio.gather(*(_run_step(step, context, gene_ids, store) for step in STEPS if step.category not in skipped))
+    gate = asyncio.Semaphore(int(config.get("max_concurrency") or 0) or len(STEPS))
+
+    async def run(step: HarvestStep) -> None:
+        async with gate:
+            await _run_step(step, context, gene_ids, store)
+
+    await asyncio.gather(*(run(step) for step in STEPS if step.category not in skipped))
     result = await asyncio.to_thread(
         _triage,
         study,

@@ -1,9 +1,10 @@
 """Builder for the ``agrihub_study`` graph.
 
 Flow: ``intake`` routes trait studies to ``model_agent`` and SNP studies to
-``locus_builder``; then ``harvest`` and ``orchestrator``, which fans out one
-``Send("specialist")`` per enabled specialist; then ``collect``,
-``rank_verify`` and ``writer``.
+``locus_builder``; then ``harvest`` and the ``orchestrator`` agent, which fans
+out one ``Send("specialist")`` per dispatch (or finishes); the specialists
+join in ``collect``, which returns to the orchestrator for a follow-up
+decision while rounds are left; then ``rank_verify`` and ``writer``.
 """
 
 from typing import Any
@@ -36,9 +37,9 @@ def build_study_graph(
     builder.add_node("model_agent", model_agent)
     builder.add_node("locus_builder", locus_builder)
     builder.add_node("harvest", harvest)
-    builder.add_node("orchestrator", orchestrator, destinations=("specialist",))
+    builder.add_node("orchestrator", orchestrator, destinations=("specialist", "rank_verify"))
     builder.add_node("specialist", specialist)
-    builder.add_node("collect", collect)
+    builder.add_node("collect", collect, destinations=("orchestrator", "rank_verify"))
     builder.add_node("rank_verify", rank_verify)
     builder.add_node("writer", make_writer(artifact_sink))
 
@@ -52,7 +53,6 @@ def build_study_graph(
     builder.add_edge("locus_builder", "harvest")
     builder.add_edge("harvest", "orchestrator")
     builder.add_edge("specialist", "collect")
-    builder.add_edge("collect", "rank_verify")
     builder.add_edge("rank_verify", "writer")
     builder.add_edge("writer", END)
     return builder.compile(checkpointer=checkpointer, store=store, name=GRAPH_ID)

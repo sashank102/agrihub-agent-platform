@@ -1,8 +1,8 @@
 """Write the structured report and export the evidence ledger.
 
 The writer is still deterministic: it lays out the real loci, the rubric
-ranking and its stability, and the limitations of this build. The LLM
-writer that adds prose arrives with the agents.
+ranking and its stability, the specialists' findings per candidate, and the
+limitations of this build. The LLM writer that adds prose arrives in plan 7.
 """
 
 import asyncio
@@ -153,7 +153,11 @@ def _limitations(study: dict[str, Any], scoring: dict[str, Any], warnings: list[
             f"Loci use fixed ±{int(window.get('flank_bp') or 0) // 1000} kb windows; LD-based windows need a "
             "genotype VCF. Window sensitivity at 50/100/250 kb is reported per candidate."
         ),
-        "Specialist, orchestrator and verifier agents are deterministic stubs in this build; the ranking is the rubric alone.",
+        (
+            "The orchestrator and specialists are language-model agents whose findings cite stored evidence; findings "
+            "are listed per candidate but do not change scores. The verifier agent is not built yet, so the ranking "
+            "is the rubric alone and no claim has been independently re-checked."
+        ),
     ]
     if scoring.get("skipped_steps"):
         items.append(
@@ -177,7 +181,7 @@ def _markdown(
         f"# {title}",
         "",
         f"Assembly {study.get('assembly')}; {len(loci)} loci; {len(candidates)} ranked candidates. "
-        "Scores come from the deterministic rubric; no language model was used.",
+        "Scores come from the deterministic rubric; agent findings are counted per candidate but do not change scores.",
         "",
         "## Loci",
         "",
@@ -201,14 +205,14 @@ def _markdown(
                 "",
                 f"## {locus.locus_id} candidates",
                 "",
-                "| # | Gene | Position | Distance | Tier | Score | Share | Evidence | Stability |",
-                "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                "| # | Gene | Position | Distance | Tier | Score | Share | Evidence | Findings | Stability |",
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
             ]
         )
         lines.extend(
             f"| {item.rank_in_locus} | {item.gene_id}{f' ({item.symbol})' if item.symbol else ''} | "
             f"{_position(item)} | {_distance(item)} | {item.tier} | "
-            f"{item.score:g} | {item.share_of_locus or 0:.2f} | {'; '.join(item.reasons[:3])} | {item.stability or ''} |"
+            f"{item.score:g} | {item.share_of_locus or 0:.2f} | {'; '.join(item.reasons[:3])} | {_findings(item)} | {item.stability or ''} |"
             for item in rows
         )
     if warnings:
@@ -231,3 +235,12 @@ def _distance(item: RankedCandidate) -> str:
     if item.overlaps_snp:
         return f"overlaps {item.nearest_snp or item.lead_snp or 'SNP'}"
     return f"{item.distance_bp / 1000:.1f} kb to {item.nearest_snp or item.lead_snp or 'SNP'}"
+
+
+def _findings(item: RankedCandidate) -> str:
+    parts = []
+    if item.supporting_findings:
+        parts.append("supports " + ", ".join(item.supporting_findings))
+    if item.conflicting_findings:
+        parts.append("conflicts " + ", ".join(item.conflicting_findings))
+    return "; ".join(parts)

@@ -153,7 +153,7 @@ def _candidate(
         ],
         stability=stability.label if stability else None,
         flags=gene.flags,
-        supporting_findings=[str(finding.finding_id) for finding in own if finding.stance != "conflicts"],
+        supporting_findings=[str(finding.finding_id) for finding in own if finding.stance == "supports"],
         conflicting_findings=[str(finding.finding_id) for finding in own if finding.stance == "conflicts"],
         evidence_ids=gene.evidence_ids(),
     )
