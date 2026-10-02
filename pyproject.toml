@@ -54,6 +54,7 @@ packages = [
     "agent_platform.services",
     "agrihub",
     "agrihub.nodes",
+    "agrihub.prompts",
     "agrihub.tools",
     "agrihub_data",
     "agrihub_data.build",
