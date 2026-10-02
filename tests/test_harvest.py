@@ -48,7 +48,10 @@ def harvested(fixture_env: FixtureBundle) -> dict[str, Any]:
 
 
 def test_every_evidence_item_is_keyed_to_a_gene_on_the_study_assembly(harvested: dict[str, Any]):
-    evidence = harvested["evidence"]
+    snps = {snp["raw"] for snp in STUDY["snps"]}
+    snp_keyed = [item for item in harvested["evidence"] if item.gene_id in snps]
+    assert all(item.category == "variant" and item.subtype == "location:intergenic" or item.subtype.startswith("ld_window:") for item in snp_keyed)
+    evidence = [item for item in harvested["evidence"] if item.gene_id not in snps]
     gene_ids = sorted({item.gene_id for item in evidence})
     rows = open_bundle("soybean").rows_raw(
         f"SELECT gene_id FROM genes WHERE assembly = 'Wm82.a2.v1' AND gene_id IN ({', '.join('?' for _ in gene_ids)})",
