@@ -17,7 +17,7 @@ from agrihub.nodes.locus_builder import locus_builder
 from agrihub.nodes.model_agent import model_agent
 from agrihub.nodes.orchestrator import orchestrator
 from agrihub.nodes.rank_verify import rank_verify
-from agrihub.nodes.specialists import specialist
+from agrihub.nodes.specialist import specialist
 from agrihub.nodes.writer import ArtifactSink, make_writer
 from agrihub.state import StudyState
 
