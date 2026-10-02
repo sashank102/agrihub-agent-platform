@@ -42,6 +42,7 @@ const useTypedStream = useStream<
       ui?: (UIMessage | RemoveUIMessage)[] | UIMessage | RemoveUIMessage;
       context?: Record<string, unknown>;
       study?: Record<string, unknown>;
+      followup?: string;
     };
     CustomEventType: UIMessage | RemoveUIMessage | RunEvent;
   }

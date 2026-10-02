@@ -196,6 +196,13 @@ export type CandidateRow = {
   lead_snp?: string | null;
   defline?: string;
   category_points?: Record<string, number>;
+  shortlist?: boolean;
+  verifier_status?: string | null;
+  reasons?: string[];
+  supporting_findings?: string[];
+  conflicting_findings?: string[];
+  evidence_ids?: string[];
+  flags?: string[];
   [key: string]: unknown;
 };
 

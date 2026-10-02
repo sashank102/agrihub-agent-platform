@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 
 const frontendDir = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(frontendDir, "..");
-const apiPort = process.env.STUDY_E2E_API_PORT || "8010";
-const webPort = process.env.STUDY_E2E_WEB_PORT || "3010";
+const apiPort = process.env.REPORT_E2E_API_PORT || "8011";
+const webPort = process.env.REPORT_E2E_WEB_PORT || "3011";
 const apiUrl = `http://127.0.0.1:${apiPort}`;
 const webUrl = `http://127.0.0.1:${webPort}`;
 const databaseUri =
@@ -15,7 +15,7 @@ const chromium = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE;
 
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: "study.spec.ts",
+  testMatch: "report.spec.ts",
   timeout: 180_000,
   fullyParallel: false,
   workers: 1,

@@ -54,8 +54,8 @@ test("runs the poster study from the form to the collapsed report and replays it
     await expect(phase).toHaveAttribute("data-state", "done");
   }
   const trace = page.getByTestId("research-trace");
-  await expect(trace).toContainText("5 agents · harvest 100%");
-  await expect(trace.locator('li[data-status="completed"]')).toHaveCount(5);
+  await expect(trace).toContainText("7 agents · harvest 100%");
+  await expect(trace.locator('li[data-status="completed"]')).toHaveCount(7);
   await expect(page.getByTestId("positional-only")).toBeVisible();
   const wrky = page.locator('[data-gene="Glyma.18G092200"]');
   await expect(wrky).toContainText("Gm18:9,262,392-9,267,008");
@@ -73,7 +73,7 @@ test("runs the poster study from the form to the collapsed report and replays it
   await expect(view).toHaveAttribute("data-collapsed", "true", {
     timeout: 30_000,
   });
-  await expect(trace.locator('li[data-status="completed"]')).toHaveCount(5);
+  await expect(trace.locator('li[data-status="completed"]')).toHaveCount(7);
   await expect(wrky).toContainText("overlaps SNP");
 
   await page.getByRole("link", { name: "Studies" }).click();

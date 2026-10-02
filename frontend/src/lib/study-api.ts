@@ -83,6 +83,37 @@ export type RunSummary = {
   finished_at: string | null;
 };
 
+export type ReportSource = {
+  source_id: string;
+  name: string;
+  version: string;
+  license?: string | null;
+  retrieved_at?: string | null;
+  url?: string | null;
+};
+
+export type ReportCitation = {
+  alias: string;
+  evidence_id: string;
+  gene_id: string;
+  source_db: string;
+  category: string;
+  subtype: string;
+  quote?: string | null;
+  verifier_status?: string | null;
+};
+
+export type ClaimVerdict = {
+  claim_id: string;
+  gene_id: string;
+  text: string;
+  evidence_ids: string[];
+  produced_by: string;
+  status: "verified" | "unverified" | "contradicted";
+  independent_evidence_ids: string[];
+  note: string;
+};
+
 export type StudyReport = {
   title: string;
   species: string;
@@ -91,10 +122,21 @@ export type StudyReport = {
   mode: "snps" | "trait";
   loci: LocusRow[];
   candidates: CandidateRow[];
+  candidates_full?: CandidateRow[];
+  verification?: ClaimVerdict[];
+  citations?: ReportCitation[];
   warnings: StudyWarning[];
   limitations: string[];
+  suggested_validations?: string[];
+  sources?: ReportSource[];
+  stability?: {
+    flanks_bp?: number[];
+    top_k?: number | null;
+    loci?: unknown[];
+  };
   evidence_count: number;
   finding_count: number;
+  markdown?: string;
   provenance: Record<string, unknown>;
 };
 

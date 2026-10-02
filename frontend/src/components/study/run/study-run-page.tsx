@@ -32,7 +32,8 @@ import {
 } from "@/lib/study-api";
 import { useStreamContext } from "@/providers/Stream";
 import { AgentLanes } from "./agent-lanes";
-import { CandidatesTable } from "./candidates-table";
+import { QAPanel } from "../report/qa-panel";
+import { ReportView } from "../report/report-view";
 import { HarvestLane } from "./harvest-lane";
 import { LiveSummary } from "./live-summary";
 import { OrchestratorPanel } from "./orchestrator-panel";
@@ -333,11 +334,17 @@ export function StudyRunPage({ threadId }: { threadId: string }) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.35 }}
               >
+                <div className="flex flex-wrap items-center gap-2">
+                  <QAPanel
+                    report={report}
+                    onOpenEvidence={() => undefined}
+                  />
+                </div>
                 <ResearchTrace
                   open={traceOpen}
                   onOpenChange={setTraceOpen}
                 />
-                <CandidatesTable
+                <ReportView
                   report={report}
                   fallbackRows={fallbackRows}
                 />
