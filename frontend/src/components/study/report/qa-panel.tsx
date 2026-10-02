@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/sheet";
 import type { CandidateRow } from "@/lib/run-events";
 import type { StudyReport } from "@/lib/study-api";
+import { ArtifactProvider } from "@/components/thread/artifact";
 import { AssistantMessage } from "@/components/thread/messages/ai";
 import { HumanMessage } from "@/components/thread/messages/human";
 import { useStreamContext } from "@/providers/Stream";
@@ -98,24 +99,26 @@ export function QAPanel({
             </Button>
           ))}
         </div>
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
-          {messages.map((message, index) =>
-            message.type === "human" ? (
-              <HumanMessage
-                key={message.id ?? index}
-                message={message}
-                isLoading={stream.isLoading}
-              />
-            ) : message.type === "ai" ? (
-              <AssistantMessage
-                key={message.id ?? index}
-                message={message}
-                isLoading={stream.isLoading}
-                handleRegenerate={() => undefined}
-              />
-            ) : null,
-          )}
-        </div>
+        <ArtifactProvider>
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
+            {messages.map((message, index) =>
+              message.type === "human" ? (
+                <HumanMessage
+                  key={message.id ?? index}
+                  message={message}
+                  isLoading={stream.isLoading}
+                />
+              ) : message.type === "ai" ? (
+                <AssistantMessage
+                  key={message.id ?? index}
+                  message={message}
+                  isLoading={stream.isLoading}
+                  handleRegenerate={() => undefined}
+                />
+              ) : null,
+            )}
+          </div>
+        </ArtifactProvider>
         <EvidenceLinks
           text={messages
             .filter((message) => message.type === "ai")
