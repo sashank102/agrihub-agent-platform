@@ -102,9 +102,9 @@ describe("the golden poster run", () => {
   it("rebuilds the finished study", () => {
     const state = live(golden);
     const lanes = selectLanes(state);
-    expect(lanes).toHaveLength(5);
+    expect(lanes).toHaveLength(6);
     expect(lanes.every((lane) => lane.status === "completed")).toBe(true);
-    expect(new Set(lanes.map((lane) => lane.specialist)).size).toBe(4);
+    expect(new Set(lanes.map((lane) => lane.specialist)).size).toBe(5);
     expect(lanes.every((lane) => lane.dispatchEventId !== null)).toBe(true);
     expect(state.decisions.map((decision) => decision.kind)).toEqual([
       "dispatch",
@@ -139,8 +139,14 @@ describe("the golden poster run", () => {
     expect(state.phase).toBe("reporting");
     const table = state.artifacts.candidates_table;
     expect(table.title).toBe("Ranked candidates");
-    expect(table.rows?.[0]).toMatchObject({ rank: 1, tier: "T4" });
+    expect(table.rows?.[0]).toMatchObject({ rank: 1, tier: "T3" });
     expect(table.rows?.[0]).toHaveProperty("distance_bp");
+    const points = (table.rows ?? []).map(
+      (row) => (row.category_points ?? {}) as Record<string, number>,
+    );
+    for (const code of ["A", "E", "F"]) {
+      expect(points.some((row) => (row[code] ?? 0) > 0)).toBe(true);
+    }
     expect(state.artifacts.loci_table.rows).toHaveLength(3);
     expect(state.artifacts.report).toBeDefined();
     expect(Object.keys(state.seen)).toHaveLength(golden.length);
@@ -159,9 +165,10 @@ describe("the golden poster run", () => {
         (item) => item.rationale.length > 0 && item.instructions.length > 0,
       ),
     ).toBe(true);
-    expect(first.rejected).toContainEqual(
+    expect(first.dispatched).toContainEqual(
       expect.objectContaining({ specialist: "expression_network" }),
     );
+    expect(first.rejected).toEqual([]);
     expect(followup.dispatched).toHaveLength(1);
     expect(followup.dispatched[0].agent_id).toBe("call_literature_r2");
     const state = live(golden);

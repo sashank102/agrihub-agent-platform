@@ -7,6 +7,41 @@ import type { CandidateRow, LocusRow, Tier } from "@/lib/run-events";
 import type { StudyReport } from "@/lib/study-api";
 import { formatBp, formatDistance } from "./format";
 
+const CATEGORY_NAMES: Record<string, string> = {
+  A: "positional/genetic",
+  B: "same-species function",
+  C: "ortholog-transferred",
+  D: "annotation/pathway",
+  E: "expression",
+  F: "network",
+  G: "GWAS/QTL convergence",
+};
+
+function CategoryPoints({ points }: { points?: Record<string, number> }) {
+  const entries = Object.entries(points ?? {})
+    .filter(([, value]) => value > 0)
+    .sort(([left], [right]) => left.localeCompare(right));
+  if (entries.length === 0) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  return (
+    <span
+      className="flex flex-wrap gap-1"
+      data-testid="category-points"
+    >
+      {entries.map(([code, value]) => (
+        <span
+          key={code}
+          title={`${code}: ${CATEGORY_NAMES[code] ?? code}`}
+          className="bg-muted rounded px-1 font-mono text-[11px] tabular-nums"
+        >
+          {code} {value.toFixed(1)}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 const TIER_VARIANT: Record<Tier, "success" | "info" | "warning" | "outline"> = {
   T1: "success",
   T2: "info",
@@ -74,7 +109,7 @@ export function CandidatesTable({
         </p>
       )}
       <div className="bg-background overflow-x-auto rounded-xl border">
-        <table className="w-full min-w-[860px] text-sm">
+        <table className="w-full min-w-[980px] text-sm">
           <caption className="sr-only">
             Ranked candidate genes grouped by locus
           </caption>
@@ -86,6 +121,7 @@ export function CandidatesTable({
               <th className="px-3 py-2 font-medium">Distance</th>
               <th className="px-3 py-2 font-medium">Tier</th>
               <th className="px-3 py-2 text-right font-medium">Score</th>
+              <th className="px-3 py-2 font-medium">Points (A–G)</th>
               <th className="px-3 py-2 font-medium">Description</th>
             </tr>
           </thead>
@@ -96,7 +132,7 @@ export function CandidatesTable({
                 <Fragment key={locusId}>
                   <tr className="bg-muted/30 border-t">
                     <th
-                      colSpan={7}
+                      colSpan={8}
                       scope="rowgroup"
                       className="px-3 py-1.5 text-left text-xs font-medium"
                     >
@@ -158,6 +194,9 @@ export function CandidatesTable({
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">
                         {item.score.toFixed(1)}
+                      </td>
+                      <td className="px-3 py-2 text-xs">
+                        <CategoryPoints points={item.category_points} />
                       </td>
                       <td className="text-muted-foreground max-w-md px-3 py-2 text-xs">
                         {item.defline || "—"}

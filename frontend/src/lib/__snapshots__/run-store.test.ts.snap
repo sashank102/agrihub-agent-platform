@@ -15,10 +15,13 @@ exports[`the golden poster run > rebuilds the finished study 1`] = `
   ],
   "evidence": {
     "association": 31,
-    "functional_annotation": 1044,
+    "expression": 460,
+    "functional_annotation": 1068,
     "known_gene": 3,
     "ortholog": 754,
     "positional": 123,
+    "regulation": 118,
+    "variant": 4,
   },
   "harvest": [
     "functional_annotation 123/123",
@@ -28,6 +31,10 @@ exports[`the golden poster run > rebuilds the finished study 1`] = `
     "qtl 123/123",
     "gwas_catalog 123/123",
     "known_genes 123/123",
+    "expression 123/123",
+    "pathways 123/123",
+    "regulation 123/123",
+    "variant_location 123/123",
   ],
   "lanes": [
     {
@@ -36,8 +43,8 @@ exports[`the golden poster run > rebuilds the finished study 1`] = `
       "name": "Locus and variant specialist",
       "specialist": "locus_variant",
       "status": "completed",
-      "step": "3/8",
-      "tools": 4,
+      "step": "5/8",
+      "tools": 9,
     },
     {
       "findings": 5,
@@ -67,6 +74,15 @@ exports[`the golden poster run > rebuilds the finished study 1`] = `
       "tools": 4,
     },
     {
+      "findings": 12,
+      "model": "agrihub-fake:poster",
+      "name": "Expression and network specialist",
+      "specialist": "expression_network",
+      "status": "completed",
+      "step": "6/6",
+      "tools": 20,
+    },
+    {
       "findings": 0,
       "model": "agrihub-fake:poster",
       "name": "Literature specialist",
@@ -79,7 +95,7 @@ exports[`the golden poster run > rebuilds the finished study 1`] = `
   "phase": "reporting",
   "phases": {
     "harvest": {
-      "detail": "1955 evidence items for 123 genes; triage brief ~1032 tokens",
+      "detail": "2561 evidence items for 123 genes; triage brief ~1334 tokens",
       "status": "completed",
     },
     "intake": {
@@ -91,11 +107,11 @@ exports[`the golden poster run > rebuilds the finished study 1`] = `
       "status": "completed",
     },
     "planning": {
-      "detail": "4 specialists dispatched",
+      "detail": "5 specialists dispatched",
       "status": "completed",
     },
     "ranking": {
-      "detail": "15 candidates ranked across 3 loci (rubric v1)",
+      "detail": "15 candidates ranked across 3 loci (rubric v2)",
       "status": "completed",
     },
     "reporting": {
@@ -103,11 +119,11 @@ exports[`the golden poster run > rebuilds the finished study 1`] = `
       "status": "completed",
     },
     "specialists": {
-      "detail": "5 specialist runs returned 8 findings",
+      "detail": "6 specialist runs returned 20 findings",
       "status": "completed",
     },
   },
-  "plan": 7,
-  "sources": 19,
+  "plan": 8,
+  "sources": 31,
 }
 `;

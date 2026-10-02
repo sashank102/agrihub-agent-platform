@@ -14,7 +14,9 @@ The ``poster`` script plays every role:
   literature check on genes that gained support, or finishes;
 - specialists: call their domain tools on the focus genes, record findings
   that cite the evidence aliases those tools returned, then call
-  ``specialist_done``. The literature lane stays offline (aliases and
+  ``specialist_done``. Phases whose tools are not bound (their domain is
+  unavailable in the bundle) are skipped, and the summary lists the gaps the
+  system prompt names. The literature lane stays offline (aliases and
   gene2pubmed only), so recordings never depend on the network.
 """
 
@@ -172,7 +174,7 @@ def poster_script(messages: list[BaseMessage], tools: tuple[str, ...]) -> AIMess
     if "dispatch_specialists" in tools:
         return _orchestrator(messages)
     if "specialist_done" in tools:
-        return _specialist(messages)
+        return _specialist(messages, tools)
     return AIMessage(content="No tools are bound.")
 
 
@@ -204,52 +206,78 @@ def _orchestrator(messages: list[BaseMessage]) -> AIMessage:
 
 
 _PHASES: dict[str, tuple[str, ...]] = {
-    "locus_variant": ("window", "record", "done"),
+    "locus_variant": ("window", "variants", "linkage", "record", "done"),
     "qtl_gwas": ("overlap", "record", "done"),
     "function_orthology": ("annotate", "orthologs", "record", "done"),
-    "expression_network": ("annotate_only", "done"),
+    "expression_network": ("tissues", "expression", "network", "regulation", "record", "done"),
     "literature": ("aliases", "publications", "record", "done"),
 }
+_TSPEC = re.compile(r"tau=([\d.]+)")
+_P_VALUE = re.compile(r" p=([\d.]+)")
+_R2 = re.compile(r"(Glyma\.\S+) r2=([\d.]+) with (\S+)")
 
 
-def _specialist(messages: list[BaseMessage]) -> AIMessage:
-    task = assignment(messages)
-    specialist = str(task.get("specialist") or "")
-    phases = _PHASES.get(specialist, ("done",))
-    step = steps_taken(messages)
-    phase = phases[min(step, len(phases) - 1)]
-    prefix = f"{task.get('agent_id') or specialist}-s{step + 1}"
+def _phase_calls(phase: str, task: dict[str, Any], tools: tuple[str, ...]) -> list[tuple[str, dict[str, Any]]]:
+    """Return the ``(tool, args)`` calls of one data phase, keeping only bound tools."""
     genes = [str(gene) for gene in task.get("focus_gene_ids") or []]
     species = str(task.get("species") or "soybean")
     trait = str(task.get("trait") or "")
+    loci = [locus for locus in task.get("focus_loci") or [] if locus.get("chrom") and locus.get("lead_pos")]
+    leads = [{"label": str(locus.get("lead_snp") or locus["locus_id"]), "chrom": str(locus["chrom"]), "pos": int(locus["lead_pos"])} for locus in loci]
+    calls: list[tuple[str, dict[str, Any]]] = []
     if phase == "window":
         windows = [
             {"chrom": locus["chrom"], "start": max(1, int(locus["start"])), "end": int(locus["end"]), "label": locus["locus_id"], "snp_pos": locus.get("lead_pos")}
             for locus in task.get("focus_loci") or []
             if locus.get("chrom")
         ]
-        return reply(call("genes_in_window", {"windows": windows, "species": species}, f"{prefix}-0"))
-    if phase == "overlap":
+        calls = [("genes_in_window", {"windows": windows, "species": species})]
+    elif phase == "variants":
+        calls = [
+            ("annotate_variants", {"variants": [{"id": lead["label"], "chrom": lead["chrom"], "pos": lead["pos"]} for lead in leads], "species": species}),
+            ("snp_in_tfbs_or_cns", {"snps": leads, "species": species}),
+            ("homeologs", {"gene_ids": genes, "species": species}),
+        ]
+        calls = [call for call in calls if call[0] == "homeologs" or leads]
+    elif phase == "linkage":
+        calls = [("ld_with_lead", {"leads": leads, "species": species}), ("gene_haplotypes", {"gene_ids": genes, "species": species})]
+        calls = [call for call in calls if call[0] == "gene_haplotypes" or leads]
+    elif phase == "overlap":
         args = {"gene_ids": genes, "trait": trait, "trait_only": True, "species": species}
-        return reply(call("qtl_overlap", args, f"{prefix}-0"), call("gwas_catalog_overlap", args, f"{prefix}-1"))
-    if phase == "annotate":
-        return reply(
-            call("gene_annotation", {"gene_ids": genes, "species": species}, f"{prefix}-0"),
-            call("annotation_relevance", {"gene_ids": genes, "trait": trait, "species": species}, f"{prefix}-1"),
-        )
-    if phase == "annotate_only":
-        return reply(call("gene_annotation", {"gene_ids": genes, "species": species}, f"{prefix}-0"))
-    if phase == "orthologs":
-        return reply(call("arabidopsis_knowledge", {"ids_or_genes": genes, "species": species}, f"{prefix}-0"))
-    if phase == "aliases":
-        return reply(call("gene_aliases", {"gene_ids": genes, "species": species}, f"{prefix}-0"))
-    if phase == "publications":
-        return reply(call("gene_publications", {"gene_ids": genes, "species": species}, f"{prefix}-0"))
+        calls = [("qtl_overlap", args), ("gwas_catalog_overlap", args)]
+    elif phase == "annotate":
+        calls = [("gene_annotation", {"gene_ids": genes, "species": species}), ("annotation_relevance", {"gene_ids": genes, "trait": trait, "species": species})]
+    elif phase == "orthologs":
+        calls = [("arabidopsis_knowledge", {"ids_or_genes": genes, "species": species})]
+    elif phase == "tissues":
+        calls = [("trait_relevant_tissues", {"trait": trait, "species": species})]
+    elif phase == "expression":
+        calls = [("tissue_specificity", {"gene_ids": genes, "trait": trait, "species": species}), ("expression_profile", {"gene_ids": genes, "trait": trait, "species": species})]
+    elif phase == "network":
+        calls = [("seed_propagation", {"gene_ids": genes, "trait": trait, "species": species}), ("coexpression_neighbors", {"gene_ids": genes, "trait": trait, "species": species})]
+    elif phase == "regulation":
+        calls = [("get_regulation", {"gene_ids": genes, "species": species}), ("get_pathways", {"gene_ids": genes, "trait": trait, "species": species})]
+    elif phase == "aliases":
+        calls = [("gene_aliases", {"gene_ids": genes, "species": species})]
+    elif phase == "publications":
+        calls = [("gene_publications", {"gene_ids": genes, "species": species})]
+    return [call for call in calls if call[0] in tools]
+
+
+def _specialist(messages: list[BaseMessage], tools: tuple[str, ...]) -> AIMessage:
+    task = assignment(messages)
+    specialist = str(task.get("specialist") or "")
+    phases = [phase for phase in _PHASES.get(specialist, ("done",)) if phase in {"record", "done"} or _phase_calls(phase, task, tools)]
+    step = steps_taken(messages)
+    phase = phases[min(step, len(phases) - 1)]
+    prefix = f"{task.get('agent_id') or specialist}-s{step + 1}"
+    genes = [str(gene) for gene in task.get("focus_gene_ids") or []]
+    if phase not in {"record", "done"}:
+        return reply(*(call(name, args, f"{prefix}-{index}") for index, (name, args) in enumerate(_phase_calls(phase, task, tools))))
     if phase == "record":
         findings = _findings(specialist, genes, messages)
         if findings:
             return reply(*(call("record_finding", finding, f"{prefix}-{index}") for index, finding in enumerate(findings)))
-        phase = "done"
     recorded = [str(message.artifact["finding_id"]) for message in messages if isinstance(message, ToolMessage) and isinstance(message.artifact, dict) and message.artifact.get("finding_id")]
     return reply(call("specialist_done", {"summary": _summary(specialist, genes, recorded, messages)}, f"{prefix}-0"))
 
@@ -258,13 +286,27 @@ def _findings(specialist: str, genes: list[str], messages: list[BaseMessage]) ->
     findings: list[dict[str, Any]] = []
     if specialist == "locus_variant":
         rows = tool_rows(messages, "genes_in_window")
+        located = tool_rows(messages, "annotate_variants")
+        linked = tool_rows(messages, "ld_with_lead")
         for gene in genes:
             row = next((item for item in rows if f" {gene} " in f" {item[1]} "), None)
             if row is None:
                 continue
             distance = _DISTANCE.search(row[1])
             where = "overlaps the lead SNP" if "SNP-in-gene" in row[1] else f"lies {int(distance.group(1)) / 1000:.1f} kb from the lead SNP" if distance else "lies in the locus window"
-            findings.append(_finding(gene, f"{gene} {where}; this is positional evidence only.", "neutral", "weak", row[0][:3]))
+            aliases = row[0][:2]
+            details = []
+            hit = next((item for item in located if f" {gene} " in f" {item[1]} "), None)
+            if hit is not None:
+                details.append(f"the lead SNP is {hit[1].split(f' {gene} ', 1)[1].split(' ')[0]} of it")
+                aliases += hit[0][:1]
+            ld_row = next((item for item in linked if (match := _R2.search(item[1])) and match.group(1) == gene), None)
+            ld = _R2.search(ld_row[1]) if ld_row else None
+            if ld_row is not None and ld is not None:
+                details.append(f"r2 {ld.group(2)} with {ld.group(3)}")
+                aliases += ld_row[0][:1]
+            claim = f"{gene} {where}" + (f"; {', '.join(details)}" if details else "") + "; this is positional evidence only."
+            findings.append(_finding(gene, claim, "neutral", "weak", aliases))
     elif specialist == "qtl_gwas":
         rows = tool_rows(messages, "qtl_overlap") + tool_rows(messages, "gwas_catalog_overlap")
         for gene in genes:
@@ -283,6 +325,25 @@ def _findings(specialist: str, genes: list[str], messages: list[BaseMessage]) ->
             row = next((item for item in rows if item[1].startswith(f"{gene} ") and "no match" not in item[1]), None)
             if row is not None:
                 findings.append(_finding(gene, f"Annotation of {gene} or its Arabidopsis best hit matches the trait profile ({row[1].split(' ', 2)[1]}).", "supports", "weak", row[0][:4]))
+    elif specialist == "expression_network":
+        specific = tool_rows(messages, "tissue_specificity")
+        profiles = tool_rows(messages, "expression_profile")
+        walks = tool_rows(messages, "seed_propagation")
+        for gene in genes:
+            own = [item for item in specific if item[1].startswith(f"{gene} ")]
+            top = [item for item in own if "TRAIT-TISSUE-TOP" in item[1] and _tau(item[1]) >= 0.8]
+            expressed = [item for item in profiles if item[1].startswith(f"{gene} ") and "EXPRESSED-IN-TRAIT-TISSUE" in item[1]]
+            if top:
+                findings.append(_finding(gene, f"{gene} is most expressed in a trait-relevant tissue and tissue-specific ({top[0][1].split(' ', 2)[2].split(' |')[0]}).", "supports", "moderate", top[0][0][:1] + (expressed[0][0][:1] if expressed else [])))
+            elif expressed:
+                findings.append(_finding(gene, f"{gene} is expressed in a trait-relevant tissue ({expressed[0][1].split('; ', 1)[-1]}), without trait-tissue specificity.", "supports", "weak", expressed[0][0][:1]))
+            elif own:
+                findings.append(_finding(gene, f"{gene} is not expressed above 1 TPM in the trait-relevant tissues of the atlases.", "neutral", "weak", own[0][0][:1]))
+            walk = next((item for item in walks if item[1].startswith(f"{gene} ")), None)
+            p_value = _P_VALUE.search(walk[1]) if walk else None
+            if walk is not None and p_value is not None and float(p_value.group(1)) <= 0.05:
+                strength = "moderate" if float(p_value.group(1)) <= 0.01 else "weak"
+                findings.append(_finding(gene, f"{gene} is close to the trait seed genes in the STRING network (seed propagation empirical p {p_value.group(1)}).", "supports", strength, walk[0][:1]))
     elif specialist == "literature":
         rows = tool_rows(messages, "gene_publications")
         for gene in genes:
@@ -291,6 +352,11 @@ def _findings(specialist: str, genes: list[str], messages: list[BaseMessage]) ->
                 pmids = ", ".join(item[1].split()[1] for item in linked[:3])
                 findings.append(_finding(gene, f"NCBI gene2pubmed links {gene} to {len(linked)} non-hub papers ({pmids}); no passage was read.", "neutral", "weak", [alias for item in linked for alias in item[0]][:5]))
     return findings
+
+
+def _tau(line: str) -> float:
+    match = _TSPEC.search(line)
+    return float(match.group(1)) if match else 0.0
 
 
 def _narrow_trait_hit(line: str) -> bool:

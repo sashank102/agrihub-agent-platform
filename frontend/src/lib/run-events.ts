@@ -195,6 +195,7 @@ export type CandidateRow = {
   nearest_snp?: string | null;
   lead_snp?: string | null;
   defline?: string;
+  category_points?: Record<string, number>;
   [key: string]: unknown;
 };
 
