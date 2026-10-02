@@ -135,6 +135,26 @@ class BuildContext:
             staging.unlink(missing_ok=True)
         return written
 
+    def temp_table(self, name: str, columns: dict[str, str], rows: Iterable[dict[str, Any]]) -> int:
+        """Create a temporary table from dictionaries (staged as NDJSON, not bound row by row)."""
+        spec = ", ".join(f"'{column}': '{kind}'" for column, kind in columns.items())
+        self.connection.execute(f"CREATE TEMP TABLE {name} ({', '.join(f'{column} {kind}' for column, kind in columns.items())})")
+        staging = self.staging_dir / f"{name}-{uuid.uuid4().hex}.ndjson"
+        written = 0
+        with staging.open("w", encoding="utf-8") as handle:
+            for row in rows:
+                handle.write(json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n")
+                written += 1
+        try:
+            if written:
+                self.connection.execute(
+                    f"INSERT INTO {name} SELECT * FROM read_json(?, format = 'newline_delimited', columns = {{{spec}}})",
+                    [str(staging)],
+                )
+        finally:
+            staging.unlink(missing_ok=True)
+        return written
+
     def _types(self, table: str) -> dict[str, str]:
         if table not in self._column_types:
             rows = self.connection.execute(

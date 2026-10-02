@@ -22,6 +22,7 @@ from typing import Any
 import duckdb
 
 from agrihub_data.build.context import BuildContext, BuildError
+from agrihub_data.build.expression import build_lis_expression
 from agrihub_data.build.gwas import build_gwas_atlas, build_soybase_gwas
 from agrihub_data.build.lis_evidence import (
     build_lis_gene_functions,
@@ -74,6 +75,7 @@ PARSERS: tuple[Parser, ...] = (
     Parser("plaza_orthology", build_plaza_orthology, after=("lis_annotation", "lis_pangenes")),
     Parser("tair", build_tair),
     Parser("ncbi_gene", build_ncbi_gene, after=("lis_annotation",)),
+    Parser("lis_expression", build_lis_expression, after=("lis_annotation", "lis_pangenes")),
 )
 
 

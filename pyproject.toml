@@ -77,7 +77,7 @@ packages = [
 "*" = ["py.typed"]
 "agrihub" = ["scoring_weights.yaml"]
 "agrihub_data" = ["schema.sql", "registry/*.yaml"]
-"agrihub_data.query" = ["traits/*.yaml"]
+"agrihub_data.query" = ["traits/*.yaml", "tissues/*.yaml"]
 
 [tool.ruff]
 lint.select = [

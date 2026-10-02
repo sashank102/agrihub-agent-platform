@@ -13,6 +13,7 @@ from agrihub_fixtures import (
 )
 
 from agrihub.configuration import MODEL_FIELDS
+from agrihub_data.availability import clear_cache as clear_availability
 from agrihub_data.build import build
 from agrihub_data.bundle import close_bundles
 from agrihub_data.fetch import fetch
@@ -58,6 +59,46 @@ def fixture_bundle(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Fixture
         server.server_close()
 
 
+@pytest.fixture(scope="session")
+def heavy_bundle(tmp_path_factory: pytest.TempPathFactory) -> Iterator[FixtureBundle]:
+    """Fetch every fixture source and build a heavy-tier soybean bundle once."""
+    root = tmp_path_factory.mktemp("heavy-server")
+    data_dir = tmp_path_factory.mktemp("heavy-data")
+    server = _serve(root)
+    registry = fixture_registry(server.base_url)
+    publish_fixture_files(registry, root)
+    register_species(registry)
+    try:
+        fetched = fetch("soybean", "heavy", data_dir=data_dir, concurrency=4)
+        assert fetched.ok, fetched.failed
+        built = build("soybean", "heavy", data_dir=data_dir)
+        yield FixtureBundle(data_dir, registry, fetched, built, list(server.requests))
+    finally:
+        unregister_species("soybean")
+        close_bundles()
+        server.shutdown()
+        server.server_close()
+
+
+@pytest.fixture
+def heavy_env(
+    heavy_bundle: FixtureBundle,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[FixtureBundle]:
+    """Point tools at the heavy fixture bundle and a fresh run directory."""
+    register_species(heavy_bundle.registry)
+    monkeypatch.setenv("AGRIHUB_DATA_DIR", str(heavy_bundle.data_dir))
+    monkeypatch.setenv("AGRIHUB_RUN_DIR", str(tmp_path / "runs"))
+    clear_availability()
+    try:
+        yield heavy_bundle
+    finally:
+        unregister_species("soybean")
+        close_bundles()
+        clear_availability()
+
+
 @pytest.fixture
 def fixture_env(
     fixture_bundle: FixtureBundle,
@@ -68,11 +109,13 @@ def fixture_env(
     register_species(fixture_bundle.registry)
     monkeypatch.setenv("AGRIHUB_DATA_DIR", str(fixture_bundle.data_dir))
     monkeypatch.setenv("AGRIHUB_RUN_DIR", str(tmp_path / "runs"))
+    clear_availability()
     try:
         yield fixture_bundle
     finally:
         unregister_species("soybean")
         close_bundles()
+        clear_availability()
 
 
 @pytest.fixture

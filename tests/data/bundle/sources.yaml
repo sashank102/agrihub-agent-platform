@@ -211,3 +211,23 @@ sources:
       - {url: "{base}/ncbi_gene/All_Plants.gene_info.gz", path: All_Plants.gene_info.gz}
       - {url: "{base}/ncbi_gene/gene2pubmed.gz", path: gene2pubmed.gz}
       - {url: "{base}/ncbi_gene/gene2go.gz", path: gene2go.gz}
+  - id: lis_expression_atlas
+    name: LIS JGI gene atlas fixture
+    tier: extended
+    version: Wm82.gnm4.ann1.expr.Wm82.Sreedasyam_Plott_2023
+    license: Open
+    assemblies: [Wm82.a2.v1, Wm82.a4.v1]
+    parser: lis_expression
+    files:
+      - {url: "{base}/lis_expression_atlas/glyma.Wm82.gnm4.ann1.expr.Wm82.Sreedasyam_Plott_2023.values.tsv.gz", path: glyma.Wm82.gnm4.ann1.expr.Wm82.Sreedasyam_Plott_2023.values.tsv.gz}
+      - {url: "{base}/lis_expression_atlas/glyma.Wm82.gnm4.ann1.expr.Wm82.Sreedasyam_Plott_2023.samples.tsv.gz", path: glyma.Wm82.gnm4.ann1.expr.Wm82.Sreedasyam_Plott_2023.samples.tsv.gz}
+  - id: lis_expression_libault
+    name: LIS Libault 2010 atlas fixture
+    tier: extended
+    version: Wm82.gnm2.ann1.expr.Wm82.Libault_Farmer_2010
+    license: Open
+    assemblies: [Wm82.a2.v1]
+    parser: lis_expression
+    files:
+      - {url: "{base}/lis_expression_libault/glyma.Wm82.gnm2.ann1.expr.Wm82.Libault_Farmer_2010.values.tsv.gz", path: glyma.Wm82.gnm2.ann1.expr.Wm82.Libault_Farmer_2010.values.tsv.gz}
+      - {url: "{base}/lis_expression_libault/glyma.Wm82.gnm2.ann1.expr.Wm82.Libault_Farmer_2010.samples.tsv.gz", path: glyma.Wm82.gnm2.ann1.expr.Wm82.Libault_Farmer_2010.samples.tsv.gz}

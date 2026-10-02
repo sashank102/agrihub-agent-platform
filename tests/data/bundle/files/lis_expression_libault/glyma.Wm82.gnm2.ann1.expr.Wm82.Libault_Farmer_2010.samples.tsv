@@ -1,0 +1,5 @@
+#identifier	name	description	treatment	tissue	development_stage	species	genotype	replicate_group	biosample	sra_experiment
+SRR1	Stacey_Flower	Flower_Stacey				Glycine max	Williams 82		SAMN11	SRX11
+SRR2	Stacey_Root	Root_Stacey				Glycine max	Williams 82		SAMN12	SRX12
+SRR3	12HA1_IN_RH	12HA1_IN_RH				Glycine max	Williams 82		SAMN13	SRX13
+SRR4	Stacey_Apical_Meristem	Apical_Meristem_Stacey				Glycine max	Williams 82		SAMN14	SRX14

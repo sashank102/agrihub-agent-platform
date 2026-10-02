@@ -1,0 +1,52 @@
+# Curator-editable trait-relevant tissues for soybean. trait_relevant_tissues
+# uses the entry whose key is the trait profile's key, then the first rule
+# whose keywords occur in the trait text. Tissue names are the normalized
+# labels of the expression sample sheets (expression build: normalize_tissue).
+#
+# Tissues in the bundle: JGI gene atlas (Sreedasyam 2023) flower, lateral_root,
+# leaf, nodule, root, root_tip, seed (stages s1-s9), shoot_tip, stem; Libault
+# 2010 flower, leaf, nodule, pod, root, root_hair, root_tip,
+# shoot_apical_meristem.
+profiles:
+  plant_height:
+    tissues: [shoot_tip, shoot_apical_meristem, stem]
+    note: Stem elongation and node number are set in the shoot apex and the elongating stem.
+  flowering_time:
+    tissues: [shoot_tip, shoot_apical_meristem, leaf, flower]
+    note: Photoperiod is sensed in leaves (E1, FT) and acts at the shoot apex; flowers show floral identity genes.
+  maturity:
+    tissues: [leaf, shoot_tip, pod, seed]
+    note: Maturity genes act in leaves and the apex; pod and seed show the reproductive phase.
+  seed_oil:
+    tissues: [seed]
+    stages: [seed_s3, seed_s4, seed_s5, seed_s6, seed_s7]
+    note: Oil accumulates in mid to late seed filling.
+  seed_protein:
+    tissues: [seed]
+    stages: [seed_s4, seed_s5, seed_s6, seed_s7, seed_s8]
+    note: Storage proteins accumulate during seed filling.
+  seed_yield:
+    tissues: [seed, pod, flower]
+    note: Yield components are set in flowers, pods and filling seeds.
+rules:
+  - keywords: [cyst nematode, scn, nematode, root rot, root knot, root]
+    tissues: [root, lateral_root, root_tip, root_hair]
+    note: Root pathogens and root traits act in roots.
+  - keywords: [nodul, nitrogen fixation, symbio]
+    tissues: [nodule, root, root_hair]
+    note: Nodulation happens in root hairs and nodules.
+  - keywords: [seed, oil, protein, fatty acid, sucrose, isoflavone]
+    tissues: [seed]
+    note: Seed composition is set during seed development.
+  - keywords: [flower, photoperiod, maturity]
+    tissues: [shoot_tip, shoot_apical_meristem, leaf, flower]
+    note: Photoperiod responses act in leaves and the shoot apex.
+  - keywords: [height, lodging, stem, node, internode, branch]
+    tissues: [shoot_tip, shoot_apical_meristem, stem]
+    note: Shoot architecture is set at the shoot apex and in the stem.
+  - keywords: [leaf, chlorophyll, photosynth]
+    tissues: [leaf]
+    note: Leaf traits.
+  - keywords: [pod, shatter]
+    tissues: [pod]
+    note: Pod traits.

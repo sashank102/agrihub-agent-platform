@@ -1,0 +1,8 @@
+#identifier	name	description	treatment	tissue	developmental_stage	species	genotype	replicate_group	biosample	sra_experiment
+SRX1	Shoot_tip.Standard_1	Shoot tip from plants grown on standard medium		shoot_tip		Glycine max	Williams 82	shoot_tip.standard	SAMN1	SRX1
+SRX2	Shoot_tip.Standard_2	Shoot tip from plants grown on standard medium		shoot_tip		Glycine max	Williams 82	shoot_tip.standard	SAMN2	SRX2
+SRX3	Seed.Seed-S5_1	Seed stage (s5)		seed		Glycine max	Williams 82	seed.seed_s5	SAMN3	SRX3
+SRX4	Seed.Seed-S5_2	Seed stage (s5)		seed		Glycine max	Williams 82	seed.seed_s5	SAMN4	SRX4
+SRX5	Leaf.Standard_1	Leaves from plants grown on standard medium		leaf		Glycine max	Williams 82	leaf.standard	SAMN5	SRX5
+SRX6	Nodules.Standard_1	Nodules		nodules		Glycine max	Williams 82	nodules.standard	SAMN6	SRX6
+SRX7	Stem.Standard_1	Stem from plants grown on standard medium		stem		Glycine max	Williams 82	stem.standard	SAMN7	SRX7
