@@ -182,5 +182,7 @@ def test_registry_species_route_lists_four_species(tmp_path, monkeypatch):
     canonical = next(assembly for assembly in soybean["assemblies"] if assembly["canonical"])
     assert canonical["chromosomes"][17] == {"name": "Gm18", "length": 58_018_742, "aliases": []}
     assert soybean["bundle"] is None and soybean["tiers"]["core"]["built"] is False
+    assert soybean["ld"] == {"available": False, "panels": [], "reason": "no soybean bundle is built"}
+    assert soybean["domains"]["expression"]["available"] is False
     assert any(source["id"] == "gwas_atlas" and source["academic_only"] for source in soybean["sources"])
     assert refused == 401

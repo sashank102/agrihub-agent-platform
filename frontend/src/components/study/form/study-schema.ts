@@ -68,6 +68,11 @@ const base = z.object({
     .int()
     .min(1, "The window must be at least 1 kb")
     .max(5000, "The window can be at most 5,000 kb"),
+  window_mode: z.enum(["fixed", "ld"]),
+  ld_r2: z
+    .number({ error: "Enter an r² threshold" })
+    .min(0.05, "r² must be at least 0.05")
+    .max(1, "r² can be at most 1"),
   top_k_per_locus: z.number().int().min(1).max(50),
   specialists_enabled: z
     .array(z.enum(SPECIALISTS))
@@ -108,6 +113,13 @@ export function studyFormSchema(registry: SpeciesInfo[]) {
           message: `${value.assembly} is not a ${species.common_name} assembly`,
         });
       }
+      if (value.window_mode === "ld" && !ldAvailable(species)) {
+        context.addIssue({
+          code: "custom",
+          path: ["window_mode"],
+          message: `LD windows are unavailable for ${species.common_name}: ${species.ld?.reason ?? "no LD panel is built"}`,
+        });
+      }
     });
 }
 
@@ -122,12 +134,23 @@ export function ldWarningKb(species: SpeciesInfo | undefined): number | null {
   return species ? 2 * species.typical_ld_kb : null;
 }
 
+export function ldAvailable(species: SpeciesInfo | undefined): boolean {
+  return Boolean(species?.ld?.available && species.ld.panels.length > 0);
+}
+
 export function toStudyRequest(values: StudyFormValues): StudyRequest {
   const common = {
     species: values.species,
     assembly: values.assembly,
     trait_text: values.trait_text.trim(),
-    window: { mode: "fixed" as const, flank_bp: values.window_kb * 1000 },
+    window:
+      values.window_mode === "ld"
+        ? {
+            mode: "ld" as const,
+            flank_bp: values.window_kb * 1000,
+            r2: values.ld_r2,
+          }
+        : { mode: "fixed" as const, flank_bp: values.window_kb * 1000 },
     top_k_per_locus: values.top_k_per_locus,
     specialists_enabled: values.specialists_enabled,
   };
@@ -142,5 +165,9 @@ export function studySummary(study: StudyRequest): string {
     study.mode === "snps"
       ? `${study.snps.length} SNP${study.snps.length === 1 ? "" : "s"}`
       : "trait mode";
-  return `Study: ${study.trait_text} in ${study.species} (${study.assembly}), ${snps}, ±${study.window.flank_bp / 1000} kb windows.`;
+  const windows =
+    study.window.mode === "ld"
+      ? `LD windows (r² ≥ ${study.window.r2}, fixed ±${study.window.flank_bp / 1000} kb fallback)`
+      : `±${study.window.flank_bp / 1000} kb windows`;
+  return `Study: ${study.trait_text} in ${study.species} (${study.assembly}), ${snps}, ${windows}.`;
 }

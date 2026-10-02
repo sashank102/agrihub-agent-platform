@@ -40,6 +40,7 @@ export type SpeciesInfo = {
   linkouts: Record<string, unknown>[];
   tiers: Record<string, { sources: number; built: boolean }>;
   bundle: { tier: string; built_at: string } | null;
+  ld?: { available: boolean; panels: string[]; reason: string | null };
   sources: { id: string; name: string; tier: string; status: string }[];
 };
 
@@ -57,7 +58,7 @@ type StudyBase = {
   species: string;
   assembly: string;
   trait_text: string;
-  window: { mode: "fixed"; flank_bp: number };
+  window: { mode: "fixed" | "ld"; flank_bp: number; r2?: number };
   top_k_per_locus: number;
   specialists_enabled: SpecialistName[];
 };

@@ -5,6 +5,7 @@ from typing import Any
 
 import duckdb
 
+from agrihub_data.availability import LD_PANEL_KIND, domain_status, resource_paths
 from agrihub_data.paths import species_paths
 from agrihub_data.registry import TIERS, SpeciesRegistry, load_all
 
@@ -28,8 +29,15 @@ def bundle_status(species: str, data_dir: Path | str | None = None) -> dict[str,
 
 
 def species_summary(registry: SpeciesRegistry, data_dir: Path | str | None = None) -> dict[str, Any]:
-    """Return assemblies, chromosome names and lengths, windows, sources and bundle state."""
+    """Return assemblies, chromosome names and lengths, windows, sources, bundle state and evidence domains.
+
+    ``ld`` says whether LD windows can be computed (PLINK2 and a built
+    panel) and lists the panels the form may offer.
+    """
     bundle = bundle_status(registry.species, data_dir)
+    domains = domain_status(registry.species, data_dir)
+    ld = domains["ld"]
+    panels = [path.name.split(".", 1)[0] for path in resource_paths(registry.species, LD_PANEL_KIND, data_dir)]
     return {
         "species": registry.species,
         "scientific_name": registry.scientific_name,
@@ -62,6 +70,8 @@ def species_summary(registry: SpeciesRegistry, data_dir: Path | str | None = Non
             for tier in TIERS
         },
         "bundle": bundle,
+        "ld": {"available": ld.available, "panels": panels if ld.available else [], "reason": ld.reason},
+        "domains": {key: {"available": status.available, "reason": status.reason} for key, status in domains.items()},
         "sources": [
             {
                 "id": source.id,

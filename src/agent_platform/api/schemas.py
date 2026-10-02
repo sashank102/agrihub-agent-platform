@@ -38,6 +38,21 @@ class SourceResponse(BaseModel):
     homepage: str | None = None
 
 
+class LdSupportResponse(BaseModel):
+    """Whether LD windows can be computed, and with which panels."""
+
+    available: bool
+    panels: list[str] = Field(default_factory=list)
+    reason: str | None = None
+
+
+class DomainResponse(BaseModel):
+    """Whether one evidence domain can be served, and why not."""
+
+    available: bool
+    reason: str | None = None
+
+
 class SpeciesResponse(BaseModel):
     """Everything the study form validates against for one species."""
 
@@ -54,6 +69,8 @@ class SpeciesResponse(BaseModel):
     linkouts: list[dict[str, Any]]
     tiers: dict[str, dict[str, Any]]
     bundle: dict[str, Any] | None
+    ld: LdSupportResponse
+    domains: dict[str, DomainResponse] = Field(default_factory=dict)
     sources: list[SourceResponse]
 
 

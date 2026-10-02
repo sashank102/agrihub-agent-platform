@@ -49,6 +49,7 @@ import {
   SPECIALIST_LABELS,
   TRAIT_SUGGESTIONS,
   defaultWindowKb,
+  ldAvailable,
   ldWarningKb,
   studyFormSchema,
   studySummary,
@@ -63,6 +64,8 @@ const DEFAULTS: StudyFormValues = {
   assembly: "Wm82.a2.v1",
   trait_text: "",
   window_kb: 250,
+  window_mode: "fixed",
+  ld_r2: 0.2,
   top_k_per_locus: 5,
   specialists_enabled: [...SPECIALISTS],
   snps: [],
@@ -180,6 +183,7 @@ export function StudyForm() {
       ...values,
       trait_text: values.trait_text?.trim() || "unspecified",
       window_kb: Number.isFinite(values.window_kb) ? values.window_kb : 0,
+      ld_r2: Number.isFinite(values.ld_r2) ? values.ld_r2 : 0.2,
     });
   }, [values]);
   const dryRunKey = dryRun ? JSON.stringify(dryRun) : null;
@@ -218,7 +222,11 @@ export function StudyForm() {
   );
 
   const ldLimit = ldWarningKb(species);
-  const wideWindow = ldLimit !== null && values.window_kb > ldLimit;
+  const ldReady = ldAvailable(species);
+  const wideWindow =
+    values.window_mode === "fixed" &&
+    ldLimit !== null &&
+    values.window_kb > ldLimit;
   const suggestions = TRAIT_SUGGESTIONS[values.species] ?? [];
 
   const onSubmit = form.handleSubmit((submitted) => {
@@ -501,11 +509,105 @@ export function StudyForm() {
           <CardHeader>
             <CardTitle>Window</CardTitle>
             <CardDescription>
-              Each SNP becomes a fixed ± window; overlapping windows merge into
-              one locus.
+              Each SNP becomes a fixed ± window or its LD window; overlapping
+              windows merge into one locus.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
+            <Controller
+              control={control}
+              name="window_mode"
+              render={({ field }) => (
+                <RadioGroup
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  aria-label="Window mode"
+                  className="grid grid-cols-2 gap-2"
+                >
+                  {[
+                    {
+                      value: "fixed",
+                      label: "Fixed",
+                      hint: "SNP ± the flank below",
+                      disabled: false,
+                    },
+                    {
+                      value: "ld",
+                      label: "LD",
+                      hint: ldReady
+                        ? `Furthest SNP in LD (${species?.ld?.panels.join(", ")} panel)`
+                        : (species?.ld?.reason ?? "No LD panel in this build"),
+                      disabled: !ldReady,
+                    },
+                  ].map((option) => (
+                    <Label
+                      key={option.value}
+                      htmlFor={`${ids}-window-mode-${option.value}`}
+                      className={cn(
+                        "flex cursor-pointer items-start gap-3 rounded-md border p-3",
+                        field.value === option.value &&
+                          "border-foreground/40 bg-muted/50",
+                        option.disabled && "cursor-not-allowed opacity-60",
+                      )}
+                    >
+                      <RadioGroupItem
+                        id={`${ids}-window-mode-${option.value}`}
+                        value={option.value}
+                        disabled={option.disabled}
+                        className="mt-0.5"
+                      />
+                      <span className="flex flex-col gap-0.5">
+                        <span className="font-medium">{option.label}</span>
+                        <span className="text-muted-foreground text-xs font-normal">
+                          {option.hint}
+                        </span>
+                      </span>
+                    </Label>
+                  ))}
+                </RadioGroup>
+              )}
+            />
+            <FieldError
+              id={`${ids}-window-mode-error`}
+              message={formState.errors.window_mode?.message}
+            />
+            {values.window_mode === "ld" && (
+              <Controller
+                control={control}
+                name="ld_r2"
+                render={({ field }) => (
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor={`${ids}-ld-r2`}>Minimum r²</Label>
+                    <Input
+                      id={`${ids}-ld-r2`}
+                      type="number"
+                      inputMode="decimal"
+                      min={0.05}
+                      max={1}
+                      step={0.05}
+                      className="w-24"
+                      value={Number.isFinite(field.value) ? field.value : ""}
+                      onBlur={field.onBlur}
+                      onChange={(event) =>
+                        field.onChange(
+                          event.target.value === ""
+                            ? Number.NaN
+                            : Number(event.target.value),
+                        )
+                      }
+                      aria-invalid={!!formState.errors.ld_r2 || undefined}
+                    />
+                    <span className="text-muted-foreground text-xs">
+                      The fixed flank below is used where LD cannot be computed.
+                    </span>
+                  </div>
+                )}
+              />
+            )}
+            <FieldError
+              id={`${ids}-ld-r2-error`}
+              message={formState.errors.ld_r2?.message}
+            />
             <Controller
               control={control}
               name="window_kb"
