@@ -44,8 +44,18 @@ class StudyConfiguration(BaseModel):
     qa_model: str = DEFAULT_MODEL
 
     max_rounds: int = Field(default=2, ge=1)
+    """Research rounds including the first; 2 allows one follow-up round."""
     max_specialist_steps: int = Field(default=8, ge=1)
+    max_orchestrator_steps: int = Field(default=6, ge=2)
+    max_focus_genes: int = Field(default=12, ge=1)
+    """Genes one dispatch may give a specialist; extra genes are dropped and reported."""
     top_k_per_locus: int = Field(default=5, ge=1)
+    history_tool_results: int = Field(default=6, ge=1)
+    """Tool results an agent sees verbatim; older ones are reduced to a one-line digest."""
+    tool_output_chars: int = Field(default=6_000, ge=500)
+    model_max_tokens: int = Field(default=4_096, ge=256)
+    model_max_retries: int = Field(default=3, ge=0)
+    enable_web_fallback: bool = True
     data_dir: str = Field(default_factory=lambda: str(data_root()))
 
     @classmethod
@@ -60,12 +70,16 @@ class StudyConfiguration(BaseModel):
         """
         configurable = config.get("configurable", {}) if config else {}
         shared_model = os.environ.get("MODEL")
+
+        def pick(field_name: str) -> Any:
+            if os.environ.get(field_name.upper()):
+                return os.environ[field_name.upper()]
+            if configurable.get(field_name) not in (None, ""):
+                return configurable[field_name]
+            return shared_model if field_name in MODEL_FIELDS else None
+
         values: dict[str, Any] = {
-            field_name: os.environ.get(field_name.upper())
-            or configurable.get(field_name)
-            or (shared_model if field_name in MODEL_FIELDS else None)
-            for field_name in cls.model_fields
-            if field_name not in SERVER_FIELDS
+            field_name: pick(field_name) for field_name in cls.model_fields if field_name not in SERVER_FIELDS
         }
         return cls(**{key: value for key, value in values.items() if value is not None})
 
