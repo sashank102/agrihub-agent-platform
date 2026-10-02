@@ -8,6 +8,11 @@ time when it is set. QTL, GWAS and known-gene overlaps are queried in
 gene mode, so every stored item is keyed to a gene on the study assembly.
 Locus-level QTL and GWAS context goes into the triage brief only.
 
+Steps of the extended and heavy tiers (expression in trait tissues,
+pathways, regulation, and the location class and TFBS/CNS hits of the
+study SNPs) run only when the bundle serves their domain; network walks
+are left to the expression and network specialist.
+
 The brief tells the orchestrator, per locus, the top genes by provisional
 score, the genes with positional evidence only, the evidence domains with no
 coverage and the curated trait genes found. It is kept under
@@ -32,10 +37,19 @@ from agrihub.nodes.locus_builder import candidate_ref, load_candidates
 from agrihub.state import CandidateGene, EvidenceItem, Locus, SourceRef, StudyState
 from agrihub_data.availability import DomainStatus, domain_status
 from agrihub_data.bundle import Bundle, open_bundle
-from agrihub_data.query import annotation, orthology, overlap
+from agrihub_data.query import (
+    annotation,
+    expression,
+    orthology,
+    overlap,
+    pathways,
+    regulation,
+    variants,
+)
 from agrihub_data.query.common import AssemblyMismatchError, Region
 from agrihub_data.query.loci import gene_regions
 from agrihub_data.query.traits import TraitProfile, map_trait
+from agrihub_data.query.variants import VariantInput
 from agrihub_data.registry import load_species
 
 HARVEST_CHUNK = 48
@@ -43,6 +57,8 @@ BRIEF_TOKEN_BUDGET = 4_000
 CHARS_PER_TOKEN = 4
 POSITIONAL_ONLY_SHOWN = 8
 HARVESTED_CATEGORIES = ("positional", "functional_annotation", "ortholog", "association", "known_gene")
+DOMAIN_CATEGORIES = {"expression": "expression", "regulation": "regulation", "variant_location": "variant"}
+"""Evidence categories harvest also covers when the bundle serves the domain."""
 
 
 @dataclass(frozen=True)
@@ -54,11 +70,23 @@ class HarvestContext:
     profile: TraitProfile
     canonical: bool
     domains: dict[str, DomainStatus] = field(default_factory=dict)
+    snps: tuple[VariantInput, ...] = ()
+    """The study SNPs, for location classes and regulatory hits."""
 
     @property
     def available(self) -> set[str]:
         """Return the evidence domains the bundle and installed binaries can serve."""
         return {key for key, status in self.domains.items() if status.available}
+
+    @property
+    def categories(self) -> set[str]:
+        """Return the rubric categories this bundle can fill."""
+        return scoring.available_categories(self.available)
+
+    @property
+    def harvested(self) -> tuple[str, ...]:
+        """Return the evidence categories harvest covers for this bundle."""
+        return (*HARVESTED_CATEGORIES, *(category for domain, category in DOMAIN_CATEGORIES.items() if domain in self.available))
 
 
 @dataclass(frozen=True)
@@ -68,6 +96,8 @@ class HarvestStep:
     category: str
     query: Callable[[HarvestContext, list[str]], list[BaseModel]]
     canonical_only: bool = False
+    domain: str | None = None
+    """The evidence domain the step needs; it is skipped when the bundle cannot serve it."""
 
 
 def _annotation(context: HarvestContext, genes: list[str]) -> list[BaseModel]:
@@ -115,6 +145,33 @@ def _known_genes(context: HarvestContext, genes: list[str]) -> list[BaseModel]:
     return list(overlap.known_trait_genes(context.bundle, context.profile, gene_ids=genes, assembly=context.assembly))
 
 
+def _expression(context: HarvestContext, genes: list[str]) -> list[BaseModel]:
+    selection = expression.trait_relevant_tissues(context.bundle.species, context.profile, context.bundle)
+    if not selection.tissues:
+        return []
+    return [
+        *expression.expression_profile(context.bundle, genes, selection),
+        *expression.tissue_specificity(context.bundle, genes, selection),
+    ]
+
+
+def _pathways(context: HarvestContext, genes: list[str]) -> list[BaseModel]:
+    return list(pathways.get_pathways(context.bundle, genes, context.profile))
+
+
+def _regulation(context: HarvestContext, genes: list[str]) -> list[BaseModel]:
+    return list(regulation.get_regulation(context.bundle, genes))
+
+
+def _variant_locations(context: HarvestContext, genes: list[str]) -> list[BaseModel]:
+    wanted = set(genes)
+    rows: list[BaseModel] = [row for row in variants.location_classes(context.bundle, list(context.snps), context.assembly) if row.gene_id in wanted]
+    if "tfbs_cns" in context.available and context.canonical:
+        regions = [Region(label=snp.label, chrom=snp.chrom, start=snp.pos, end=snp.pos, snp_pos=snp.pos, assembly=context.assembly) for snp in context.snps]
+        rows.extend(hit for hit in regulation.snp_in_tfbs_or_cns(context.bundle, regions, context.assembly) if hit.gene_id in wanted)
+    return rows
+
+
 STEPS: tuple[HarvestStep, ...] = (
     HarvestStep("functional_annotation", _annotation),
     HarvestStep("orthologs", _orthologs, canonical_only=True),
@@ -123,7 +180,16 @@ STEPS: tuple[HarvestStep, ...] = (
     HarvestStep("qtl", _qtl),
     HarvestStep("gwas_catalog", _gwas),
     HarvestStep("known_genes", _known_genes, canonical_only=True),
+    HarvestStep("expression", _expression, canonical_only=True, domain="expression"),
+    HarvestStep("pathways", _pathways, canonical_only=True, domain="pathways"),
+    HarvestStep("regulation", _regulation, canonical_only=True, domain="regulation"),
+    HarvestStep("variant_location", _variant_locations, domain="variant_location"),
 )
+
+
+def runs(step: HarvestStep, context: HarvestContext) -> bool:
+    """Return whether a step applies to this study's assembly and bundle."""
+    return (context.canonical or not step.canonical_only) and (step.domain is None or step.domain in context.available)
 
 
 async def harvest(state: StudyState, config: RunnableConfig) -> dict[str, Any]:
@@ -133,7 +199,7 @@ async def harvest(state: StudyState, config: RunnableConfig) -> dict[str, Any]:
     loci = [Locus.model_validate(raw) for raw in state.get("loci") or []]
     store = EvidenceStore.for_run(run_id_from_config(config))
     candidates = await asyncio.to_thread(load_candidates, list(state.get("candidates") or []), store)
-    context = await asyncio.to_thread(harvest_context, study)
+    context = await asyncio.to_thread(harvest_context, study, loci)
     _announce_sources(context)
     gene_ids = [gene.gene_id for gene in candidates]
     skipped = [step.category for step in STEPS if step.canonical_only and not context.canonical]
@@ -143,7 +209,7 @@ async def harvest(state: StudyState, config: RunnableConfig) -> dict[str, Any]:
         async with gate:
             await _run_step(step, context, gene_ids, store)
 
-    await asyncio.gather(*(run(step) for step in STEPS if step.category not in skipped))
+    await asyncio.gather(*(run(step) for step in STEPS if runs(step, context)))
     result = await asyncio.to_thread(
         _triage,
         study,
@@ -171,25 +237,31 @@ async def harvest(state: StudyState, config: RunnableConfig) -> dict[str, Any]:
     return {"triage_brief": brief, "candidates": result["candidates"]}
 
 
-def harvest_context(study: dict[str, Any]) -> HarvestContext:
-    """Open the study's bundle and map its trait."""
+def harvest_context(study: dict[str, Any], loci: list[Locus] | None = None) -> HarvestContext:
+    """Open the study's bundle, map its trait and collect the SNPs of its loci."""
     species = str(study.get("species") or "")
     registry = load_species(species)
     bundle = open_bundle(registry.species)
     assembly = registry.assembly(study.get("assembly")).id
+    snps = {
+        (snp, pos): VariantInput(id=snp, chrom=locus.chrom, pos=pos)
+        for locus in loci or []
+        for snp, pos in (locus.snp_positions or ({locus.lead_snp: locus.lead_pos} if locus.lead_pos else {})).items()
+    }
     return HarvestContext(
         bundle=bundle,
         assembly=assembly,
         profile=map_trait(str(study.get("trait_text") or ""), registry.species, bundle),
         canonical=assembly == registry.canonical_assembly,
         domains=domain_status(registry.species),
+        snps=tuple(snps.values()),
     )
 
 
 def harvest_genes(context: HarvestContext, gene_ids: list[str], store: EvidenceStore) -> list[EvidenceItem]:
     """Run every step over ``gene_ids`` without events and return their stored evidence."""
     for step in STEPS:
-        if step.canonical_only and not context.canonical:
+        if not runs(step, context):
             continue
         for start in range(0, len(gene_ids), HARVEST_CHUNK):
             _store_rows(step.query(context, gene_ids[start : start + HARVEST_CHUNK]), store)
@@ -257,7 +329,7 @@ def _triage(
     symbols = _symbols(items)
     candidates = [gene.model_copy(update={"symbol": symbols.get(gene.gene_id) or gene.symbol}) for gene in candidates]
     registry = load_species(context.bundle.species)
-    scores = scoring.score_candidates(candidates, items, profile=context.profile, ld_kb=registry.typical_ld_kb)
+    scores = scoring.score_candidates(candidates, items, profile=context.profile, ld_kb=registry.typical_ld_kb, available=context.categories)
     per_gene: dict[str, Counter[str]] = {gene_id: Counter() for gene_id in gene_ids}
     for item in items:
         per_gene.setdefault(item.gene_id, Counter())[item.category] += 1
@@ -357,7 +429,7 @@ def _locus_brief(
         "top": [_gene_brief(gene) for gene in ranked[:top_k]],
         "positional_only": {"count": len(positional_only), "gene_ids": positional_only[:POSITIONAL_ONLY_SHOWN]},
         "known_genes": curated,
-        "no_coverage": [category for category in HARVESTED_CATEGORIES if not covered.get(category)],
+        "no_coverage": [category for category in context.harvested if not covered.get(category)],
         "context": _locus_context(locus, context),
     }
 

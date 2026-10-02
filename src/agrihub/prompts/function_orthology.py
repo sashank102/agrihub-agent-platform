@@ -22,10 +22,11 @@ FUNCTION_ORTHOLOGY = AgentPrompt(
         "Run gene_annotation and annotation_relevance (with the trait) on all focus genes in one round.",
         "Run get_orthologs and arabidopsis_knowledge for the genes with a plausible family or an ortholog in the brief; note relation (one2one vs one2many), number of methods and confidence.",
         "Separate what is known for the {species} gene itself (own GO with experimental codes) from what is transferred from an ortholog (TAIR phenotypes, experimental GO of the AGI).",
+        "Run get_pathways with the trait when an enzyme or metabolic family is involved; a pathway whose name matches the trait is annotation evidence for the gene itself.",
         "Record supports only when the function or the ortholog phenotype matches the trait profile; computational GO alone is weak; low-confidence or family-only orthology is at most weak.",
     ),
     output_contract=SPECIALIST_CONTRACT,
     stop_rules=SPECIALIST_STOP,
-    tools=("gene_annotation", "annotation_relevance", "get_orthologs", "arabidopsis_knowledge", "map_trait", *COMMON_TOOLS),
+    tools=("gene_annotation", "annotation_relevance", "get_orthologs", "arabidopsis_knowledge", "get_pathways", "map_trait", *COMMON_TOOLS),
     domains=SPECIALIST_DOMAINS["function_orthology"],
 )

@@ -49,7 +49,9 @@ from agrihub.prompts.locus_variant import LOCUS_VARIANT
 from agrihub.prompts.qtl_gwas import QTL_GWAS
 from agrihub.state import SpecialistName, SpecialistTask
 from agrihub.tools import bundle_tools as bt
+from agrihub.tools import extended_tools as et
 from agrihub.tools import literature_tools as lt
+from agrihub.tools import variant_tools as vt
 from agrihub.tools.agent_tools import COMMON_TOOLS
 from agrihub.tools.store_tools import store_for_config
 from agrihub_data.availability import (
@@ -93,7 +95,21 @@ SPECS: dict[SpecialistName, SpecialistSpec] = {
     "locus_variant": SpecialistSpec(
         "locus_variant",
         LOCUS_VARIANT,
-        (bt.genes_in_window, bt.define_locus, bt.gene_annotation, bt.map_gene_ids, bt.liftover, bt.resolve_marker, bt.normalize_chrom, *COMMON_TOOLS),
+        (
+            bt.genes_in_window,
+            vt.annotate_variants,
+            et.snp_in_tfbs_or_cns,
+            vt.ld_with_lead,
+            bt.define_locus,
+            vt.homeologs,
+            vt.gene_haplotypes,
+            bt.gene_annotation,
+            bt.map_gene_ids,
+            bt.liftover,
+            bt.resolve_marker,
+            bt.normalize_chrom,
+            *COMMON_TOOLS,
+        ),
     ),
     "qtl_gwas": SpecialistSpec(
         "qtl_gwas",
@@ -103,13 +119,23 @@ SPECS: dict[SpecialistName, SpecialistSpec] = {
     "function_orthology": SpecialistSpec(
         "function_orthology",
         FUNCTION_ORTHOLOGY,
-        (bt.gene_annotation, bt.annotation_relevance, bt.get_orthologs, bt.arabidopsis_knowledge, bt.map_trait, *COMMON_TOOLS),
+        (bt.gene_annotation, bt.annotation_relevance, bt.get_orthologs, bt.arabidopsis_knowledge, et.get_pathways, bt.map_trait, *COMMON_TOOLS),
     ),
     "expression_network": SpecialistSpec(
         "expression_network",
         EXPRESSION_NETWORK,
-        (bt.gene_annotation, bt.annotation_relevance, bt.map_trait, *COMMON_TOOLS),
-        max_steps=4,
+        (
+            *et.EXPRESSION_TOOLS,
+            et.seed_propagation,
+            et.coexpression_neighbors,
+            et.network_neighbors,
+            et.get_regulation,
+            et.get_pathways,
+            bt.gene_annotation,
+            bt.map_trait,
+            *COMMON_TOOLS,
+        ),
+        max_steps=6,
     ),
     "literature": SpecialistSpec(
         "literature",

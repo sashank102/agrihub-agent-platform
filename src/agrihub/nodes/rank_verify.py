@@ -69,15 +69,15 @@ def _rank(
     store: EvidenceStore,
     top_k: int,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    context = harvest_context(study)
+    context = harvest_context(study, loci)
     registry = load_species(context.bundle.species)
     gene_ids = [gene.gene_id for gene in candidates]
     items = store.query(gene_ids) if gene_ids else []
-    scores = scoring.score_candidates(candidates, items, profile=context.profile, ld_kb=registry.typical_ld_kb)
+    scores = scoring.score_candidates(candidates, items, profile=context.profile, ld_kb=registry.typical_ld_kb, available=context.categories)
 
     def rescore(genes: list[CandidateGene]) -> scoring.StudyScores:
         extra = harvest_genes(context, [gene.gene_id for gene in genes], store)
-        return scoring.score_candidates(genes, extra, profile=context.profile, ld_kb=registry.typical_ld_kb)
+        return scoring.score_candidates(genes, extra, profile=context.profile, ld_kb=registry.typical_ld_kb, available=context.categories)
 
     sensitivity = scoring.window_sensitivity(
         loci,

@@ -68,7 +68,7 @@ def test_progress_events_reach_the_total_for_every_step(harvested: dict[str, Any
     for event in harvested["events"]:
         if event["type"] == "evidence.progress":
             progress.setdefault(event["data"]["category"], []).append((event["data"]["done"], event["data"]["total"]))
-    assert set(progress) == {step.category for step in STEPS}
+    assert set(progress) == {step.category for step in STEPS if step.domain in {None, "variant_location"}}
     for steps in progress.values():
         assert [done for done, _ in steps] == sorted(done for done, _ in steps)
         assert steps[-1] == (total, total)

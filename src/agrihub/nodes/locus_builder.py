@@ -1,7 +1,10 @@
 """Turn SNPs into merged loci and the candidate genes inside them.
 
-Each SNP gets a fixed window (``define_locus``, clamped to its chromosome);
-windows that overlap or touch on one chromosome merge into one ``Locus``. The
+Each SNP gets a fixed window (``define_locus``, clamped to its chromosome),
+or with ``window.mode == "ld"`` its LD window on the bundled panel or the
+study's ``genotype_vcf_ref`` (falling back to the fixed window, with a
+warning, when LD cannot be computed); windows that overlap or touch on one
+chromosome merge into one ``Locus``. The
 genes of each locus come from ``genes_in_window`` on the study assembly,
 nearest to any of its SNPs first, capped at ``max_genes_per_locus``. The full
 gene record is stored as positional evidence; state keeps only candidate
@@ -29,6 +32,7 @@ from agrihub.state import (
 )
 from agrihub_data.bundle import Bundle, BundleMissingError, open_bundle
 from agrihub_data.query.common import Region
+from agrihub_data.query.ld import LdUnavailableError, LdWindow, gene_ld
 from agrihub_data.query.loci import GeneInWindow, define_locus, genes_in_window
 from agrihub_data.registry import load_species
 
@@ -42,6 +46,23 @@ class SnpWindow:
     pos: int
     start: int
     end: int
+    ld: LdWindow | None = None
+
+
+@dataclass(frozen=True)
+class LdRequest:
+    """How LD windows are asked for: the r2 threshold and an optional study VCF."""
+
+    r2: float
+    vcf_ref: str | None = None
+
+
+def ld_request(study: dict[str, Any]) -> LdRequest | None:
+    """Return the study's LD settings, or ``None`` for fixed windows."""
+    window = Window.model_validate(study.get("window") or {})
+    if window.mode != "ld":
+        return None
+    return LdRequest(r2=window.r2, vcf_ref=study.get("genotype_vcf_ref"))
 
 
 async def locus_builder(state: StudyState, config: RunnableConfig) -> dict[str, Any]:
@@ -56,7 +77,7 @@ async def locus_builder(state: StudyState, config: RunnableConfig) -> dict[str, 
     store = EvidenceStore.for_run(run_id_from_config(config))
     try:
         loci, candidates, warnings = await asyncio.to_thread(
-            _build, species, assembly, snps, window.flank_bp, cap, store
+            _build, species, assembly, snps, window.flank_bp, cap, store, ld_request(study)
         )
     except BundleMissingError as exc:
         events.phase("loci", "failed", detail=str(exc))
@@ -127,12 +148,16 @@ def _build(
     flank_bp: int,
     cap: int,
     store: EvidenceStore,
+    ld: LdRequest | None = None,
 ) -> tuple[list[Locus], list[CandidateGene], list[StudyWarning]]:
     built: list[Locus] = []
     candidates: list[CandidateGene] = []
     warnings: list[StudyWarning] = []
-    for locus, genes, in_window, warning in _assign_genes(species, assembly, snps, flank_bp, cap):
+    for locus, genes, in_window, warning, windows in _assign_genes(species, assembly, snps, flank_bp, cap, ld, warnings):
         store.put_items(item for gene in in_window for item in gene.evidence())
+        for found in (window.ld for window in windows if window.ld is not None):
+            linked = gene_ld(found, [(gene.gene_id, gene.start, gene.end) for gene in genes])
+            store.put_items([*found.evidence(), *(item for row in linked for item in row.evidence())])
         candidates.extend(genes)
         built.append(locus)
         if warning is not None:
@@ -146,6 +171,7 @@ def preview_loci(
     snps: list[SnpInput],
     flank_bp: int,
     cap: int,
+    ld: LdRequest | None = None,
 ) -> tuple[list[Locus], list[StudyWarning]]:
     """Return the loci a study would build, with gene counts, without storing evidence.
 
@@ -154,7 +180,7 @@ def preview_loci(
     """
     loci: list[Locus] = []
     warnings: list[StudyWarning] = []
-    for locus, _, _, warning in _assign_genes(species, assembly, snps, flank_bp, cap):
+    for locus, _, _, warning, _ in _assign_genes(species, assembly, snps, flank_bp, cap, ld, warnings):
         loci.append(locus)
         if warning is not None:
             warnings.append(warning)
@@ -167,13 +193,16 @@ def _assign_genes(
     snps: list[SnpInput],
     flank_bp: int,
     cap: int,
-) -> list[tuple[Locus, list[CandidateGene], list[GeneInWindow], StudyWarning | None]]:
+    ld: LdRequest | None = None,
+    warnings: list[StudyWarning] | None = None,
+) -> list[tuple[Locus, list[CandidateGene], list[GeneInWindow], StudyWarning | None, list[SnpWindow]]]:
     """Give each gene to the first locus that holds it and cap each locus at its nearest genes."""
-    loci = build_loci(species, assembly, snps, flank_bp)
+    windows = snp_windows(species, assembly, snps, flank_bp, ld, warnings)
+    loci = merge_windows(species, assembly, windows)
     if not loci:
         return []
     bundle = open_bundle(species)
-    assigned: list[tuple[Locus, list[CandidateGene], list[GeneInWindow], StudyWarning | None]] = []
+    assigned: list[tuple[Locus, list[CandidateGene], list[GeneInWindow], StudyWarning | None, list[SnpWindow]]] = []
     placed: set[str] = set()
     for locus in loci:
         pairs = [pair for pair in zip(*locus_genes(bundle, locus), strict=True) if pair[0].gene_id not in placed]
@@ -188,35 +217,55 @@ def _assign_genes(
             )
             genes, in_window = genes[:cap], in_window[:cap]
         placed.update(gene.gene_id for gene in genes)
+        members = [window for window in windows if window.snp.raw in locus.snp_positions]
         assigned.append(
-            (locus.model_copy(update={"n_genes": len(genes), "genes_capped": capped}), genes, in_window, warning)
+            (locus.model_copy(update={"n_genes": len(genes), "genes_capped": capped}), genes, in_window, warning, members)
         )
     return assigned
 
 
-def snp_windows(species: str, assembly: str, snps: list[SnpInput], flank_bp: int) -> list[SnpWindow]:
-    """Return each SNP's fixed window, clamped to its chromosome."""
+def snp_windows(
+    species: str,
+    assembly: str,
+    snps: list[SnpInput],
+    flank_bp: int,
+    ld: LdRequest | None = None,
+    warnings: list[StudyWarning] | None = None,
+) -> list[SnpWindow]:
+    """Return each SNP's fixed window clamped to its chromosome, or its LD window when ``ld`` is set."""
     windows = []
     for snp in snps:
         if snp.chrom is None or snp.pos is None:
             continue
+        if ld is not None:
+            try:
+                found = define_locus(species, snp.chrom, snp.pos, "ld", None, assembly, r2=ld.r2, vcf_ref=ld.vcf_ref, label=snp.raw)
+                windows.append(SnpWindow(snp=snp, chrom=found.chrom, pos=snp.pos, start=found.start, end=found.end, ld=found.ld))
+                if found.warning and warnings is not None:
+                    warnings.append(StudyWarning(code="ld_proxy", message=found.warning, snp=snp.raw))
+                continue
+            except (LdUnavailableError, ValueError) as exc:
+                if warnings is not None:
+                    warnings.append(StudyWarning(code="ld_unavailable", message=f"LD window unavailable ({exc}); used the fixed window", snp=snp.raw))
         locus = define_locus(species, snp.chrom, snp.pos, "fixed", flank_bp, assembly)
         windows.append(SnpWindow(snp=snp, chrom=locus.chrom, pos=snp.pos, start=locus.start, end=locus.end))
     return windows
 
 
 def build_loci(species: str, assembly: str, snps: list[SnpInput], flank_bp: int) -> list[Locus]:
+    """Merge overlapping or touching fixed windows per chromosome into loci numbered in genome order."""
+    return merge_windows(species, assembly, snp_windows(species, assembly, snps, flank_bp))
+
+
+def merge_windows(species: str, assembly: str, windows: list[SnpWindow]) -> list[Locus]:
     """Merge overlapping or touching windows per chromosome into loci numbered in genome order.
 
     The lead SNP has the smallest p-value, then the highest score, then the
-    first position.
+    first position. A locus is ``ld`` when all its windows are LD windows.
     """
     target = load_species(species).assembly(assembly)
     order = {chromosome.name: index for index, chromosome in enumerate(target.chromosomes)}
-    windows = sorted(
-        snp_windows(species, target.id, snps, flank_bp),
-        key=lambda item: (order.get(item.chrom, len(order)), item.chrom, item.start, item.pos),
-    )
+    windows = sorted(windows, key=lambda item: (order.get(item.chrom, len(order)), item.chrom, item.start, item.pos))
     groups: list[list[SnpWindow]] = []
     for item in windows:
         last = groups[-1] if groups else None
@@ -236,7 +285,7 @@ def build_loci(species: str, assembly: str, snps: list[SnpInput], flank_bp: int)
                 start=min(member.start for member in group),
                 end=max(member.end for member in group),
                 assembly=target.id,
-                window_method="fixed",
+                window_method="ld" if all(member.ld is not None for member in group) else "fixed",
                 merged_from=[member.snp.raw for member in group] if len(group) > 1 else [],
                 lead_pos=lead.pos,
                 snp_positions={member.snp.raw: member.pos for member in group},

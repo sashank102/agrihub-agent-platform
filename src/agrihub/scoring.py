@@ -3,16 +3,24 @@
 Every gene gets 0-100 points in seven categories:
 
 - A positional: ``max * exp(-d / LD50)`` from the distance to the nearest SNP
-  of its locus, LD50 being the species' typical LD distance.
+  of its locus, LD50 being the species' typical LD distance, or ``max * r2``
+  when the gene has an LD r2 with its lead SNP; plus a bonus for a HIGH or
+  MODERATE predicted consequence and one for a UTR, splice, upstream, TFBS
+  or conserved-element hit of a lead SNP.
 - B same-species functional: curated known trait genes, by trait match and
   curation confidence.
 - C ortholog-transferred: TAIR phenotypes, experimental GO and seed-family
   names of the Arabidopsis ortholog that match the trait, times an orthology
   factor (relation, methods, confidence) and a phylogenetic factor.
 - D annotation relevance: the gene's own GO terms (experimental full,
-  computational 0.3), seed-family names and trait keywords.
-- E expression and F network: not in the core bundle yet; they score 0 and
-  are reported as not available, never as negative evidence.
+  computational 0.3), seed-family names, trait keywords and trait-matching
+  pathways.
+- E expression: expression in the trait-relevant tissues and tissue
+  specificity (tau, z-score) per atlas.
+- F network: seed-propagation empirical p, and STRING or ATTED-II neighbours
+  that are trait seed genes.
+- E and F are reported as not available, never as negative evidence, when
+  the bundle has no atlas or network (``available``).
 - G convergence: prior QTL (placement, markers, span, overlap, trait match)
   and catalog GWAS hits (distance to the gene, trait match, p-value).
 
@@ -52,6 +60,8 @@ WEIGHTS_FILE = "scoring_weights.yaml"
 CATEGORY_CODES = ("A", "B", "C", "D", "E", "F", "G")
 CITATION_ORDER = ("B", "C", "G", "D")
 FUNCTIONAL_CODES = ("B", "C", "D", "E", "F")
+OPTIONAL_CODES = frozenset({"E", "F"})
+"""Categories only an extended-tier bundle can fill."""
 ORTHOLOG_FIELDS = frozenset({"arabidopsis_symbol", "arabidopsis_best_hit", "tair_description", "tair_curator_summary"})
 """Relevance match fields that describe the Arabidopsis best hit; they score in C, not D."""
 _PMID = re.compile(r"PMID:\s*(\d+)", re.IGNORECASE)
@@ -90,10 +100,13 @@ class CategorySpec(BaseModel):
 
 
 class PositionalWeights(BaseModel):
-    """Distance decay for category A."""
+    """Distance decay or LD r2 for category A, and the variant bonuses."""
 
     ld_scale: float = Field(gt=0.0)
     not_available: str
+    variant_impact: float = Field(ge=0.0)
+    regulatory_hit: float = Field(ge=0.0)
+    regulatory_classes: list[str]
 
 
 class KnownGeneWeights(BaseModel):
@@ -127,6 +140,33 @@ class AnnotationWeights(BaseModel):
     go_computational: float
     family: float
     keyword: float
+    pathway: float
+
+
+class PointBand(BaseModel):
+    """Points for a value of at least ``at_least`` (or at most ``max``)."""
+
+    at_least: float | None = None
+    max: float | None = None
+    points: float = Field(ge=0.0)
+
+
+class ExpressionWeights(BaseModel):
+    """Expression in trait-relevant tissues in category E."""
+
+    trait_tpm: list[PointBand]
+    specific: float
+    specific_tau: float
+    enriched: float
+    enriched_z: float
+
+
+class NetworkWeights(BaseModel):
+    """Network proximity to trait seeds in category F."""
+
+    seed_p: list[PointBand]
+    seed_neighbor: float
+    coexpressed_seed: float
 
 
 class QtlWeights(BaseModel):
@@ -152,6 +192,8 @@ class GwasWeights(BaseModel):
 class PenaltyWeights(BaseModel):
     """Deductions for gene models that are unlikely candidates."""
 
+    not_expressed: float
+    not_expressed_tpm: float
     te_like: float
     te_terms: list[str]
 
@@ -173,6 +215,8 @@ class Rubric(BaseModel):
     known_gene: KnownGeneWeights
     ortholog: OrthologWeights
     annotation: AnnotationWeights
+    expression: ExpressionWeights
+    network: NetworkWeights
     qtl: QtlWeights
     gwas: GwasWeights
     penalties: PenaltyWeights
@@ -297,6 +341,8 @@ class _GeneCredits:
     positional_points: float
     positional_ids: list[str]
     credits: list[_Credit] = field(default_factory=list)
+    ld: _Credit | None = None
+    max_expression: float | None = None
     dropped: dict[str, list[Dropped]] = field(default_factory=lambda: defaultdict(list))
     penalties: list[Penalty] = field(default_factory=list)
     flags: list[str] = field(default_factory=list)
@@ -391,8 +437,14 @@ def score_candidates(
     profile: TraitProfile,
     ld_kb: float,
     rubric: Rubric | None = None,
+    available: set[str] | None = None,
 ) -> StudyScores:
-    """Score every candidate from its stored evidence; the same input always gives the same output."""
+    """Score every candidate from its stored evidence; the same input always gives the same output.
+
+    ``available`` names the categories the bundle can fill (``E``, ``F``);
+    the others are reported as not available. ``None`` uses the rubric's
+    own flags.
+    """
     weights = rubric or load_rubric()
     by_gene: dict[str, list[EvidenceItem]] = defaultdict(list)
     for item in evidence:
@@ -402,7 +454,7 @@ def score_candidates(
         for candidate in sorted(candidates, key=lambda gene: (gene.locus_id, gene.gene_id))
     ]
     _share_paralog_credit(raw, weights)
-    genes = {credits.candidate.gene_id: _finalize(credits, weights) for credits in raw}
+    genes = {credits.candidate.gene_id: _finalize(credits, weights, available) for credits in raw}
     loci: dict[str, list[GeneScore]] = defaultdict(list)
     for gene in genes.values():
         loci[gene.locus_id].append(gene)
@@ -417,6 +469,19 @@ def score_candidates(
             gene.share_of_locus = round(exponent / total, 4)
         order[locus_id] = [gene.gene_id for gene in members]
     return StudyScores(rubric_version=weights.version, genes=genes, loci=order)
+
+
+def available_categories(domains: Iterable[str]) -> set[str]:
+    """Return the rubric categories a set of available evidence domains can fill."""
+    present = set(domains)
+    codes = {"B", "C", "D", "G"}
+    if "variant_location" in present:
+        codes.add("A")
+    if "expression" in present:
+        codes.add("E")
+    if present & {"network", "coexpression"}:
+        codes.add("F")
+    return codes
 
 
 def explain_score(scores: StudyScores, gene_id: str) -> dict[str, Any]:
@@ -441,7 +506,7 @@ def _gene_credits(
     credits = _GeneCredits(
         candidate=candidate,
         positional_points=positional,
-        positional_ids=[str(item.evidence_id) for item in items if item.category == "positional"],
+        positional_ids=[str(item.evidence_id) for item in items if item.category == "positional" and item.subtype == "in_window"],
     )
     calls = {
         str((item.value or {}).get("target_gene_id")): item.via_ortholog
@@ -475,6 +540,34 @@ def _gene_credits(
         elif item.category == "association" and item.subtype.startswith("gwas:"):
             points, reason = gwas_points(value, rubric)
             credits.credits.append(_Credit("G", points, evidence_id, f"{value.get('trait_name')}: {reason}", citations))
+        elif item.category == "functional_annotation" and item.subtype.startswith("pathway:"):
+            if value.get("matched"):
+                credits.credits.append(
+                    _Credit("D", rubric.annotation.pathway, evidence_id, f"pathway {value.get('pathway_name')} matches {value['matched'][0]}", kind="pathway")
+                )
+        elif item.category == "expression":
+            if item.subtype.startswith("expression_profile:"):
+                peak = float(value.get("max_value") or 0.0)
+                credits.max_expression = max(peak, credits.max_expression or 0.0)
+            credit = _expression_credit(evidence_id, item.subtype, value, rubric)
+            if credit is not None:
+                credits.credits.append(credit)
+        elif item.category == "network":
+            credit = _network_credit(evidence_id, item.subtype, value, rubric)
+            if credit is not None:
+                credits.credits.append(credit)
+        elif item.category in {"variant", "regulation"}:
+            credit = _variant_credit(evidence_id, item.category, item.subtype, value, rubric)
+            if credit is not None:
+                credits.credits.append(credit)
+        elif item.category == "positional" and item.subtype.startswith("ld_r2:"):
+            r2 = float(value.get("r2") or 0.0)
+            if credits.ld is None or r2 > credits.ld.points:
+                credits.ld = _Credit("A", r2, evidence_id, f"r2 {r2:g} with {value.get('lead')} on {value.get('genotypes')}", kind="ld")
+    if credits.max_expression is not None and credits.max_expression < rubric.penalties.not_expressed_tpm:
+        credits.penalties.append(
+            Penalty(reason=f"not expressed in any atlas sample (max {credits.max_expression:g} TPM)", points=rubric.penalties.not_expressed)
+        )
     defline = candidate.defline.casefold()
     terms = [term for term in rubric.penalties.te_terms if term in defline]
     if terms:
@@ -589,6 +682,68 @@ def _relevance_credit(
     return _Credit("D", weights_d.keyword, evidence_id, f"keyword {term} in {where}", kind="keyword")
 
 
+def _band_points(bands: list[PointBand], value: float) -> float:
+    for item in bands:
+        if (item.at_least is not None and value >= item.at_least) or (item.max is not None and value <= item.max):
+            return item.points
+    return 0.0
+
+
+def _expression_credit(evidence_id: str, subtype: str, value: dict[str, Any], rubric: Rubric) -> _Credit | None:
+    weights = rubric.expression
+    dataset = subtype.split(":", 1)[1] if ":" in subtype else ""
+    if subtype.startswith("expression_profile:"):
+        if value.get("trait_max_value") is None:
+            return None
+        trait_max = float(value["trait_max_value"])
+        points = _band_points(weights.trait_tpm, trait_max)
+        if points <= 0:
+            return None
+        return _Credit("E", points, evidence_id, f"{trait_max:g} TPM in {value.get('trait_max_sample')} ({dataset})", kind="trait_expression")
+    if subtype.startswith("tissue_specificity:"):
+        tau = value.get("tau")
+        trait_z = value.get("trait_z")
+        if value.get("trait_tissue_top") and tau is not None and float(tau) >= weights.specific_tau:
+            return _Credit("E", weights.specific, evidence_id, f"specific to {value.get('top_tissue')} (tau {float(tau):.2f}, {dataset})", kind="specific")
+        if trait_z is not None and float(trait_z) >= weights.enriched_z:
+            return _Credit("E", weights.enriched, evidence_id, f"enriched in a trait tissue (z {float(trait_z):.1f}, {dataset})", kind="enriched")
+    return None
+
+
+def _network_credit(evidence_id: str, subtype: str, value: dict[str, Any], rubric: Rubric) -> _Credit | None:
+    weights = rubric.network
+    if subtype.startswith("seed_propagation:"):
+        p_value = value.get("empirical_p")
+        if p_value is None or value.get("is_seed"):
+            return None
+        points = _band_points(weights.seed_p, float(p_value))
+        if points <= 0:
+            return None
+        return _Credit("F", points, evidence_id, f"near {value.get('trait_key')} seeds on {value.get('network')} (empirical p {float(p_value):.3g})", kind="seed_propagation")
+    if value.get("neighbor_is_seed"):
+        if subtype.startswith("coexpression:"):
+            return _Credit("F", weights.coexpressed_seed, evidence_id, f"co-expressed with seed {value.get('neighbor_id')} (z {value.get('score')})", kind="coexpressed_seed")
+        if subtype.startswith("neighbor:") and float(value.get("score") or 0.0) >= 0.7:
+            return _Credit("F", weights.seed_neighbor, evidence_id, f"STRING neighbour of seed {value.get('neighbor_id')} (score {value.get('score')})", kind="seed_neighbor")
+    return None
+
+
+def _variant_credit(evidence_id: str, category: str, subtype: str, value: dict[str, Any], rubric: Rubric) -> _Credit | None:
+    weights = rubric.positional
+    if category == "regulation":
+        if subtype.startswith(("tfbs_hit:", "cns_hit:")):
+            kind = "TFBS" if subtype.startswith("tfbs_hit:") else "conserved element"
+            return _Credit("A", weights.regulatory_hit, evidence_id, f"{value.get('snp')} in a {kind} ({value.get('relation') or 'near'} this gene)", kind="regulatory_hit")
+        return None
+    impact = str(value.get("impact") or "").upper()
+    if impact in {"HIGH", "MODERATE"}:
+        terms = ",".join((value.get("consequences") or [{}])[0].get("terms") or [])
+        return _Credit("A", weights.variant_impact, evidence_id, f"{value.get('variant')} {terms} ({impact})", kind="variant_impact")
+    if value.get("location_class") in weights.regulatory_classes:
+        return _Credit("A", weights.regulatory_hit, evidence_id, f"{value.get('variant')} in the {value.get('location_class')}", kind="regulatory_hit")
+    return None
+
+
 def _share_paralog_credit(genes: list[_GeneCredits], rubric: Rubric) -> None:
     holders: dict[tuple[str, str], set[str]] = defaultdict(set)
     for credits in genes:
@@ -609,7 +764,7 @@ def _share_paralog_credit(genes: list[_GeneCredits], rubric: Rubric) -> None:
                     credit.reason += f" (shared by {len(members)} paralogs)"
 
 
-def _finalize(credits: _GeneCredits, rubric: Rubric) -> GeneScore:
+def _finalize(credits: _GeneCredits, rubric: Rubric, available: set[str] | None = None) -> GeneScore:
     by_category: dict[str, list[_Credit]] = defaultdict(list)
     for credit in credits.credits:
         by_category[credit.category].append(credit)
@@ -637,14 +792,24 @@ def _finalize(credits: _GeneCredits, rubric: Rubric) -> GeneScore:
     for code in CATEGORY_CODES:
         spec = rubric.categories[code]
         if code == "A":
+            base, reason = credits.positional_points, f"{credits.candidate.distance_bp} bp from {credits.candidate.nearest_snp or 'the lead SNP'}"
+            evidence_ids = list(credits.positional_ids)
+            if credits.ld is not None:
+                base, reason = spec.max * credits.ld.points, credits.ld.reason
+                evidence_ids.append(credits.ld.evidence_id)
+            bonuses = []
+            for kind in ("variant_impact", "regulatory_hit"):
+                best = max((credit for credit in by_category["A"] if credit.kind == kind), key=lambda credit: (credit.points, credit.evidence_id), default=None)
+                if best is not None:
+                    bonuses.append(best)
             categories[code] = CategoryScore(
                 code=code,
                 name=spec.name,
-                points=round(min(spec.max, credits.positional_points), 2),
+                points=round(min(spec.max, base + sum(credit.points for credit in bonuses)), 2),
                 max_points=spec.max,
-                evidence_ids=list(credits.positional_ids),
-                reasons=[f"{credits.candidate.distance_bp} bp from {credits.candidate.nearest_snp or 'the lead SNP'}"],
-                note=rubric.positional.not_available,
+                evidence_ids=[*evidence_ids, *(credit.evidence_id for credit in bonuses)],
+                reasons=[reason, *(credit.reason for credit in bonuses)],
+                note=None if available is None or "A" in available else rubric.positional.not_available,
             )
             continue
         ranked = sorted(by_category[code], key=lambda item: (-item.points, item.evidence_id))
@@ -655,16 +820,17 @@ def _finalize(credits: _GeneCredits, rubric: Rubric) -> GeneScore:
         total = 0.0
         if counted:
             total = counted[0].points + (rubric.second_best * counted[1].points if len(counted) > 1 else 0.0)
+        is_available = spec.available if available is None or code not in OPTIONAL_CODES else code in available
         categories[code] = CategoryScore(
             code=code,
             name=spec.name,
             points=round(min(spec.max, total), 2),
             max_points=spec.max,
-            available=spec.available,
+            available=is_available,
             evidence_ids=[credit.evidence_id for credit in counted],
             reasons=[credit.reason for credit in counted[:3]],
             dropped=dropped.get(code, []),
-            note=spec.note if not spec.available else None,
+            note=spec.note if not is_available else None,
         )
     points = {code: category.points for code, category in categories.items()}
     penalty = sum(item.points for item in credits.penalties)

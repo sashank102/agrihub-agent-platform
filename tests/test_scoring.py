@@ -96,8 +96,8 @@ def _relevance(gene_id: str, kind: str, term: str, field: str, code: str | None 
     )
 
 
-def _score(genes: list[CandidateGene], items: list[EvidenceItem]) -> scoring.StudyScores:
-    return scoring.score_candidates(genes, items, profile=PROFILE, ld_kb=LD_KB)
+def _score(genes: list[CandidateGene], items: list[EvidenceItem], available: set[str] | None = None) -> scoring.StudyScores:
+    return scoring.score_candidates(genes, items, profile=PROFILE, ld_kb=LD_KB, available=available if available is not None else {"A"})
 
 
 def _qtl(**changes: Any) -> float:
@@ -270,3 +270,66 @@ def test_window_sensitivity_reranks_each_locus_at_every_flank():
     members[250_000] = [near, mid, far, extra]
     scoring.window_sensitivity([locus], scores, lambda _, flank: members[flank], rescore, top_k=1)
     assert rescored == [["extra"]]
+
+
+def _expression(gene_id: str, dataset: str = "Sreedasyam_Plott_2023", **value: Any) -> list[EvidenceItem]:
+    profile = {"max_value": value.get("max_value", 40.0), "trait_max_value": value.get("trait_max_value", 40.0), "trait_max_sample": "shoot_tip.standard"}
+    specificity = {"tau": value.get("tau", 0.9), "trait_tissue_top": value.get("top", True), "top_tissue": "shoot_tip", "trait_z": value.get("z", 2.0)}
+    return [
+        _item(gene_id, "expression", f"expression_profile:{dataset}", profile, record=f"{dataset}:{gene_id}:profile"),
+        _item(gene_id, "expression", f"tissue_specificity:{dataset}", specificity, record=f"{dataset}:{gene_id}:tau"),
+    ]
+
+
+def test_expression_scores_trait_tissue_level_and_specificity():
+    genes = [_gene("specific"), _gene("enriched"), _gene("low"), _gene("silent")]
+    items = [
+        *_expression("specific"),
+        *_expression("enriched", tau=0.4, top=False, z=1.8, trait_max_value=4.0),
+        *_expression("low", tau=0.1, top=False, z=0.1, trait_max_value=0.6, max_value=2.0),
+        *_expression("silent", tau=None, top=False, z=None, trait_max_value=0.1, max_value=0.2),
+    ]
+    scores = _score(genes, items, {"A", "E", "F"})
+    assert scores.genes["specific"].categories["E"].points == 8 + 0.25 * 5
+    assert scores.genes["enriched"].categories["E"].points == 5 + 0.25 * 3
+    assert scores.genes["low"].categories["E"].points == 0
+    assert [penalty.points for penalty in scores.genes["silent"].penalties] == [3.0]
+    assert scores.genes["specific"].categories["E"].available and scores.genes["specific"].tier == "T3"
+
+
+def test_network_scores_seed_propagation_and_seed_neighbours():
+    items = [
+        _item("near", "network", "seed_propagation:string", {"empirical_p": 0.004, "trait_key": "plant_height", "network": "string"}),
+        _item("near", "network", "coexpression:atted:seed1", {"neighbor_is_seed": True, "neighbor_id": "seed1", "score": 6.5}),
+        _item("weak", "network", "seed_propagation:string", {"empirical_p": 0.08, "trait_key": "plant_height", "network": "string"}),
+        _item("seed", "network", "seed_propagation:string", {"empirical_p": 0.001, "is_seed": True}),
+        _item("far", "network", "neighbor:string:x", {"neighbor_is_seed": False, "neighbor_id": "x", "score": 0.9}),
+    ]
+    scores = _score([_gene(name) for name in ("near", "weak", "seed", "far")], items, {"A", "E", "F"})
+    assert scores.genes["near"].categories["F"].points == 10
+    assert scores.genes["weak"].categories["F"].points == 3
+    assert scores.genes["seed"].categories["F"].points == 0 and scores.genes["far"].categories["F"].points == 0
+
+
+def test_ld_r2_replaces_distance_and_variants_add_bonuses():
+    far = _gene("far", 120_000)
+    items = [
+        _item("far", "positional", "ld_r2:Song_Hyten_2015", {"r2": 0.9, "lead": "S18_9263941", "genotypes": "Song_Hyten_2015"}),
+        _item("far", "variant", "consequence:missense_variant", {"impact": "MODERATE", "variant": "S18_1", "consequences": [{"terms": ["missense_variant"]}]}),
+        _item("far", "regulation", "tfbs_hit:t1", {"snp": "S18_1", "relation": "promoter"}),
+        _item("utr", "variant", "location:five_prime_UTR", {"location_class": "five_prime_UTR", "variant": "S18_2"}),
+        _item("intron", "variant", "location:intron", {"location_class": "intron", "variant": "S18_3"}),
+    ]
+    scores = _score([far, _gene("utr", 60_000), _gene("intron", 0)], items)
+    a = scores.genes["far"].categories["A"]
+    assert a.points == 20.0 and a.reasons[0].startswith("r2 0.9 with S18_9263941") and len(a.evidence_ids) == 3
+    distance_only = _score([_gene("far", 120_000)], []).genes["far"].categories["A"].points
+    assert scores.genes["utr"].categories["A"].points == pytest.approx(round(20 * 2.718281828 ** (-60_000 / 150_000) + 2, 2), abs=0.01)
+    assert scores.genes["intron"].categories["A"].points == 20.0 and distance_only < 10
+
+
+def test_trait_matching_pathways_score_in_d():
+    item = _item("ga", "functional_annotation", "pathway:PMN SoyCyc:PWY-5070", {"pathway_name": "gibberellin biosynthesis I", "matched": ["gibberellin"]})
+    other = _item("ga", "functional_annotation", "pathway:PMN SoyCyc:PWY-1", {"pathway_name": "starch degradation", "matched": []})
+    scores = _score([_gene("ga")], [item, other])
+    assert scores.genes["ga"].categories["D"].points == 4.0 and scores.genes["ga"].categories["D"].evidence_ids == [item.evidence_id]

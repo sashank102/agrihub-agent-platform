@@ -20,6 +20,7 @@ from agrihub.state import (
     TraitStudy,
     parse_study,
 )
+from agrihub_data.availability import domain_status
 from agrihub_data.bundle import Bundle, BundleMissingError, open_bundle
 from agrihub_data.query.ids import parse_positional, resolve_marker
 from agrihub_data.registry import (
@@ -169,7 +170,12 @@ def route_after_intake(state: StudyState) -> Literal["model_agent", "locus_build
 
 
 def window_warnings(registry: SpeciesRegistry, study: SnpStudy | TraitStudy) -> list[StudyWarning]:
-    """Warn when the flank is more than twice the species' typical LD distance."""
+    """Warn when the flank is more than twice the species' typical LD distance, or LD windows cannot be computed."""
+    if study.window.mode == "ld":
+        status = domain_status(registry.species).get("ld")
+        if status is not None and not status.available and not study.genotype_vcf_ref:
+            return [StudyWarning(code="ld_unavailable", message=f"LD windows are unavailable ({status.reason}); fixed ±{study.window.flank_bp // 1_000} kb windows will be used")]
+        return []
     limit_bp = int(2 * registry.typical_ld_kb * 1_000)
     if study.window.mode == "fixed" and study.window.flank_bp > limit_bp:
         return [

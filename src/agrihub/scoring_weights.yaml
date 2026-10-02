@@ -3,7 +3,7 @@
 # categories minus penalties, and share_of_locus = softmax(score / tau) within
 # its locus.
 
-version: 1
+version: 2
 tau: 8.0
 # Within a category only the best credit counts fully: max + second * 0.25.
 second_best: 0.25
@@ -13,14 +13,21 @@ categories:
   B: {name: Direct same-species functional evidence, max: 25}
   C: {name: Ortholog-transferred function, max: 20}
   D: {name: Annotation/pathway relevance, max: 10}
-  E: {name: Expression, max: 10, available: false, note: "no expression atlas in the core bundle yet"}
-  F: {name: Network, max: 10, available: false, note: "no co-expression or interaction network in the core bundle yet"}
+  E: {name: Expression, max: 10, note: "no expression atlas in this bundle (extended tier)"}
+  F: {name: Network, max: 10, note: "no STRING or ATTED-II network in this bundle (extended tier)"}
   G: {name: GWAS/QTL convergence, max: 5}
 
 positional:
-  # A = max * exp(-distance / LD50), LD50 = typical_ld_kb of the species * ld_scale.
+  # A = max * exp(-distance / LD50), LD50 = typical_ld_kb of the species * ld_scale,
+  # or max * r2 when the gene has an LD r2 with its lead SNP (LD panel or study VCF),
+  # plus the bonuses below, capped at the category maximum.
   ld_scale: 1.0
-  not_available: "linked-variant impact and promoter/UTR/TFBS hits need variant annotation (a later plan)"
+  not_available: "variant location classes need gene parts; rebuild the bundle"
+  # A HIGH or MODERATE predicted consequence (VEP/SnpEff) of a lead or linked SNP in the gene.
+  variant_impact: 5.0
+  # A lead SNP in the gene's UTR, splice region or 2 kb upstream, or in a promoter TFBS or conserved element.
+  regulatory_hit: 2.0
+  regulatory_classes: [five_prime_UTR, three_prime_UTR, splice, upstream]
 
 known_gene:
   # Curated same-species trait genes (category B), by how the record matches the trait.
@@ -54,6 +61,27 @@ annotation:
   go_computational: 3.0
   family: 6.0
   keyword: 4.0
+  # A PMN or Plant Reactome pathway whose name matches a trait keyword.
+  pathway: 4.0
+
+expression:
+  # Expression in the trait-relevant tissues (category E), per atlas.
+  # Maximum TPM in a trait tissue, highest band first.
+  trait_tpm: [{at_least: 10.0, points: 5.0}, {at_least: 1.0, points: 3.0}]
+  # The top tissue is a trait tissue and tau >= specific_tau.
+  specific: 8.0
+  specific_tau: 0.8
+  # Otherwise a trait tissue with z >= enriched_z among the gene's tissues.
+  enriched: 5.0
+  enriched_z: 1.5
+
+network:
+  # Network proximity to trait seed genes (category F).
+  # seed_propagation empirical p, lowest band first.
+  seed_p: [{max: 0.01, points: 10.0}, {max: 0.05, points: 6.0}, {max: 0.1, points: 3.0}]
+  # A direct STRING neighbour (score >= 0.7) or an ATTED-II top partner that is a seed gene.
+  seed_neighbor: 4.0
+  coexpressed_seed: 4.0
 
 qtl:
   # Prior QTL for the trait overlapping the gene (category G).
@@ -81,6 +109,9 @@ gwas:
   p_value: [{max: 1.0e-8, factor: 1.0}, {max: 1.0e-5, factor: 0.8}, {factor: 0.6}]
 
 penalties:
+  # Expressed below not_expressed_tpm in every sample of every atlas.
+  not_expressed: 3.0
+  not_expressed_tpm: 0.5
   te_like: 5.0
   te_terms: [transposon, retrotransposon, transposable element, reverse transcriptase, gag-pol, gag/pol]
 
