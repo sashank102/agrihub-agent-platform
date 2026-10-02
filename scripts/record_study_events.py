@@ -66,24 +66,37 @@ async def record_events(study: dict[str, Any] | None = None, *, fake_llm: bool =
     from langgraph.checkpoint.memory import InMemorySaver
 
     from agrihub.graph import build_study_graph
+    from agrihub_data.availability import pin_heavy_domains
 
     run_id = uuid.uuid4().hex
     graph = build_study_graph(checkpointer=InMemorySaver())
     configurable: dict[str, Any] = {"thread_id": run_id, "run_id": run_id}
     config: dict[str, Any] = {"configurable": configurable}
     if fake_llm:
-        configurable.update(orchestrator_model=FAKE_MODEL, specialist_model=FAKE_MODEL)
-        config["max_concurrency"] = 1
-    return [
-        part["data"]
-        async for part in graph.astream(
-            {"study": study or POSTER_STUDY},
-            config,
-            stream_mode=["custom"],
-            subgraphs=True,
-            version="v2",
+        # The golden fixture must not change when the host has PLINK2 or VEP.
+        pin_heavy_domains(False)
+        configurable.update(
+            orchestrator_model=FAKE_MODEL,
+            specialist_model=FAKE_MODEL,
+            verifier_model=FAKE_MODEL,
+            writer_model=FAKE_MODEL,
+            qa_model=FAKE_MODEL,
         )
-    ]
+        config["max_concurrency"] = 1
+    try:
+        return [
+            part["data"]
+            async for part in graph.astream(
+                {"study": study or POSTER_STUDY},
+                config,
+                stream_mode=["custom"],
+                subgraphs=True,
+                version="v2",
+            )
+        ]
+    finally:
+        if fake_llm:
+            pin_heavy_domains(None)
 
 
 def normalize(events: list[dict[str, Any]], *, fixed_clock: bool = False) -> list[dict[str, Any]]:

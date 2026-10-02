@@ -185,7 +185,11 @@ def test_study_run_streams_custom_events_and_stores_artifacts(postgres_database_
                 assert run_events
                 assert all(event["schema"] == events.SCHEMA for event in run_events)
                 lane_names = {name for name in names if name.startswith("custom|specialist:")}
-                started = [event for event in run_events if event["type"] == "agent.started"]
+                started = [
+                    event
+                    for event in run_events
+                    if event["type"] == "agent.started" and event["agent"]["kind"] == "specialist"
+                ]
                 assert len(lane_names) == len({event["agent"]["id"] for event in started}) >= 3
                 phases = [
                     (event["data"]["phase"], event["data"]["status"])
@@ -255,7 +259,7 @@ def test_study_run_streams_custom_events_and_stores_artifacts(postgres_database_
                     ).all()
                 )
             by_kind = {artifact.kind: artifact for artifact in artifacts}
-            assert set(by_kind) == {"report", "evidence_snapshot"}
+            assert set(by_kind) >= {"report", "evidence_snapshot", "run_trace"}
             assert str(by_kind["report"].id) == created["report"]["artifact_id"]
             assert str(by_kind["evidence_snapshot"].id) == created["evidence_snapshot"]["artifact_id"]
             snapshot = by_kind["evidence_snapshot"].content or {}

@@ -130,6 +130,8 @@ class RunEvent(BaseModel):
 
 PIPELINE = AgentRef(id="pipeline", name="Study pipeline", kind="pipeline")
 ORCHESTRATOR = AgentRef(id="orchestrator", name="Orchestrator", kind="orchestrator")
+VERIFIER = AgentRef(id="verifier", name="Verifier", kind="verifier", parent_id="pipeline")
+WRITER = AgentRef(id="writer", name="Report writer", kind="writer", parent_id="pipeline")
 
 
 def emit(

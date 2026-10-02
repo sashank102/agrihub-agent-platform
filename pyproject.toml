@@ -121,4 +121,5 @@ exclude = ["src/open_deep_research", "tests"]
 markers = [
     "postgres: requires TEST_DATABASE_URI and a live PostgreSQL server",
     "bundle: requires a built soybean bundle at $AGRIHUB_DATA_DIR/soybean/bundle.duckdb",
+    "binaries: requires PLINK2 and Ensembl VEP on the host",
 ]

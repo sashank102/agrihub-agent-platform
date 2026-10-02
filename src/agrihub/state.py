@@ -248,6 +248,9 @@ class RankedCandidate(BaseModel):
     supporting_findings: list[str] = Field(default_factory=list)
     conflicting_findings: list[str] = Field(default_factory=list)
     evidence_ids: list[str] = Field(default_factory=list)
+    shortlist: bool = False
+    """True when the gene is in the top-K highlighted shortlist of its locus."""
+    verifier_status: Literal["verified", "unverified", "contradicted", "unchecked"] = "unchecked"
 
 
 class SourceRef(BaseModel):
@@ -257,6 +260,34 @@ class SourceRef(BaseModel):
     name: str
     version: str
     license: str | None = None
+    retrieved_at: str | None = None
+    url: str | None = None
+
+
+class EvidenceRef(BaseModel):
+    """A citation the report may point at, with the quote the hover card shows."""
+
+    alias: str
+    evidence_id: str
+    gene_id: str
+    source_db: str
+    category: str
+    subtype: str
+    quote: str | None = None
+    verifier_status: str | None = None
+
+
+class ClaimVerdict(BaseModel):
+    """A verifier mark on one existing claim. The verifier never adds claims."""
+
+    claim_id: str
+    gene_id: str
+    text: str
+    evidence_ids: list[str] = Field(default_factory=list)
+    produced_by: str = ""
+    status: Literal["verified", "unverified", "contradicted"]
+    independent_evidence_ids: list[str] = Field(default_factory=list)
+    note: str = ""
 
 
 class Report(BaseModel):
@@ -270,6 +301,11 @@ class Report(BaseModel):
     provenance: dict[str, JsonValue] = Field(default_factory=dict)
     loci: list[Locus] = Field(default_factory=list)
     candidates: list[RankedCandidate] = Field(default_factory=list)
+    """Top-K shortlist per locus, the genes the summary highlights."""
+    candidates_full: list[RankedCandidate] = Field(default_factory=list)
+    """Every scored gene, including those outside the shortlist."""
+    verification: list[ClaimVerdict] = Field(default_factory=list)
+    citations: list[EvidenceRef] = Field(default_factory=list)
     stability: dict[str, JsonValue] = Field(default_factory=dict)
     """Window-sensitivity summary: top genes per locus at each tested flank."""
     warnings: list[StudyWarning] = Field(default_factory=list)
@@ -301,6 +337,8 @@ class StudyState(TypedDict, total=False):
     ranking: list[dict[str, Any]]
     scoring: dict[str, Any]
     report: dict[str, Any] | None
+    evidence_snapshot: dict[str, Any]
+    followup: str
     run_status: str
 
 

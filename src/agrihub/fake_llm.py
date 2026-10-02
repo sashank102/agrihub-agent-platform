@@ -170,11 +170,15 @@ def _expand(ranges: str) -> list[str]:
 
 
 def poster_script(messages: list[BaseMessage], tools: tuple[str, ...]) -> AIMessage:
-    """Play the orchestrator or a specialist, depending on the bound tools."""
+    """Play the orchestrator, a specialist, the verifier or follow-up Q&A."""
     if "dispatch_specialists" in tools:
         return _orchestrator(messages)
     if "specialist_done" in tools:
         return _specialist(messages, tools)
+    if "explain_score" in tools or "search_report" in tools:
+        return _qa(messages, tools)
+    if "get_evidence" in tools and "record_finding" not in tools:
+        return AIMessage(content="Verifier notes are already decided. No new claims.")
     return AIMessage(content="No tools are bound.")
 
 
@@ -380,6 +384,25 @@ def _narrow_trait_hit(line: str) -> bool:
 
 def _finding(target: str, claim: str, stance: str, strength: str, evidence_ids: list[str]) -> dict[str, Any]:
     return {"target": target, "claim": claim, "stance": stance, "strength": strength, "evidence_ids": evidence_ids}
+
+
+def _qa(messages: list[BaseMessage], tools: tuple[str, ...]) -> AIMessage:
+    """Look up the gene in the question, then answer with the aliases the tool returned."""
+    step = steps_taken(messages)
+    text = human_text(messages)
+    if re.search(r"new window|another trait|re-?run|different trait", text, re.IGNORECASE):
+        return AIMessage(content="That needs a new study. Follow-up questions cannot change the window, the trait or the SNP set.")
+    gene = re.search(r"Glyma\.\d+G\d+", text)
+    if step == 0 and gene and "explain_score" in tools:
+        return reply(call("explain_score", {"gene_id": gene.group(0)}, "qa-explain"))
+    if step == 0 and "search_report" in tools:
+        return reply(call("search_report", {"query": text[-240:]}, "qa-search"))
+    aliases = re.findall(r"\bE\d+\b", "\n".join(str(message.content) for message in messages))
+    cited = " ".join(f"[{alias}]" for alias in list(dict.fromkeys(aliases))[:6])
+    subject = gene.group(0) if gene else "The candidate"
+    if not cited:
+        return AIMessage(content=f"{subject} is in the finished report. The study was not modified.")
+    return AIMessage(content=f"{subject} is a candidate because of the stored evidence {cited}. The study was not modified.")
 
 
 def unavailable_domains(messages: list[BaseMessage]) -> list[str]:

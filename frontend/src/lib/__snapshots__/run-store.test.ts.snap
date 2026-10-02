@@ -5,7 +5,9 @@ exports[`the golden poster run > rebuilds the finished study 1`] = `
   "artifacts": [
     "loci_table: Loci",
     "candidates_table: Ranked candidates",
+    "candidates_full: Full candidate ranking",
     "evidence_snapshot: Evidence ledger",
+    "run_trace: Run trace",
     "report: plant height candidate genes in soybean",
   ],
   "decisions": [
@@ -44,7 +46,7 @@ exports[`the golden poster run > rebuilds the finished study 1`] = `
       "specialist": "locus_variant",
       "status": "completed",
       "step": "5/8",
-      "tools": 9,
+      "tools": 8,
     },
     {
       "findings": 5,
@@ -91,11 +93,20 @@ exports[`the golden poster run > rebuilds the finished study 1`] = `
       "step": "3/8",
       "tools": 3,
     },
+    {
+      "findings": 0,
+      "model": "agrihub-fake:poster",
+      "name": "Verifier",
+      "specialist": null,
+      "status": "completed",
+      "step": "1/2",
+      "tools": 0,
+    },
   ],
   "phase": "reporting",
   "phases": {
     "harvest": {
-      "detail": "2561 evidence items for 123 genes; triage brief ~1334 tokens",
+      "detail": "2561 evidence items for 123 genes; triage brief ~1404 tokens",
       "status": "completed",
     },
     "intake": {
@@ -111,7 +122,7 @@ exports[`the golden poster run > rebuilds the finished study 1`] = `
       "status": "completed",
     },
     "ranking": {
-      "detail": "15 candidates ranked across 3 loci (rubric v2)",
+      "detail": "123 candidates ranked across 3 loci (rubric v3)",
       "status": "completed",
     },
     "reporting": {

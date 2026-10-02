@@ -3,7 +3,7 @@
 # categories minus penalties, and share_of_locus = softmax(score / tau) within
 # its locus.
 
-version: 2
+version: 3
 tau: 8.0
 # Within a category only the best credit counts fully: max + second * 0.25.
 second_best: 0.25
@@ -18,10 +18,16 @@ categories:
   G: {name: GWAS/QTL convergence, max: 5}
 
 positional:
-  # A = max * exp(-distance / LD50), LD50 = typical_ld_kb of the species * ld_scale,
-  # or max * r2 when the gene's LD r2 with its lead SNP (LD panel or study VCF) gives
-  # more, plus the bonuses below, capped at the category maximum.
+  # A = max * exp(-distance / LD50), LD50 = typical_ld_kb of the species * ld_scale.
+  # Panel LD r2 raises A but contributes at most ld_cap of the category. A gene that
+  # contains the SNP also gets the remaining fraction, so an LD-linked neighbour cannot
+  # tie it. Distance decay still applies when it beats the capped LD score.
   ld_scale: 1.0
+  ld_cap: 0.85
+  # Reserved for the gene that contains the SNP. A neighbour's distance score
+  # stops this far below the category maximum, which is the trait-TPM cap, so
+  # non-specific expression cannot overtake the SNP-containing gene.
+  overlap_margin: 2.0
   not_available: "variant location classes need gene parts; rebuild the bundle"
   # A HIGH or MODERATE predicted consequence (VEP/SnpEff) of a lead or linked SNP in the gene.
   variant_impact: 5.0
@@ -72,9 +78,27 @@ expression:
   # The top tissue is a trait tissue and tau >= specific_tau.
   specific: 8.0
   specific_tau: 0.8
-  # Otherwise a trait tissue with z >= enriched_z among the gene's tissues.
+  # Otherwise a trait tissue with z >= enriched_z, and either tau >= enriched_tau
+  # or at least enriched_fold times the gene's median across tissues. Tau below
+  # specificity_tau_floor earns no specificity points. Housekeeping families
+  # (PANTHER/Pfam name or defline) keep specificity times housekeeping_factor.
   enriched: 5.0
   enriched_z: 1.5
+  enriched_tau: 0.5
+  enriched_fold: 2.0
+  specificity_tau_floor: 0.3
+  housekeeping_factor: 0.25
+  housekeeping_terms:
+    - ribosomal protein
+    - ribosomal rna
+    - 40s ribosomal
+    - 60s ribosomal
+    - 50s ribosomal
+    - ribosome
+    - histone
+    - ubiquitin-conjugating
+    - elongation factor
+    - translation initiation
 
 network:
   # Network proximity to trait seed genes (category F).

@@ -111,8 +111,9 @@ def test_snp_study_emits_phases_in_order_and_closes_each():
 
 def test_dispatched_specialists_get_distinct_lanes_that_all_complete():
     received, values, run_id = _run(SNP_STUDY)
-    started = [event for event in received if event["type"] == "agent.started"]
-    completed = [event for event in received if event["type"] == "agent.completed"]
+    started = [event for event in received if event["type"] == "agent.started" and event["agent"]["kind"] == "specialist"]
+    completed = [event for event in received if event["type"] == "agent.completed" and event["agent"]["kind"] == "specialist"]
+    assert any(event["agent"]["kind"] == "verifier" for event in received if event["type"] == "agent.started")
     started_ids = [event["agent"]["id"] for event in started]
 
     assert len(started) == len(values["dispatches"]) >= 4
@@ -184,7 +185,7 @@ def test_final_state_has_a_report_and_artifacts_follow_the_ledger():
     assert values["messages"][-1].content == report.markdown
     assert values["run_status"] == "completed"
 
-    assert [item["kind"] for item in stored] == ["report", "evidence_snapshot"]
+    assert [item["kind"] for item in stored] == ["report", "evidence_snapshot", "run_trace"]
     snapshot = stored[1]["content"]
     assert len(snapshot["evidence"]) == report.evidence_count
     cited = {evidence_id for candidate in report.candidates for evidence_id in candidate.evidence_ids}
@@ -198,7 +199,9 @@ def test_final_state_has_a_report_and_artifacts_follow_the_ledger():
         "loci_table",
         "candidates_table",
         "candidates_table",
+        "candidates_full",
         "evidence_snapshot",
+        "run_trace",
         "report",
     ]
     assert artifacts[-1]["data"]["artifact_id"] == "artifact-1"
@@ -210,7 +213,8 @@ def test_disabled_specialists_are_rejected_in_the_decision():
     received, values, _ = _run(study)
     first_round = [item for item in values["dispatches"] if item["round"] == 1]
     assert sorted(item["specialist"] for item in first_round) == ["literature", "qtl_gwas"]
-    assert len([event for event in received if event["type"] == "agent.started"]) == len(values["dispatches"])
+    started = [event for event in received if event["type"] == "agent.started" and event["agent"]["kind"] == "specialist"]
+    assert len(started) == len(values["dispatches"])
     dispatch = next(event for event in received if event["type"] == "orchestrator.decision")
     assert sorted(item["specialist"] for item in dispatch["data"]["rejected"]) == [
         "expression_network",

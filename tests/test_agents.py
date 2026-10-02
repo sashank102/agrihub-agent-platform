@@ -105,7 +105,11 @@ def test_orchestrator_dispatches_differentiated_lanes_with_rationales():
     assert len(focus) == len(dispatched)
     assert len({item["instructions"] for item in dispatched}) == len({item["rationale"] for item in dispatched}) == len(dispatched)
     assert all(item["agent_id"].startswith("call_orch_r1_s2-") for item in dispatched)
-    started = {event["agent"]["id"]: event for event in _of(received, "agent.started")}
+    started = {
+        event["agent"]["id"]: event
+        for event in _of(received, "agent.started")
+        if event["agent"]["kind"] == "specialist"
+    }
     assert set(started) == {item["agent_id"] for item in dispatched}
     for item in dispatched:
         focus = started[item["agent_id"]]["data"]["focus"]
@@ -147,7 +151,7 @@ def test_unknown_gene_ids_in_a_dispatch_are_rejected(script: Callable[[Script], 
     rejected = {item["specialist"]: item["reason"] for item in decision["rejected"]}
     assert rejected["literature"] == "unknown gene ids: Glyma.99G999999"
     assert rejected["locus_variant"] == "unknown loci: L9"
-    assert [event["agent"]["id"] for event in _of(received, "agent.started")] == ["call_bad-qtl_gwas"]
+    assert [event["agent"]["id"] for event in _of(received, "agent.started") if event["agent"]["kind"] == "specialist"] == ["call_bad-qtl_gwas"]
     assert values["run_status"] == "completed"
 
 
@@ -173,8 +177,8 @@ def test_a_specialist_that_never_finishes_closes_when_its_budget_runs_out(script
         return fake_llm.reply(fake_llm.call("think", {"reflection": "keep looking"}, f"think-{step}"))
 
     received, values, _ = _run(script(play), max_rounds=1, max_specialist_steps=2)
-    steps = [event["data"]["step"] for event in _of(received, "agent.step")]
-    completed = _of(received, "agent.completed")
+    steps = [event["data"]["step"] for event in _of(received, "agent.step") if event["agent"]["kind"] == "specialist"]
+    completed = [event for event in _of(received, "agent.completed") if event["agent"]["kind"] == "specialist"]
     assert steps == [1, 2]
     assert completed[0]["data"]["status"] == "completed"
     assert budget.budget_reminder(0, 2) and budget.budget_reminder(1, 2).startswith("This is your last tool round")
@@ -254,7 +258,7 @@ def test_follow_up_rounds_happen_only_when_allowed(script: Callable[[Script], st
     decisions = [event["data"] for event in _of(double, "orchestrator.decision")]
     assert [(item["kind"], item["round"]) for item in decisions] == [("dispatch", 1), ("followup", 2), ("finish", 2)]
     assert [item["agent_id"] for item in decisions[1]["dispatched"]] == ["call_follow-function_orthology"]
-    started = _of(double, "agent.started")
+    started = [event for event in _of(double, "agent.started") if event["agent"]["kind"] == "specialist"]
     assert [event["data"]["focus"]["round"] for event in started] == [1, 2]
     assert started[1]["agent"]["label"].endswith("round 2")
     assert double_values["round"] == 2 and len(double_values["orchestrator_usage"]) == 2

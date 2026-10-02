@@ -7,7 +7,7 @@ import pytest
 
 from agrihub import scoring
 from agrihub.evidence_store import evidence_id_for
-from agrihub.state import CandidateGene, EvidenceItem, Locus, OrthologRef
+from agrihub.state import CandidateGene, EvidenceItem, Finding, Locus, OrthologRef
 from agrihub_data.query.traits import TraitProfile
 
 PROFILE = TraitProfile(
@@ -275,6 +275,9 @@ def test_window_sensitivity_reranks_each_locus_at_every_flank():
 def _expression(gene_id: str, dataset: str = "Sreedasyam_Plott_2023", **value: Any) -> list[EvidenceItem]:
     profile = {"max_value": value.get("max_value", 40.0), "trait_max_value": value.get("trait_max_value", 40.0), "trait_max_sample": "shoot_tip.standard"}
     specificity = {"tau": value.get("tau", 0.9), "trait_tissue_top": value.get("top", True), "top_tissue": "shoot_tip", "trait_z": value.get("z", 2.0)}
+    for key in ("tissue_means", "trait_tissues", "trait_fold"):
+        if key in value:
+            specificity[key] = value[key]
     return [
         _item(gene_id, "expression", f"expression_profile:{dataset}", profile, record=f"{dataset}:{gene_id}:profile"),
         _item(gene_id, "expression", f"tissue_specificity:{dataset}", specificity, record=f"{dataset}:{gene_id}:tau"),
@@ -291,10 +294,11 @@ def test_expression_scores_trait_tissue_level_and_specificity():
     ]
     scores = _score(genes, items, {"A", "E", "F"})
     assert scores.genes["specific"].categories["E"].points == 8 + 0.25 * 2
-    assert scores.genes["enriched"].categories["E"].points == 5 + 0.25 * 1
+    # tau 0.4 is below the enrichment floor and has no 2x fold, so only the trait-TPM band counts.
+    assert scores.genes["enriched"].categories["E"].points == 1
     assert scores.genes["low"].categories["E"].points == 0
     assert [penalty.points for penalty in scores.genes["silent"].penalties] == [3.0]
-    assert scores.genes["specific"].categories["E"].available and scores.genes["specific"].tier == "T3"
+    assert scores.genes["specific"].categories["E"].available and scores.genes["specific"].tier == "T4"
 
 
 def test_network_scores_seed_propagation_and_seed_neighbours():
@@ -336,3 +340,105 @@ def test_trait_matching_pathways_score_in_d():
     other = _item("ga", "functional_annotation", "pathway:PMN SoyCyc:PWY-1", {"pathway_name": "starch degradation", "matched": []})
     scores = _score([_gene("ga")], [item, other])
     assert scores.genes["ga"].categories["D"].points == 4.0 and scores.genes["ga"].categories["D"].evidence_ids == [item.evidence_id]
+
+
+def test_low_tau_expression_and_housekeeping_specificity_stay_within_the_trait_band():
+    broad = _expression("broad", tau=0.24, top=False, z=3.0, trait_max_value=40.0)
+    folded = _expression(
+        "folded",
+        tau=0.42,
+        top=True,
+        z=1.8,
+        trait_max_value=4.0,
+        tissue_means={"shoot_tip": 3.0, "root": 1.0, "leaf": 1.0},
+        trait_tissues=["shoot_tip"],
+    )
+    quiet = _expression("quiet", tau=0.09, top=True, z=2.0, trait_max_value=20.0)
+    genes = [
+        _gene("broad", defline="50S ribosomal protein L22"),
+        _gene("folded", defline="ribosomal RNA methyltransferase"),
+        _gene("quiet", defline="arginine/serine-rich coiled coil protein"),
+    ]
+    scores = _score(genes, [*broad, *folded, *quiet], {"A", "E"})
+    assert scores.genes["broad"].categories["E"].points <= 2
+    assert scores.genes["quiet"].categories["E"].points <= 2
+    assert scores.genes["folded"].categories["E"].points <= 2
+    assert scores.genes["broad"].tier == "T4"
+    with_function = _score(
+        [_gene("both")],
+        [*_expression("both"), _relevance("both", "keyword", "gibberellin", "defline")],
+        {"A", "D", "E"},
+    )
+    assert with_function.genes["both"].tier == "T3"
+
+
+def test_panel_ld_leaves_the_snp_containing_gene_ahead_of_an_ld_neighbour():
+    contained = _gene("snp", 0).model_copy(update={"overlaps_snp": True})
+    neighbour = _gene("neighbour", 22_000)
+
+    def linked(gene_id: str) -> EvidenceItem:
+        return _item(gene_id, "positional", "ld_r2:panel", {"r2": 1.0, "lead": "S18_9263941", "genotypes": "panel"})
+
+    scores = _score([contained, neighbour], [linked("snp"), linked("neighbour")])
+    snp_a = scores.genes["snp"].categories["A"].points
+    neighbour_a = scores.genes["neighbour"].categories["A"].points
+    assert snp_a == 20.0
+    assert neighbour_a <= 20 * 0.85 + 0.5
+    assert snp_a > neighbour_a
+    nonspecific = _expression("neighbour", tau=0.2, top=False, z=2.2, trait_max_value=30.0)
+    compared = _score([contained, neighbour], [linked("snp"), linked("neighbour"), *nonspecific], {"A", "E"})
+    assert compared.genes["snp"].score >= compared.genes["neighbour"].score
+
+
+def test_supporting_findings_add_evidence_once_and_conflicts_are_recorded():
+    profile = _expression("g1")
+    finding = Finding(
+        finding_id="F1",
+        agent_id="lane",
+        target="g1",
+        claim="expressed in the trait tissue",
+        stance="supports",
+        strength="weak",
+        evidence_ids=[item.evidence_id or "" for item in profile],
+    )
+    again = Finding(
+        finding_id="F2",
+        agent_id="lane",
+        target="g1",
+        claim="the same expression fact",
+        stance="supports",
+        strength="weak",
+        evidence_ids=[item.evidence_id or "" for item in profile],
+    )
+    base = _score([_gene("g1")], profile, {"A", "E"})
+    doubled = scoring.score_candidates(
+        [_gene("g1")],
+        profile,
+        profile=PROFILE,
+        ld_kb=LD_KB,
+        available={"A", "E"},
+        findings=[finding, again],
+        finding_items=profile,
+    )
+    assert doubled.genes["g1"].score == base.genes["g1"].score
+    via_finding = scoring.score_candidates(
+        [_gene("g1")],
+        [],
+        profile=PROFILE,
+        ld_kb=LD_KB,
+        available={"A", "E"},
+        findings=[finding],
+        finding_items=profile,
+    )
+    assert via_finding.genes["g1"].categories["E"].points == base.genes["g1"].categories["E"].points
+    conflict = finding.model_copy(update={"finding_id": "F9", "stance": "conflicts", "claim": "the passage disagrees"})
+    flagged = scoring.score_candidates(
+        [_gene("g1")],
+        profile,
+        profile=PROFILE,
+        ld_kb=LD_KB,
+        available={"A", "E"},
+        findings=[conflict],
+    )
+    assert flagged.genes["g1"].score == base.genes["g1"].score
+    assert "conflict: F9" in flagged.genes["g1"].flags

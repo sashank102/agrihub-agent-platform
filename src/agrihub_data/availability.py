@@ -177,6 +177,8 @@ class BundleFacts(BaseModel):
 
 _cache: dict[str, tuple[int, BundleFacts]] = {}
 _cache_lock = threading.Lock()
+_heavy_pin: bool | None = None
+"""When set, LD and VEP ignore the host binaries. ``False`` is the fake-LLM recording profile."""
 
 
 def bundle_facts(species: str, data_dir: Path | str | None = None) -> BundleFacts:
@@ -230,6 +232,22 @@ def resource_paths(species: str, kind: str, data_dir: Path | str | None = None) 
     return [root / relative for relative in bundle_facts(species, data_dir).resources.get(kind, []) if (root / relative).exists()]
 
 
+def pin_heavy_domains(available: bool | None) -> None:
+    """Force LD and variant-consequence availability, ignoring host binaries.
+
+    ``True`` reports both domains available, ``False`` reports them
+    unavailable, and ``None`` probes the host again. Fake-LLM recordings pin
+    ``False`` so the golden event fixture does not depend on PLINK2 or VEP.
+    """
+    global _heavy_pin
+    _heavy_pin = available
+
+
+def heavy_domains_pinned() -> bool | None:
+    """Return the heavy-domain pin, or ``None`` when the host is probed."""
+    return _heavy_pin
+
+
 def clear_cache() -> None:
     """Forget cached bundle facts (tests)."""
     with _cache_lock:
@@ -275,6 +293,10 @@ def _status(domain: Domain, species: str, facts: BundleFacts, root: Path) -> Dom
         if not any((root / relative).exists() for relative in facts.resources.get(kind, [])):
             return status(f"no {kind.replace('_', ' ')} for {species} (tier {built_tier}); {hint}")
     for binary in domain.binaries:
+        if _heavy_pin is False:
+            return status(BINARY_HINTS.get(binary, f"{binary} is pinned unavailable"))
+        if _heavy_pin is True:
+            continue
         if binary == "plink2" and external.plink2_path() is None:
             return status(BINARY_HINTS["plink2"])
         if binary == "vep" and external.vep_runner() is None:

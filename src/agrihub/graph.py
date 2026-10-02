@@ -12,6 +12,7 @@ from typing import Any
 from langgraph.graph import END, START, StateGraph
 
 from agrihub.nodes.collect import collect
+from agrihub.nodes.followup import followup_qa
 from agrihub.nodes.harvest import harvest
 from agrihub.nodes.intake import intake, route_after_intake
 from agrihub.nodes.locus_builder import locus_builder
@@ -23,6 +24,13 @@ from agrihub.nodes.writer import ArtifactSink, make_writer
 from agrihub.state import StudyState
 
 GRAPH_ID = "agrihub_study"
+
+
+def route_entry(state: StudyState) -> str:
+    """Send a follow-up question on a finished study to the read-only Q&A node."""
+    if str(state.get("followup") or "").strip() and state.get("report"):
+        return "followup_qa"
+    return "intake"
 
 
 def build_study_graph(
@@ -42,8 +50,10 @@ def build_study_graph(
     builder.add_node("collect", collect, destinations=("orchestrator", "rank_verify"))
     builder.add_node("rank_verify", rank_verify)
     builder.add_node("writer", make_writer(artifact_sink))
+    builder.add_node("followup_qa", followup_qa)
 
-    builder.add_edge(START, "intake")
+    builder.add_conditional_edges(START, route_entry, ["followup_qa", "intake"])
+    builder.add_edge("followup_qa", END)
     builder.add_conditional_edges(
         "intake",
         route_after_intake,

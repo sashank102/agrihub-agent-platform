@@ -3,11 +3,12 @@
 Every gene gets 0-100 points in seven categories:
 
 - A positional: ``max * exp(-d / LD50)`` from the distance to the nearest SNP
-  of its locus, LD50 being the species' typical LD distance, or ``max * r2``
-  when the gene's LD r2 with its lead SNP gives more (the LD panel is not the
-  study population, so LD only raises A); plus a bonus for a HIGH or
-  MODERATE predicted consequence and one for a UTR, splice, upstream, TFBS
-  or conserved-element hit of a lead SNP.
+  of its locus, LD50 being the species' typical LD distance. Panel LD r2
+  raises A but contributes at most ``ld_cap`` of the category (the panel is
+  not the study population), plus an overlap or distance bonus so a gene
+  that contains the SNP keeps an edge over an LD-linked neighbour. A HIGH or
+  MODERATE predicted consequence and a UTR, splice, upstream, TFBS or
+  conserved-element hit add their bonuses on top.
 - B same-species functional: curated known trait genes, by trait match and
   curation confidence.
 - C ortholog-transferred: TAIR phenotypes, experimental GO and seed-family
@@ -16,8 +17,11 @@ Every gene gets 0-100 points in seven categories:
 - D annotation relevance: the gene's own GO terms (experimental full,
   computational 0.3), seed-family names, trait keywords and trait-matching
   pathways.
-- E expression: expression in the trait-relevant tissues and tissue
-  specificity (tau, z-score) per atlas.
+- E expression: expression in the trait-relevant tissues, capped at the
+  trait-TPM band, plus specificity. Specificity needs tau at least 0.3;
+  enrichment also needs tau at least 0.5 or a 2x fold over the gene's
+  median. Ribosomal, histone and similar housekeeping families are
+  down-weighted.
 - F network: seed-propagation empirical p, and STRING or ATTED-II neighbours
   that are trait seed genes.
 - E and F are reported as not available, never as negative evidence, when
@@ -35,8 +39,10 @@ Independence rules, applied per gene:
   it and are flagged.
 
 Then ``share_of_locus = softmax(score / tau)`` within each locus, and tiers:
-T1 ``B >= 15``; T2 ``C >= 12`` and ``A >= 10``; T3 any functional evidence;
-T4 positional only. Weights live in ``scoring_weights.yaml`` next to this
+T1 ``B >= 15``; T2 ``C >= 12`` and ``A >= 10``; T3 is C, D or F (expression
+alone does not lift T4 to T3); T4 positional only. Supporting findings add
+only the evidence they cite, once; conflicting findings are recorded and do
+not add points. Weights live in ``scoring_weights.yaml`` next to this
 module so they can be tuned without code changes.
 """
 
@@ -53,7 +59,7 @@ from typing import Any
 import yaml
 from pydantic import BaseModel, Field
 
-from agrihub.state import CandidateGene, EvidenceItem, Locus, OrthologRef, Tier
+from agrihub.state import CandidateGene, EvidenceItem, Finding, Locus, OrthologRef, Tier
 from agrihub_data.query.annotation import EXPERIMENTAL_GO_CODES
 from agrihub_data.query.traits import TraitProfile
 
@@ -61,6 +67,8 @@ WEIGHTS_FILE = "scoring_weights.yaml"
 CATEGORY_CODES = ("A", "B", "C", "D", "E", "F", "G")
 CITATION_ORDER = ("B", "C", "G", "D")
 FUNCTIONAL_CODES = ("B", "C", "D", "E", "F")
+T3_CODES = ("C", "D", "F")
+"""T3 is ortholog function, annotation or network. Expression alone stays T4."""
 OPTIONAL_CODES = frozenset({"E", "F"})
 """Categories only an extended-tier bundle can fill."""
 ORTHOLOG_FIELDS = frozenset({"arabidopsis_symbol", "arabidopsis_best_hit", "tair_description", "tair_curator_summary"})
@@ -104,6 +112,10 @@ class PositionalWeights(BaseModel):
     """Distance decay or LD r2 for category A, and the variant bonuses."""
 
     ld_scale: float = Field(gt=0.0)
+    ld_cap: float = Field(default=0.85, gt=0.0, le=1.0)
+    """Panel LD r2 contributes at most this fraction of category A."""
+    overlap_margin: float = Field(default=2.0, ge=0.0)
+    """Points reserved for a gene that contains the SNP, so a neighbour cannot tie it on distance alone."""
     not_available: str
     variant_impact: float = Field(ge=0.0)
     regulatory_hit: float = Field(ge=0.0)
@@ -160,6 +172,13 @@ class ExpressionWeights(BaseModel):
     specific_tau: float
     enriched: float
     enriched_z: float
+    enriched_tau: float = 0.5
+    """Enrichment also needs tau at least this, unless the trait fold clears ``enriched_fold``."""
+    enriched_fold: float = 2.0
+    specificity_tau_floor: float = 0.3
+    """No specificity points below this tau."""
+    housekeeping_factor: float = Field(default=0.25, ge=0.0, le=1.0)
+    housekeeping_terms: list[str] = Field(default_factory=list)
 
 
 class NetworkWeights(BaseModel):
@@ -439,16 +458,23 @@ def score_candidates(
     ld_kb: float,
     rubric: Rubric | None = None,
     available: set[str] | None = None,
+    findings: Iterable[Finding] | None = None,
+    finding_items: Iterable[EvidenceItem] | None = None,
 ) -> StudyScores:
     """Score every candidate from its stored evidence; the same input always gives the same output.
 
     ``available`` names the categories the bundle can fill (``E``, ``F``);
     the others are reported as not available. ``None`` uses the rubric's
-    own flags.
+    own flags. Supporting findings add only evidence they cite that is not
+    already in ``evidence`` (passed as ``finding_items``); the same id is
+    never credited twice. Conflicting findings are recorded on the gene and
+    do not add points.
     """
     weights = rubric or load_rubric()
+    claims = list(findings or [])
+    pool = _merge_finding_evidence(list(evidence), claims, list(finding_items or []))
     by_gene: dict[str, list[EvidenceItem]] = defaultdict(list)
-    for item in evidence:
+    for item in pool:
         by_gene[item.gene_id].append(item)
     raw = [
         _gene_credits(candidate, by_gene.get(candidate.gene_id, []), profile, ld_kb, weights)
@@ -456,6 +482,7 @@ def score_candidates(
     ]
     _share_paralog_credit(raw, weights)
     genes = {credits.candidate.gene_id: _finalize(credits, weights, available) for credits in raw}
+    _record_conflicts(genes, claims)
     loci: dict[str, list[GeneScore]] = defaultdict(list)
     for gene in genes.values():
         loci[gene.locus_id].append(gene)
@@ -573,6 +600,14 @@ def _gene_credits(
     terms = [term for term in rubric.penalties.te_terms if term in defline]
     if terms:
         credits.penalties.append(Penalty(reason=f"transposable-element-like gene model ({terms[0]})", points=rubric.penalties.te_like))
+    housekeeping = _housekeeping_term(candidate, items, rubric.expression.housekeeping_terms)
+    if housekeeping:
+        factor = rubric.expression.housekeeping_factor
+        credits.flags.append(f"housekeeping: {housekeeping}")
+        for credit in credits.credits:
+            if credit.category == "E" and credit.kind in {"specific", "enriched"}:
+                credit.points = round(credit.points * factor, 3)
+                credit.reason += f" (housekeeping {housekeeping})"
     return credits
 
 
@@ -703,12 +738,112 @@ def _expression_credit(evidence_id: str, subtype: str, value: dict[str, Any], ru
         return _Credit("E", points, evidence_id, f"{trait_max:g} TPM in {value.get('trait_max_sample')} ({dataset})", kind="trait_expression")
     if subtype.startswith("tissue_specificity:"):
         tau = value.get("tau")
+        if tau is None or float(tau) < weights.specificity_tau_floor:
+            return None
+        tau_value = float(tau)
+        if value.get("trait_tissue_top") and tau_value >= weights.specific_tau:
+            return _Credit("E", weights.specific, evidence_id, f"specific to {value.get('top_tissue')} (tau {tau_value:.2f}, {dataset})", kind="specific")
         trait_z = value.get("trait_z")
-        if value.get("trait_tissue_top") and tau is not None and float(tau) >= weights.specific_tau:
-            return _Credit("E", weights.specific, evidence_id, f"specific to {value.get('top_tissue')} (tau {float(tau):.2f}, {dataset})", kind="specific")
-        if trait_z is not None and float(trait_z) >= weights.enriched_z:
-            return _Credit("E", weights.enriched, evidence_id, f"enriched in a trait tissue (z {float(trait_z):.1f}, {dataset})", kind="enriched")
+        if trait_z is None or float(trait_z) < weights.enriched_z:
+            return None
+        fold = _trait_fold(value)
+        if tau_value < weights.enriched_tau and (fold is None or fold < weights.enriched_fold):
+            return None
+        fold_text = f", {fold:.1f}x median" if fold is not None else ""
+        return _Credit(
+            "E",
+            weights.enriched,
+            evidence_id,
+            f"enriched in a trait tissue (z {float(trait_z):.1f}, tau {tau_value:.2f}{fold_text}, {dataset})",
+            kind="enriched",
+        )
     return None
+
+
+def _trait_fold(value: dict[str, Any]) -> float | None:
+    """Return trait-tissue expression over the gene's median, or ``None`` when it cannot be computed.
+
+    ``tissue_means`` are log2(TPM+1). An explicit ``trait_fold`` wins.
+    """
+    if value.get("trait_fold") is not None:
+        return float(value["trait_fold"])
+    means = value.get("tissue_means")
+    if not isinstance(means, dict) or len(means) < 2:
+        return None
+    linear = {str(tissue): max(0.0, (2.0 ** float(level)) - 1.0) for tissue, level in means.items()}
+    ordered = sorted(linear.values())
+    mid = len(ordered) // 2
+    median = ordered[mid] if len(ordered) % 2 else (ordered[mid - 1] + ordered[mid]) / 2.0
+    tissues = [str(tissue) for tissue in value.get("trait_tissues") or []]
+    trait_levels = [linear[tissue] for tissue in tissues if tissue in linear]
+    if not trait_levels and value.get("trait_tissue_top") and str(value.get("top_tissue")) in linear:
+        trait_levels = [linear[str(value["top_tissue"])]]
+    if not trait_levels:
+        return None
+    peak = max(trait_levels)
+    if median <= 1e-9:
+        return float("inf") if peak > 0 else 0.0
+    return peak / median
+
+
+def _housekeeping_term(candidate: CandidateGene, items: list[EvidenceItem], terms: list[str]) -> str | None:
+    """Return the first housekeeping family named in the defline or in PANTHER/Pfam evidence."""
+    if not terms:
+        return None
+    blobs = [candidate.defline]
+    for item in items:
+        if item.category != "functional_annotation":
+            continue
+        kind = item.subtype.split(":", 1)[0]
+        if kind not in {"pfam", "panther"}:
+            continue
+        value = item.value if isinstance(item.value, dict) else {}
+        blobs.append(" ".join(str(value.get(key) or "") for key in ("id", "name", "label")))
+        blobs.append(item.subtype)
+    text = " ".join(blobs).casefold()
+    for term in terms:
+        if term.casefold() in text:
+            return term
+    return None
+
+
+def _merge_finding_evidence(
+    evidence: list[EvidenceItem],
+    findings: list[Finding],
+    cited: list[EvidenceItem],
+) -> list[EvidenceItem]:
+    """Add evidence that supporting findings cite and that harvest did not already include."""
+    if not findings or not cited:
+        return evidence
+    wanted: set[str] = set()
+    for finding in findings:
+        if finding.stance == "supports":
+            wanted.update(finding.evidence_ids)
+    if not wanted:
+        return evidence
+    seen = {str(item.evidence_id) for item in evidence}
+    seen |= {item.alias for item in evidence if item.alias}
+    extra: list[EvidenceItem] = []
+    for item in cited:
+        keys = {key for key in (str(item.evidence_id) if item.evidence_id else None, item.alias) if key}
+        if keys & wanted and not keys & seen:
+            extra.append(item)
+            seen |= keys
+    return evidence + extra
+
+
+def _record_conflicts(genes: dict[str, GeneScore], findings: list[Finding]) -> None:
+    """Record conflicting findings on the gene. They do not change points."""
+    for finding in findings:
+        if finding.stance != "conflicts" or finding.target_type != "gene":
+            continue
+        gene = genes.get(finding.target)
+        if gene is None:
+            continue
+        label = finding.finding_id or finding.claim
+        flag = f"conflict: {label}"
+        if flag not in gene.flags:
+            gene.flags.append(flag)
 
 
 def _network_credit(evidence_id: str, subtype: str, value: dict[str, Any], rubric: Rubric) -> _Credit | None:
@@ -793,11 +928,21 @@ def _finalize(credits: _GeneCredits, rubric: Rubric, available: set[str] | None 
     for code in CATEGORY_CODES:
         spec = rubric.categories[code]
         if code == "A":
-            base, reason = credits.positional_points, f"{credits.candidate.distance_bp} bp from {credits.candidate.nearest_snp or 'the lead SNP'}"
+            base = credits.positional_points
+            reason = f"{credits.candidate.distance_bp} bp from {credits.candidate.nearest_snp or 'the lead SNP'}"
             evidence_ids = list(credits.positional_ids)
-            if credits.ld is not None and spec.max * credits.ld.points > base:
-                base, reason = spec.max * credits.ld.points, credits.ld.reason
-                evidence_ids.append(credits.ld.evidence_id)
+            if credits.ld is not None and spec.max > 0:
+                capped = spec.max * rubric.positional.ld_cap * credits.ld.points
+                if credits.candidate.overlaps_snp:
+                    capped += spec.max * (1.0 - rubric.positional.ld_cap)
+                if capped > base:
+                    reason = credits.ld.reason
+                    if credits.candidate.overlaps_snp:
+                        reason = f"{reason}; the gene contains the SNP"
+                    base = capped
+                    evidence_ids.append(credits.ld.evidence_id)
+            if credits.candidate.distance_bp > 0 and not credits.candidate.overlaps_snp:
+                base = min(base, spec.max - rubric.positional.overlap_margin)
             bonuses = []
             for kind in ("variant_impact", "regulatory_hit"):
                 best = max((credit for credit in by_category["A"] if credit.kind == kind), key=lambda credit: (credit.points, credit.evidence_id), default=None)
@@ -818,9 +963,7 @@ def _finalize(credits: _GeneCredits, rubric: Rubric, available: set[str] | None 
         for credit in ranked:
             if credit.points <= 0:
                 dropped[code].append(Dropped(evidence_id=credit.evidence_id, reason=credit.reason))
-        total = 0.0
-        if counted:
-            total = counted[0].points + (rubric.second_best * counted[1].points if len(counted) > 1 else 0.0)
+        total = _category_total(code, counted, rubric, credits.flags)
         is_available = spec.available if available is None or code not in OPTIONAL_CODES else code in available
         categories[code] = CategoryScore(
             code=code,
@@ -849,6 +992,34 @@ def _finalize(credits: _GeneCredits, rubric: Rubric, available: set[str] | None 
     )
 
 
+def _category_total(code: str, counted: list[_Credit], rubric: Rubric, flags: list[str]) -> float:
+    """Return a category total. Plain expression cannot exceed the trait-TPM band.
+
+    Extra atlases do not stack trait-TPM points past that band. A housekeeping
+    family is capped there too, so ribosomal or histone specificity cannot
+    lift E above plain trait-tissue expression.
+    """
+    if not counted:
+        return 0.0
+    if code != "E":
+        return counted[0].points + (rubric.second_best * counted[1].points if len(counted) > 1 else 0.0)
+    trait = [credit for credit in counted if credit.kind == "trait_expression"]
+    other = [credit for credit in counted if credit.kind != "trait_expression"]
+    cap = max((band.points for band in rubric.expression.trait_tpm), default=0.0)
+    trait_points = min(cap, trait[0].points) if trait else 0.0
+    other_points = 0.0
+    if other:
+        other_points = other[0].points + (rubric.second_best * other[1].points if len(other) > 1 else 0.0)
+    if trait_points and other_points:
+        best, runner = max(other_points, trait_points), min(other_points, trait_points)
+        total = best + rubric.second_best * runner
+    else:
+        total = trait_points or other_points
+    if any(flag.startswith("housekeeping:") for flag in flags):
+        total = min(total, cap)
+    return total
+
+
 def _drop(credits: list[_Credit], dropped: list[Dropped], kind: str, reason: str) -> None:
     for credit in [credit for credit in credits if credit.kind == kind]:
         credits.remove(credit)
@@ -860,7 +1031,7 @@ def _tier(points: dict[str, float], rubric: Rubric) -> Tier:
         rule = rubric.tiers.get(tier) or {}
         if rule and all(points.get(code, 0.0) >= minimum for code, minimum in rule.items()):
             return "T1" if tier == "T1" else "T2"
-    if any(points.get(code, 0.0) > 0 for code in FUNCTIONAL_CODES):
+    if any(points.get(code, 0.0) > 0 for code in T3_CODES):
         return "T3"
     return "T4"
 

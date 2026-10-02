@@ -299,7 +299,7 @@ def test_store_tools_run_off_the_event_loop(store: EvidenceStore):
     assert threads and "MainThread" not in threads
 
 
-def test_checkpoint_stays_flat_with_a_thousand_evidence_items(fixture_env: FixtureBundle):
+def test_checkpoint_stays_flat_with_a_thousand_evidence_items(fixture_env: FixtureBundle, fake_llm: str):
     study = {
         "mode": "snps",
         "species": "soybean",

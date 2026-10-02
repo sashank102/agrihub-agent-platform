@@ -88,7 +88,8 @@ def test_ld_mode_builds_ld_windows_and_stores_gene_r2(heavy_env: FixtureBundle, 
     assert linked["Glyma.18G092200"]["r2"] == 1.0 and linked["Glyma.18G092000"]["via"] == "ss2"
     assert any(item.subtype.startswith("ld_window:") and item.gene_id == "S18_9263941" for item in items)
     ranked = {row["gene_id"]: row for row in values["ranking"]}
-    assert ranked["Glyma.18G092000"]["category_points"]["A"] >= 20.0
+    assert ranked["Glyma.18G092200"]["category_points"]["A"] == 20.0
+    assert ranked["Glyma.18G092200"]["category_points"]["A"] > ranked["Glyma.18G092000"]["category_points"]["A"]
 
 
 def test_core_only_bundle_declines_expression_network(fixture_env: FixtureBundle, fake_llm: str):

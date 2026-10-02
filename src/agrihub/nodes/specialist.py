@@ -167,6 +167,7 @@ class SpecialistRunState(TypedDict, total=False):
     usage: dict[str, Any]
     done: bool
     summary: str
+    closed_with_tool: bool
 
 
 def max_steps_for(spec: SpecialistSpec, settings: StudyConfiguration) -> int:
@@ -249,7 +250,8 @@ async def agent(state: SpecialistRunState, config: RunnableConfig) -> dict[str, 
     update: dict[str, Any] = {"messages": [response], "step": step, "usage": usage}
     if not calls:
         update["done"] = True
-        update["summary"] = _text(response) or "Finished without a summary."
+        update["closed_with_tool"] = False
+        update["summary"] = _text(response) or "Finished without a specialist_done tool call."
     return update
 
 
@@ -311,10 +313,12 @@ async def tools(state: SpecialistRunState, config: RunnableConfig) -> dict[str, 
     }
     if done_call is not None:
         update["done"] = True
+        update["closed_with_tool"] = True
         update["summary"] = str((done_call.get("args") or {}).get("summary") or "Done.")
     elif step >= int(state.get("max_steps") or settings.max_specialist_steps):
         recorded = len(state.get("finding_ids") or []) + len(update["finding_ids"])
         update["done"] = True
+        update["closed_with_tool"] = False
         update["summary"] = f"Step budget of {step} used up before specialist_done; {recorded} findings recorded."
     return update
 
@@ -406,6 +410,7 @@ async def specialist(task: SpecialistTask, config: RunnableConfig) -> dict[str, 
                 "input_tokens": int(usage.get("input_tokens") or 0),
                 "output_tokens": int(usage.get("output_tokens") or 0),
                 "duration_ms": duration_ms,
+                "missing_specialist_done": not bool(result.get("closed_with_tool")),
             }
         ],
     }
