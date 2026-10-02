@@ -65,6 +65,27 @@ cp .env.groq.example .env
 ./start-dev.sh
 ```
 
+## Species data bundles
+
+Study tools read an offline DuckDB bundle per species under
+`AGRIHUB_DATA_DIR` (default `var/data`). Each tier includes the ones before
+it, and `build` writes the bundle for the tier it is given:
+
+```bash
+# core: genes, annotation, id maps, markers, QTL, GWAS, curated genes, orthology, ontologies (~2.3 GB raw)
+./.tools/bin/uv run agrihub-data fetch --species soybean --tier core
+# extended: expression atlases, STRING and ATTED-II networks, PlantTFDB/PlantRegMap, PMN and Plant Reactome (~6 GB more raw)
+./.tools/bin/uv run agrihub-data fetch --species soybean --tier extended
+# heavy: VEP cache, SoySNP50K LD panel, GmHapMap, HXNY homeologs (~0.3 GB more raw)
+./.tools/bin/uv run agrihub-data fetch --species soybean --tier heavy
+scripts/setup_heavy_tools.sh   # PLINK2 binary and the ensembl-vep Docker image
+./.tools/bin/uv run agrihub-data build --species soybean --tier heavy
+./.tools/bin/uv run agrihub-data verify --species soybean
+```
+
+Domains whose data or binaries are missing are reported to the agents and in
+the report as "not available in this build"; `/registry/species` lists them.
+
 ## PostgreSQL
 
 ```bash
