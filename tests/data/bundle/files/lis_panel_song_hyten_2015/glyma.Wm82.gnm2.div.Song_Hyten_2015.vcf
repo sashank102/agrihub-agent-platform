@@ -1,0 +1,9 @@
+##fileformat=VCFv4.2
+##contig=<ID=glyma.Wm82.gnm2.Gm18,length=58018742>
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	PI0	PI1	PI2	PI3	PI4	PI5	PI6	PI7	PI8	PI9
+glyma.Wm82.gnm2.Gm18	9200000	ss1	A	G	.	.	.	GT	0/0	0/0	1/1	1/1	0/0	1/1	0/0	1/1	0/0	0/0
+glyma.Wm82.gnm2.Gm18	9240000	ss2	C	T	.	.	.	GT	0/0	0/0	1/1	1/1	0/0	1/1	0/0	1/1	0/0	0/0
+glyma.Wm82.gnm2.Gm18	9262600	ss3	G	A	.	.	.	GT	0/0	0/0	1/1	1/1	0/0	1/1	0/0	1/1	0/0	0/0
+glyma.Wm82.gnm2.Gm18	9263900	ss7	T	C	.	.	.	GT	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0	0/0
+glyma.Wm82.gnm2.Gm18	9300000	ss4	A	C	.	.	.	GT	0/0	1/1	0/0	1/1	1/1	0/0	0/0	0/0	1/1	0/0
+glyma.Wm82.gnm2.Gm18	9500000	ss5	T	G	.	.	.	GT	0/0	0/0	1/1	1/1	0/0	1/1	0/0	0/0	0/0	0/0

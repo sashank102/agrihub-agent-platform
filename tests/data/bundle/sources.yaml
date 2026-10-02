@@ -294,3 +294,40 @@ sources:
     parser: plant_reactome
     files:
       - {url: "{base}/plant_reactome/gene_ids_by_pathway_and_species.tab", path: gene_ids_by_pathway_and_species.tab}
+  - id: lis_synteny_hxny
+    name: LIS HXNY fixture
+    tier: heavy
+    version: Wm82.gnm2.syn.HXNY
+    license: Open
+    assemblies: [Wm82.a2.v1]
+    parser: lis_synteny
+    files:
+      - {url: "{base}/lis_synteny_hxny/glyma.Wm82.gnm2.x.glyma.Wm82.gnm2.recent_duplication.HXNY.gff3.gz", path: glyma.Wm82.gnm2.x.glyma.Wm82.gnm2.recent_duplication.HXNY.gff3.gz}
+  - id: ensembl_vep_cache
+    name: VEP cache fixture
+    tier: heavy
+    version: glycine_max_vep_63_Glycine_max_v2.1
+    license: Open
+    assemblies: [Wm82.a2.v1]
+    parser: vep_cache
+    files:
+      - {url: "{base}/ensembl_vep_cache/glycine_max_vep_63_Glycine_max_v2.1.tar.gz", path: glycine_max_vep_63_Glycine_max_v2.1.tar.gz}
+  - id: lis_panel_song_hyten_2015
+    name: SoySNP50K panel fixture
+    tier: heavy
+    version: Wm82.gnm2.div.Song_Hyten_2015
+    license: Open
+    assemblies: [Wm82.a2.v1]
+    parser: ld_panel
+    files:
+      - {url: "{base}/lis_panel_song_hyten_2015/glyma.Wm82.gnm2.div.Song_Hyten_2015.vcf.gz", path: glyma.Wm82.gnm2.div.Song_Hyten_2015.vcf.gz}
+  - id: gmhapmap
+    name: GmHapMap fixture
+    tier: heavy
+    version: Wm82.gnm2.div.Torkamaneh_Laroche_2019
+    license: Open
+    assemblies: [Wm82.a2.v1]
+    parser: gmhapmap
+    files:
+      - {url: "{base}/gmhapmap/glyma.Wm82.gnm2.div.Torkamaneh_Laroche_2019.haplotypes_by_gene.tsv.gz", path: glyma.Wm82.gnm2.div.Torkamaneh_Laroche_2019.haplotypes_by_gene.tsv.gz}
+      - {url: "{base}/gmhapmap/glyma.Wm82.gnm2.div.Torkamaneh_Laroche_2019.NonSynSNPs.vcf.gz", path: glyma.Wm82.gnm2.div.Torkamaneh_Laroche_2019.NonSynSNPs.vcf.gz}

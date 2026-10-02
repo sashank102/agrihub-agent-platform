@@ -1,0 +1,5 @@
+##gff-version 3
+#refname: glyma.Wm82.gnm2.ann1
+glyma.Wm82.gnm2.Gm18	DAGchainer	syntenic_region	9230000	9245000	100.0	+	.	Name=glyma.Wm82.gnm2.recent_duplication.Gm18;matches=glyma.Wm82.gnm2.recent_duplication.Gm18:9255000..9275000;median_Ks=0.1300
+glyma.Wm82.gnm2.Gm19	DAGchainer	syntenic_region	45000000	45200000	90.0	-	.	Name=glyma.Wm82.gnm2.recent_duplication.Gm05;matches=glyma.Wm82.gnm2.recent_duplication.Gm05:2800000..2950000;median_Ks=0.1400
+glyma.Wm82.gnm2.contig_x	DAGchainer	syntenic_region	1	1000	5.0	+	.	Name=glyma.Wm82.gnm2.recent_duplication.Gm01;matches=glyma.Wm82.gnm2.recent_duplication.Gm01:1..1000;median_Ks=0.2

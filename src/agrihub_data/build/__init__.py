@@ -41,6 +41,7 @@ from agrihub_data.build.orthology import build_ensembl_compara, build_plaza_orth
 from agrihub_data.build.pathways import build_plant_reactome, build_pmn_pathways
 from agrihub_data.build.regulation import build_plantregmap, build_planttfdb
 from agrihub_data.build.tair import build_tair
+from agrihub_data.build.variation import build_gmhapmap, build_ld_panel, build_lis_synteny, build_vep_cache
 from agrihub_data.bundle import DATA_TABLES, SCHEMA_VERSION
 from agrihub_data.fetch import Manifest
 from agrihub_data.paths import SpeciesPaths, species_paths
@@ -85,6 +86,10 @@ PARSERS: tuple[Parser, ...] = (
     Parser("plantregmap", build_plantregmap, after=("lis_annotation",)),
     Parser("pmn_pathways", build_pmn_pathways, after=("lis_annotation",)),
     Parser("plant_reactome", build_plant_reactome, after=("lis_annotation",)),
+    Parser("lis_synteny", build_lis_synteny, after=("lis_annotation",)),
+    Parser("vep_cache", build_vep_cache),
+    Parser("ld_panel", build_ld_panel),
+    Parser("gmhapmap", build_gmhapmap, after=("lis_annotation",)),
 )
 
 
