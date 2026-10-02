@@ -14,7 +14,7 @@ store under ``output_ref``. The tool artifact repeats ``evidence_ids``,
 
 import asyncio
 from collections.abc import Callable, Sequence
-from typing import Any, TypeVar
+from typing import Any, Literal, TypeVar
 
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool, ToolException, tool
@@ -26,6 +26,7 @@ from agrihub.tools.store_tools import store_for_config
 from agrihub_data.bundle import Bundle, BundleMissingError, open_bundle
 from agrihub_data.query import annotation, ids, loci, orthology, overlap, traits
 from agrihub_data.query.common import AssemblyMismatchError, Region
+from agrihub_data.query.ld import LdUnavailableError
 from agrihub_data.registry import (
     UnknownAssemblyError,
     UnknownChromosomeError,
@@ -373,36 +374,50 @@ async def define_locus(
     species: str = "soybean",
     flank_bp: int | None = None,
     assembly: str | None = None,
+    mode: Literal["fixed", "ld"] = "fixed",
+    r2: float = 0.2,
+    vcf_ref: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
-    """Turn SNP positions into fixed pos ± flank windows clamped to the chromosome (species default flank).
+    """Turn SNP positions into locus windows: fixed pos ± flank clamped to the chromosome, or LD windows (furthest SNP with r2 >= r2, extended to gene boundaries).
 
     Args:
         snps: SNP positions.
         species: Registered species, e.g. soybean.
-        flank_bp: Flank on each side; defaults to the species window (soybean 250000).
+        flank_bp: Fixed mode: flank on each side (soybean default 250000). LD mode: the maximum distance searched (default 1000000).
         assembly: Assembly of the positions; defaults to the canonical assembly.
+        mode: fixed, or ld (needs PLINK2 and the bundled SoySNP50K panel or a study VCF).
+        r2: LD mode: minimum r2 with the lead.
+        vcf_ref: LD mode: a study VCF in the species genotypes directory, or panel:<name>.
     """
 
     def work() -> tuple[str, dict[str, Any]]:
         name = _species(species)
-        rows = [
-            DefinedLocus(
-                label=snp.label or f"{snp.chrom}:{snp.pos}",
-                window=loci.define_locus(name, snp.chrom, snp.pos, "fixed", flank_bp, assembly),
-            )
-            for snp in _as(SnpPosition, snps)
-        ]
+        rows = []
+        notes = []
+        for snp in _as(SnpPosition, snps):
+            label = snp.label or f"{snp.chrom}:{snp.pos}"
+            try:
+                window = loci.define_locus(name, snp.chrom, snp.pos, mode, flank_bp, assembly, r2=r2, vcf_ref=vcf_ref, label=label)
+            except LdUnavailableError as exc:
+                notes.append(f"LD window unavailable for {label} ({exc}); fixed window used")
+                window = loci.define_locus(name, snp.chrom, snp.pos, "fixed", None, assembly)
+            rows.append(DefinedLocus(label=label, window=window))
         return _respond(
             config,
             "define_locus",
-            f"define_locus {name}: {len(rows)} windows",
+            f"define_locus {name} ({mode}): {len(rows)} windows",
             rows,
             lambda row: (
                 f"{row.label} {row.window.assembly} {row.window.chrom}:{row.window.start}-{row.window.end} "
-                f"(±{row.window.flank_bp}{', clamped' if row.window.clamped else ''})"
+                + (
+                    f"(LD r2>={row.window.ld.r2_threshold:g}, {row.window.ld.n_partners} partners, {row.window.end - row.window.start + 1} bp)"
+                    if row.window.ld
+                    else f"(±{row.window.flank_bp}{', clamped' if row.window.clamped else ''})"
+                )
                 + (f" WARNING {row.window.warning}" if row.window.warning else "")
             ),
             evidence=False,
+            notes=notes,
         )
 
     return await _run(work)

@@ -138,8 +138,8 @@ def test_define_locus_uses_species_defaults_and_clamps():
     wide = define_locus("maize", "chr1", 1_000_000, flank_bp=250_000)
     assert wide.warning and "typical LD" in wide.warning
     assert define_locus("maize", "chr1", 1_000_000).warning is None
-    with pytest.raises(ValueError, match="mode='fixed'"):
-        define_locus("soybean", "18", 9_263_941, mode="ld")
+    with pytest.raises(ValueError, match="unknown window mode"):
+        define_locus("soybean", "18", 9_263_941, mode="window")
     with pytest.raises(ValueError, match="outside"):
         define_locus("soybean", "18", 60_000_000)
 

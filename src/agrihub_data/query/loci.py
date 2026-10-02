@@ -5,13 +5,20 @@ from typing import Literal
 from pydantic import BaseModel
 
 from agrihub.state import EvidenceItem
-from agrihub_data.bundle import Bundle
+from agrihub_data.bundle import Bundle, open_bundle
 from agrihub_data.query.common import Region, registry_of, resolve_region
+from agrihub_data.query.ld import (
+    DEFAULT_R2,
+    DEFAULT_WINDOW_KB,
+    LdUnavailableError,
+    LdWindow,
+    ld_window,
+)
 from agrihub_data.registry import load_species, normalize_chrom
 
 
 class LocusWindow(BaseModel):
-    """A fixed window around a SNP, clamped to its chromosome."""
+    """A window around a SNP: fixed (pos ± flank, clamped) or LD-based (``ld`` holds how it was found)."""
 
     species: str
     assembly: str
@@ -20,9 +27,10 @@ class LocusWindow(BaseModel):
     start: int
     end: int
     flank_bp: int
-    mode: Literal["fixed"]
+    mode: Literal["fixed", "ld"]
     clamped: bool
     warning: str | None = None
+    ld: LdWindow | None = None
 
     def region(self, label: str | None = None) -> Region:
         """Return the window as a region labeled ``label``."""
@@ -86,15 +94,25 @@ def define_locus(
     mode: str = "fixed",
     flank_bp: int | None = None,
     assembly: str | None = None,
+    *,
+    r2: float = DEFAULT_R2,
+    vcf_ref: str | None = None,
+    label: str | None = None,
+    bundle: Bundle | None = None,
 ) -> LocusWindow:
-    """Return ``pos ± flank_bp`` clamped to the chromosome, using the species default flank.
+    """Return ``pos ± flank_bp`` clamped to the chromosome, or the SNP's LD window with ``mode="ld"``.
+
+    The fixed flank defaults to the species window. An LD window
+    (:func:`agrihub_data.query.ld.ld_window`) reaches the furthest SNP with
+    ``r2`` or more within ``flank_bp`` (default 1 Mb) and is extended to gene
+    boundaries; it is computed on the canonical assembly.
 
     Raises:
-        ValueError: for ``mode="ld"``, which needs a genotype VCF (a later plan),
-            or a position outside the chromosome.
+        ValueError: for an unknown mode or a position outside the chromosome.
+        LdUnavailableError: for ``mode="ld"`` without PLINK2, genotypes or a usable panel SNP near the lead.
     """
-    if mode != "fixed":
-        raise ValueError("only mode='fixed' is available; LD windows need a genotype VCF")
+    if mode not in {"fixed", "ld"}:
+        raise ValueError(f"unknown window mode {mode!r}; use fixed or ld")
     registry = load_species(species)
     target = registry.assembly(assembly)
     name = normalize_chrom(species, chrom, target.id)
@@ -102,6 +120,24 @@ def define_locus(
     length = chromosome.length if chromosome else None
     if pos < 1 or (length is not None and pos > length):
         raise ValueError(f"{name}:{pos} is outside {target.id} ({length} bp)")
+    if mode == "ld":
+        if target.id != registry.canonical_assembly:
+            raise LdUnavailableError(f"LD windows are computed on {registry.canonical_assembly}; lift {name}:{pos} over first")
+        window_kb = (flank_bp or DEFAULT_WINDOW_KB * 1_000) // 1_000
+        found = ld_window(bundle or open_bundle(species), label or f"{name}:{pos}", name, pos, vcf_ref=vcf_ref, window_kb=window_kb, r2=r2)
+        return LocusWindow(
+            species=registry.species,
+            assembly=target.id,
+            chrom=name,
+            pos=pos,
+            start=found.start,
+            end=found.end,
+            flank_bp=max(pos - found.start, found.end - pos),
+            mode="ld",
+            clamped=False,
+            warning=found.note,
+            ld=found,
+        )
     flank = registry.default_window.flank_bp if flank_bp is None else flank_bp
     if flank < 0:
         raise ValueError("flank_bp must not be negative")
