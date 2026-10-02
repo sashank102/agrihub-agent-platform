@@ -12,6 +12,7 @@ from agrihub_fixtures import DataServer, FixtureBundle, packaged_soybean
 
 from agrihub_data.build import PARSERS, BuildError, build
 from agrihub_data.build.context import open_text
+from agrihub_data.bundle import tables_for
 from agrihub_data.fetch import fetch
 from agrihub_data.paths import species_paths
 from agrihub_data.registry import (
@@ -138,6 +139,8 @@ def test_parsers_run_in_dependency_order():
 def test_fixture_bundle_builds_and_verifies(fixture_bundle: FixtureBundle):
     report = fixture_bundle.build_report
     assert report.tables["genes"] == 7 + 7 + 2
+    assert report.tables["gene_parts"] == 4
+    assert report.tables["expression"] == report.tables["edges"] == report.tables["resources"] == 0
     assert report.tables["qtl"] == 6
     assert report.tables["known_genes"] == 4
     assert report.tables["ncbi_genes"] == 5
@@ -165,7 +168,9 @@ def test_fixture_bundle_builds_and_verifies(fixture_bundle: FixtureBundle):
 
     checked = verify("soybean", data_dir=fixture_bundle.data_dir)
     assert checked.ok, checked.problems
-    assert all(count > 0 for count in checked.counts.values())
+    core = set(tables_for("core"))
+    assert all(count > 0 for table, count in checked.counts.items() if table in core)
+    assert all(count == 0 for table, count in checked.counts.items() if table not in core | {"sources"})
 
 
 def test_every_row_carries_species_assembly_and_source_version(fixture_bundle: FixtureBundle):

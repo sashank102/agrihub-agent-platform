@@ -13,10 +13,12 @@ from typing import Any
 import duckdb
 
 from agrihub_data.paths import species_paths
+from agrihub_data.registry import TIERS, Tier
 
-SCHEMA_VERSION = "2"
+SCHEMA_VERSION = "3"
 DATA_TABLES: tuple[str, ...] = (
     "genes",
+    "gene_parts",
     "id_map",
     "annotation",
     "go_annot",
@@ -32,20 +34,52 @@ DATA_TABLES: tuple[str, ...] = (
     "ncbi_genes",
     "ncbi_gene_pubmed",
     "ncbi_gene_go",
+    "samples",
+    "expression",
+    "edges",
+    "tf",
+    "regulation",
+    "regulatory_regions",
+    "pathways",
+    "homeologs",
+    "gene_haplotypes",
+    "variants",
+    "resources",
 )
+TABLE_TIERS: dict[str, Tier] = {
+    **{table: "extended" for table in ("samples", "expression", "edges", "tf", "regulation", "regulatory_regions", "pathways")},
+    **{table: "heavy" for table in ("homeologs", "gene_haplotypes", "variants", "resources")},
+}
+"""The tier that fills each non-core table; other data tables are core."""
 NON_GENOMIC_TABLES = frozenset({"ontology_terms", "trait_map", "sources"})
 """Tables whose rows must carry ``assembly = 'none'``."""
 EXTRA_ASSEMBLY_COLUMNS: dict[str, tuple[str, ...]] = {
     "id_map": ("to_assembly",),
     "orthologs": ("target_assembly",),
     "known_genes": ("source_assembly",),
+    "expression": ("source_assembly",),
 }
 POSITIONAL_TABLES: dict[str, tuple[str, str]] = {
     "genes": ("start", "end"),
+    "gene_parts": ("start", "end"),
     "markers": ("start", "end"),
     "qtl": ("start", "end"),
     "gwas_hits": ("pos", "pos"),
+    "regulatory_regions": ("start", "end"),
+    "gene_haplotypes": ("pos", "pos"),
+    "variants": ("pos", "pos"),
 }
+
+
+def table_tier(table: str) -> Tier:
+    """Return the tier whose sources fill ``table``."""
+    return TABLE_TIERS.get(table, "core")
+
+
+def tables_for(tier: Tier) -> tuple[str, ...]:
+    """Return the data tables a bundle of ``tier`` must fill."""
+    allowed = TIERS[: TIERS.index(tier) + 1]
+    return tuple(table for table in DATA_TABLES if table_tier(table) in allowed)
 
 
 class BundleMissingError(FileNotFoundError):

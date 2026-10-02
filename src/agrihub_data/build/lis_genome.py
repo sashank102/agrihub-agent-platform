@@ -6,8 +6,10 @@ from pathlib import Path
 from typing import Any
 
 from agrihub_data.build.context import BuildContext, BuildError, split_list, tsv_rows
-from agrihub_data.build.gff import features, load_marker_gff
+from agrihub_data.build.gff import features, load_marker_gff, strip_id_prefix
 from agrihub_data.registry import Source, UnknownAssemblyError
+
+GENE_PARTS = ("CDS", "five_prime_UTR", "three_prime_UTR")
 
 _A1_ANCESTOR = re.compile(r"^(Glyma\d{2}g\d{5})\.v1(?:\.\d+)?$")
 _WM82_ANCESTOR = re.compile(r"^(Glyma\.\d{2}G\d{6})\.(Wm82\.a\d\.v1)$")
@@ -43,6 +45,7 @@ def build_lis_annotation(ctx: BuildContext, source: Source) -> None:
     genes = _genes(ctx, source, assembly)
     ctx.insert("genes", ({**base, **gene} for gene in genes.values()))
     ctx.count(parser, "genes", len(genes))
+    ctx.count(parser, "gene_parts", ctx.insert("gene_parts", _gene_parts(ctx, source, assembly, genes)))
 
     ancestors = [
         {
@@ -171,6 +174,40 @@ def _genes(ctx: BuildContext, source: Source, assembly: str) -> dict[str, dict[s
             if gene is not None and not gene["defline"] and len(fields) >= 3:
                 gene["defline"] = fields[2].split(" - ", 1)[-1].strip()
     return genes
+
+
+def _gene_parts(
+    ctx: BuildContext,
+    source: Source,
+    assembly: str,
+    genes: dict[str, dict[str, Any]],
+) -> Iterator[dict[str, Any]]:
+    """Yield the CDS and UTR intervals of every transcript of a loaded gene."""
+    gff = ctx.file(source, ".gene_models_main.gff3.gz")
+    transcripts: dict[str, tuple[str, str]] = {}
+    base = ctx.base(source, assembly)
+    for feature in features(gff, {"mRNA", *GENE_PARTS}):
+        if feature.type == "mRNA":
+            gene_id = strip_id_prefix(feature.attributes.get("Parent", ""))
+            if gene_id in genes:
+                transcripts[feature.attributes.get("ID", "")] = (gene_id, strip_id_prefix(feature.attributes.get("ID", "")))
+            continue
+        owner = transcripts.get(feature.attributes.get("Parent", "").split(",")[0])
+        if owner is None:
+            ctx.count(source.id, "gene_parts_without_transcript")
+            continue
+        gene = genes[owner[0]]
+        yield {
+            **base,
+            "gene_id": owner[0],
+            "transcript_id": owner[1],
+            "part": feature.type,
+            "chrom": gene["chrom"],
+            "start": feature.start,
+            "end": feature.end,
+            "strand": gene["strand"],
+            "source_db": "LIS",
+        }
 
 
 def _parse_ancestor(ctx: BuildContext, value: str) -> tuple[str | None, str]:

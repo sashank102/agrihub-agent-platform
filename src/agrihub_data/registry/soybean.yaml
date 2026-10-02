@@ -551,16 +551,234 @@ sources:
   - id: lis_expression_atlas
     name: LIS JGI soybean gene atlas (Sreedasyam, Plott et al. 2023)
     tier: extended
-    status: planned
     version: Wm82.gnm4.ann1.expr.Wm82.Sreedasyam_Plott_2023
-    license: Open (LIS datastore)
-    homepage: https://data.legumeinfo.org/Glycine/max/expression/
-    assemblies: [Wm82.a4.v1]
+    license: Open (LIS datastore README); JGI Flagship Plant Gene Atlas
+    homepage: https://data.legumeinfo.org/Glycine/max/expression/Wm82.gnm4.ann1.expr.Wm82.Sreedasyam_Plott_2023/
+    citation: Stacy et al. 2014, JGI Flagship Plant Gene Atlas, doi:10.46936/10.25585/60000843
+    assemblies: [Wm82.a2.v1, Wm82.a4.v1]
+    parser: lis_expression
+    notes: >-
+      TPM per sample on Wm82.a4.v1 gene ids, mapped to Wm82.a2.v1 through GFF
+      ancestors then pangenes; replicates are averaged per replicate_group and
+      unmapped a4 genes are counted in the build stats.
+    files:
+      - url: https://data.legumeinfo.org/Glycine/max/expression/Wm82.gnm4.ann1.expr.Wm82.Sreedasyam_Plott_2023/glyma.Wm82.gnm4.ann1.expr.Wm82.Sreedasyam_Plott_2023.values.tsv.gz
+        path: glyma.Wm82.gnm4.ann1.expr.Wm82.Sreedasyam_Plott_2023.values.tsv.gz
+        sha256: eaf9eb37a2a6aa47a2fb9a2706969c7b671d87d2da909cd3afcab9a43009a43f
+        size: 33809356
+      - url: https://data.legumeinfo.org/Glycine/max/expression/Wm82.gnm4.ann1.expr.Wm82.Sreedasyam_Plott_2023/glyma.Wm82.gnm4.ann1.expr.Wm82.Sreedasyam_Plott_2023.samples.tsv.gz
+        path: glyma.Wm82.gnm4.ann1.expr.Wm82.Sreedasyam_Plott_2023.samples.tsv.gz
+        sha256: b2e7b1be7237c58476aa21c0f6ab18274b27ce69a0dfe89d4d3f64bae4066252
+        size: 4377
+  - id: lis_expression_libault
+    name: LIS soybean transcriptome atlas (Libault, Farmer et al. 2010)
+    tier: extended
+    version: Wm82.gnm2.ann1.expr.Wm82.Libault_Farmer_2010
+    license: Open (LIS datastore README)
+    homepage: https://data.legumeinfo.org/Glycine/max/expression/Wm82.gnm2.ann1.expr.Wm82.Libault_Farmer_2010/
+    citation: Libault et al. 2010, Plant J 63:86-99
+    assemblies: [Wm82.a2.v1]
+    parser: lis_expression
+    files:
+      - url: https://data.legumeinfo.org/Glycine/max/expression/Wm82.gnm2.ann1.expr.Wm82.Libault_Farmer_2010/glyma.Wm82.gnm2.ann1.expr.Wm82.Libault_Farmer_2010.values.tsv.gz
+        path: glyma.Wm82.gnm2.ann1.expr.Wm82.Libault_Farmer_2010.values.tsv.gz
+        sha256: a870de549b7df1975566bc177c3f7415a7ae319230a4a1806f4044c59bb99bca
+        size: 1408500
+      - url: https://data.legumeinfo.org/Glycine/max/expression/Wm82.gnm2.ann1.expr.Wm82.Libault_Farmer_2010/glyma.Wm82.gnm2.ann1.expr.Wm82.Libault_Farmer_2010.samples.tsv.gz
+        path: glyma.Wm82.gnm2.ann1.expr.Wm82.Libault_Farmer_2010.samples.tsv.gz
+        sha256: c7df9a6e6bc064e1bc806264621655cc88c95c0c145db07136037f5f3d52441b
+        size: 450
+  - id: string_soybean
+    name: STRING 12.5 soybean protein network (taxon 3847)
+    tier: extended
+    version: STRING v12.5
+    license: CC-BY-4.0
+    homepage: https://string-db.org/cgi/download?species_text=Glycine+max
+    citation: Szklarczyk et al. 2025, Nucleic Acids Res 53:D730-D737
+    assemblies: [Wm82.a2.v1]
+    parser: string
+    notes: >-
+      Proteins map to Wm82.a2.v1 genes through their UniProt ORF names
+      (GLYMA_); the text-mining channel is dropped and the combined score is
+      recomputed from the remaining channels with STRING's prior correction.
+    files:
+      - url: https://stringdb-downloads.org/download/protein.links.detailed.v12.5/3847.protein.links.detailed.v12.5.txt.gz
+        path: 3847.protein.links.detailed.v12.5.txt.gz
+        sha256: 011aff05ae402a60845bcce268ea3c845fa1f6ea132a1c7c580b77cf4d9e2647
+        size: 305686877
+      - url: https://stringdb-downloads.org/download/protein.aliases.v12.5/3847.protein.aliases.v12.5.txt.gz
+        path: 3847.protein.aliases.v12.5.txt.gz
+        sha256: be063a34d89bba5d9e50cacf8976f637bfc0dbf63fdcd8eda8c4eede54c4cc2d
+        size: 4100801
+      - url: https://stringdb-downloads.org/download/protein.info.v12.5/3847.protein.info.v12.5.txt.gz
+        path: 3847.protein.info.v12.5.txt.gz
+        sha256: c94f4eb6cd9405e7d448d5764b13f5b6cc9c130e90a63a8efd0fc0826ba911d1
+        size: 859584
+  - id: atted_soybean
+    name: ATTED-II soybean RNA-seq co-expression (Gma-u.c5-0)
+    tier: extended
+    version: ATTED-II Gma-u.c5-0 (Gma-u.v26-01, 2026-02-16)
+    license: Free download; terms at https://atted.jp (no license stated on the download page)
+    homepage: https://atted.jp/download/
+    citation: Obayashi et al. 2023, Plant Cell Physiol 63:869-881
+    assemblies: [Wm82.a2.v1, Wm82.a4.v1]
+    parser: atted
+    notes: >-
+      One zip member per NCBI GeneID listing every partner by z-score; the
+      build keeps each gene's top partners. GeneIDs map to Wm82.a4.v1 locus
+      tags through the xref file and then to Wm82.a2.v1. The same zip is
+      mirrored at https://zenodo.org/records/18688599.
+    files:
+      - url: https://atted.jp/download/Gma-u.c5-0/coex/
+        path: Gma-u.v26-01.G37077-S3310.combat_pca.subagging.z.d.zip
+        sha256: 6526ad2840c814dc3dd8eb8cc113e97eaf2120e5c4a63246ce483285cf9795f3
+        size: 5612952330
+      - url: https://atted.jp/download/Gma-u.c5-0/id/Gma-u.c5-0_gene_xref.tsv.zip
+        path: Gma-u.c5-0_gene_xref.tsv.zip
+        sha256: b710810a408cac9dca046c07bb881a2cdb6bac8d4564c4883d6088412648a39d
+        size: 455851
+  - id: planttfdb_soybean
+    name: PlantTFDB 5.0 soybean transcription factors and binding motifs
+    tier: extended
+    version: PlantTFDB v5.0 (Gma)
+    license: Free download for academic use (Gao lab; no open license stated)
+    academic_only: true
+    homepage: https://planttfdb.gao-lab.org/index.php?sp=Gma
+    citation: Jin et al. 2017, Nucleic Acids Res 45:D1040-D1045
+    assemblies: [Wm82.a2.v1]
+    parser: planttfdb
+    files:
+      - url: https://planttfdb.gao-lab.org/download/TF_list/Gma_TF_list.txt.gz
+        path: Gma_TF_list.txt.gz
+        sha256: d6ee5ebc7381a84df6afb74e6f36e31bd5539aef9cc3cf9bf92004f95ef4b42c
+        size: 31610
+      - url: https://planttfdb.gao-lab.org/download/motif/Gma_TF_binding_motifs_information.txt
+        path: Gma_TF_binding_motifs_information.txt
+        sha256: 814e8875be232d8310b5fec5cabbda1834d9781e2ae63eb6094543e5ad49379d
+        size: 37712
+  - id: plantregmap_soybean
+    name: PlantRegMap soybean regulation, promoter TFBS and conserved elements
+    tier: extended
+    version: PlantRegMap v5 (Glycine_max)
+    license: Free download for academic use (Gao lab; no open license stated)
+    academic_only: true
+    homepage: https://plantregmap.gao-lab.org/download.php#glycine_max
+    citation: Tian et al. 2020, Nucleic Acids Res 48:D1104-D1113
+    assemblies: [Wm82.a2.v1]
+    parser: plantregmap
+    notes: >-
+      Gene ids are Gmax_275 Wm82.a2.v1 ids; ids without a bundle gene are
+      counted and dropped. TFBS are FunTFBS sites in promoters; conserved
+      elements are phastCons calls (CE_Gma.gtf).
+    files:
+      - url: https://plantregmap.gao-lab.org/download_ftp.php?filepath=08-download/Glycine_max/binding/regulation_merged_Gma.txt
+        path: regulation_merged_Gma.txt
+        sha256: ed55480624d8ae6dd90a17be91f8f37b6a764bad544b0c7c46eb57d8c1d134e9
+        size: 45528599
+      - url: https://plantregmap.gao-lab.org/download_ftp.php?filepath=08-download/Glycine_max/binding/TFBS_from_FunTFBS_inProm_Gma.gff
+        path: TFBS_from_FunTFBS_inProm_Gma.gff
+        sha256: c1e03543c94cbf645d49b1aea8e1583359ab78fc206576c923cdc52884c5add0
+        size: 11201616
+      - url: https://plantregmap.gao-lab.org/download_ftp.php?filepath=08-download/Glycine_max/CE/CE_Gma.gtf.gz
+        path: CE_Gma.gtf.gz
+        sha256: 446d11903a4b8b1529450f667d487d80ec95d11e6d93078c850a1db100e79cb9
+        size: 11102850
+  - id: pmn_soycyc
+    name: PMN16 SoyCyc pathways
+    tier: extended
+    version: PMN16 (soycyc_pathways.20251021)
+    license: Free download (PMN FTP); see https://plantcyc.org for terms
+    homepage: https://plantcyc.org/
+    citation: Hawkins et al. 2025, Plant Physiol (Plant Metabolic Network 16)
+    assemblies: [Wm82.a2.v1]
+    parser: pmn_pathways
+    notes: The PMN FTP listing is a Google Cloud bucket; files are fetched from the bucket URL.
+    files:
+      - url: https://plantcyc-ftp.storage.googleapis.com/pmn/Pathways/Data_dumps/PMN16_July2024/pathways/soycyc_pathways.20251021
+        path: soycyc_pathways.20251021.tsv
+        sha256: 25e6cbe20b17acb0a5759583fd1b1e06d0d18d3f289a94b59b045cba37024efb
+        size: 2178512
+  - id: plant_reactome
+    name: Plant Reactome gene-to-pathway map (Glycine max rows)
+    tier: extended
+    version: Plant Reactome current
+    rolling: true
+    license: CC-BY-4.0
+    homepage: https://plantreactome.gramene.org/
+    citation: Gupta et al. 2024, Nucleic Acids Res 52:D1538-D1547
+    assemblies: [Wm82.a2.v1]
+    parser: plant_reactome
+    files:
+      - url: https://plantreactome.gramene.org/download/current/gene_ids_by_pathway_and_species.tab
+        path: gene_ids_by_pathway_and_species.tab
+  - id: lis_synteny_hxny
+    name: LIS soybean recent-duplication synteny blocks (HXNY)
+    tier: heavy
+    version: Wm82.gnm2.syn.HXNY
+    license: Open (LIS datastore README)
+    homepage: https://data.legumeinfo.org/Glycine/max/synteny/Wm82.gnm2.syn.HXNY/
+    citation: Dash et al. 2016, Nucleic Acids Res 44:D1181-D1188
+    assemblies: [Wm82.a2.v1]
+    parser: lis_synteny
+    notes: >-
+      Blocks pair regions, not genes; a homeolog is the gene in the matched
+      region that shares the query gene's PANTHER family, nearest to its
+      projected position.
+    files:
+      - url: https://data.legumeinfo.org/Glycine/max/synteny/Wm82.gnm2.syn.HXNY/glyma.Wm82.gnm2.x.glyma.Wm82.gnm2.recent_duplication.HXNY.gff3.gz
+        path: glyma.Wm82.gnm2.x.glyma.Wm82.gnm2.recent_duplication.HXNY.gff3.gz
+        sha256: a0c0086325d50dc455afa17d5655cac59530624719849871c0d853652e924e04
+        size: 19455
   - id: ensembl_vep_cache
     name: Ensembl Plants 63 VEP cache for Glycine_max_v2.1
     tier: heavy
-    status: planned
     version: glycine_max_vep_63_Glycine_max_v2.1
     license: Ensembl data are available without restriction
     homepage: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/variation/indexed_vep_cache/
+    citation: McLaren et al. 2016, Genome Biol 17:122
     assemblies: [Wm82.a2.v1]
+    parser: vep_cache
+    notes: >-
+      Unpacked under <species>/vep/ and used by the ensemblorg/ensembl-vep
+      release_116 Docker image with --offline --cache_version 63 (Ensembl
+      chromosome names 1-20).
+    files:
+      - url: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/variation/indexed_vep_cache/glycine_max_vep_63_Glycine_max_v2.1.tar.gz
+        path: glycine_max_vep_63_Glycine_max_v2.1.tar.gz
+        sha256: f6e0027c6dca87aaf87bb2d59ca87b3aa712ac36e18aa2749bf9f44562031c57
+        size: 126126092
+  - id: lis_panel_song_hyten_2015
+    name: USDA soybean germplasm SoySNP50K genotypes (Song, Hyten et al. 2015)
+    tier: heavy
+    version: Wm82.gnm2.div.Song_Hyten_2015
+    license: Open (LIS datastore README)
+    homepage: https://data.legumeinfo.org/Glycine/max/diversity/Wm82.gnm2.div.Song_Hyten_2015/
+    citation: Song et al. 2015, G3 5:1999-2006
+    assemblies: [Wm82.a2.v1]
+    parser: ld_panel
+    notes: >-
+      About 20,000 accessions at about 42,000 SoySNP50K sites on Wm82.a2.v1;
+      the LD reference panel for ld_with_lead and LD-mode loci.
+    files:
+      - url: https://data.legumeinfo.org/Glycine/max/diversity/Wm82.gnm2.div.Song_Hyten_2015/glyma.Wm82.gnm2.div.Song_Hyten_2015.vcf.gz
+        path: glyma.Wm82.gnm2.div.Song_Hyten_2015.vcf.gz
+        sha256: bfb71705228cfc8639941f89b4e62a4d23a5c5e9d74703caebb6dfc1e8ae279a
+        size: 144475859
+  - id: gmhapmap
+    name: GmHapMap haplotypes by gene and non-synonymous SNPs (Torkamaneh, Laroche et al. 2019)
+    tier: heavy
+    version: Wm82.gnm2.div.Torkamaneh_Laroche_2019
+    license: Open (LIS datastore README); primary copy on figshare doi:10.6084/m9.figshare.7388753.v1
+    homepage: https://data.legumeinfo.org/Glycine/max/diversity/Wm82.gnm2.div.Torkamaneh_Laroche_2019/
+    citation: Torkamaneh et al. 2021, Plant Biotechnol J 19:324-334
+    assemblies: [Wm82.a2.v1]
+    parser: gmhapmap
+    files:
+      - url: https://data.legumeinfo.org/Glycine/max/diversity/Wm82.gnm2.div.Torkamaneh_Laroche_2019/glyma.Wm82.gnm2.div.Torkamaneh_Laroche_2019.haplotypes_by_gene.tsv.gz
+        path: glyma.Wm82.gnm2.div.Torkamaneh_Laroche_2019.haplotypes_by_gene.tsv.gz
+        sha256: 20c786c469b99d442de89037f8a63c15857ea91174b1a24ab8b25f85bb88ec1c
+        size: 4577170
+      - url: https://data.legumeinfo.org/Glycine/max/diversity/Wm82.gnm2.div.Torkamaneh_Laroche_2019/glyma.Wm82.gnm2.div.Torkamaneh_Laroche_2019.NonSynSNPs.vcf.gz
+        path: glyma.Wm82.gnm2.div.Torkamaneh_Laroche_2019.NonSynSNPs.vcf.gz
+        sha256: 9b24884a7be9d8b7e7eb863aa067d95ae12022d5fa30d0fdfc793f131abe7d97
+        size: 36908435

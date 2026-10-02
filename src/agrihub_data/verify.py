@@ -11,10 +11,17 @@ from agrihub_data.bundle import (
     EXTRA_ASSEMBLY_COLUMNS,
     NON_GENOMIC_TABLES,
     POSITIONAL_TABLES,
+    SCHEMA_VERSION,
+    tables_for,
 )
 from agrihub_data.fetch import Manifest, sha256_file
 from agrihub_data.paths import species_paths
-from agrihub_data.registry import NON_GENOMIC_ASSEMBLY, SpeciesRegistry, load_species
+from agrihub_data.registry import (
+    NON_GENOMIC_ASSEMBLY,
+    TIERS,
+    SpeciesRegistry,
+    load_species,
+)
 
 
 @dataclass
@@ -39,10 +46,12 @@ def verify(
 ) -> VerifyReport:
     """Verify a species bundle.
 
-    Checks that every data table is non-empty, every row carries species,
+    Checks that the bundle has the current schema version, every data table
+    of its tier and below is non-empty, every row carries species,
     source_version and a registered assembly (``none`` only in non-genomic
     tables), positional rows use canonical chromosome names within the
-    registered length, and fetched files still match their manifest sha256.
+    registered length, heavy resources are unpacked where the bundle says,
+    and fetched files still match their manifest sha256.
     """
     registry = load_species(species)
     paths = species_paths(registry.species, data_dir)
@@ -56,14 +65,22 @@ def verify(
         info = dict(connection.execute("SELECT key, value FROM bundle_info").fetchall())
         if info.get("species") != registry.species:
             report.problems.append(f"bundle_info species is {info.get('species')!r}")
+        if info.get("schema_version") != SCHEMA_VERSION:
+            report.problems.append(f"schema_version is {info.get('schema_version')!r}, expected {SCHEMA_VERSION}; rebuild the bundle")
+            return report
+        tier = info.get("tier") if info.get("tier") in TIERS else "core"
+        required = set(tables_for(tier))  # type: ignore[arg-type]
         for table in (*DATA_TABLES, "sources"):
             count = int(connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0])  # type: ignore[index]
             report.counts[table] = count
-            if count == 0:
+            if count == 0 and (table == "sources" or table in required):
                 report.problems.append(f"{table} is empty")
             _check_provenance(connection, table, registered, report)
         for table, (start, end) in POSITIONAL_TABLES.items():
             _check_positions(connection, registry, table, start, end, report)
+        for resource_id, relative in connection.execute("SELECT resource_id, path FROM resources").fetchall():
+            if not (paths.root / str(relative)).exists():
+                report.problems.append(f"resource {resource_id} is missing at {relative}; rebuild the heavy tier")
     finally:
         connection.close()
     if checksums:
