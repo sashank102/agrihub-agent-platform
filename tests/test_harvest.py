@@ -83,7 +83,8 @@ def test_the_triage_brief_is_under_budget_and_names_known_genes_and_gaps(harvest
     assert dt1["top"][0]["gene_id"] == "Glyma.19G194300" and dt1["top"][0]["tier"] == "T1"
     assert dt1["known_genes"] == [{"gene_id": "Glyma.19G194300", "symbols": ["GmDT1", "GmTFL1b"], "trait_match": "ontology"}]
     assert "interval QTLs" in by_locus["L2"]["context"]["qtl"]
-    assert "expression" in brief["not_yet_available"]
+    assert "expression" not in brief["domains"]["available"]
+    assert "build the extended tier" in brief["domains"]["unavailable"]["expression"]
     assert "known_gene" in by_locus["L1"]["no_coverage"] or by_locus["L1"]["known_genes"]
     assert brief["matrix_ref"].startswith("O")
 

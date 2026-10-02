@@ -1,5 +1,9 @@
 """Output contract, stop rules and inputs shared by the five specialists."""
 
+from agrihub_data.availability import SPECIALIST_DOMAINS
+
+__all__ = ["COMMON_TOOLS", "SPECIALIST_CONTRACT", "SPECIALIST_DOMAINS", "SPECIALIST_INPUTS", "SPECIALIST_STOP"]
+
 SPECIALIST_INPUTS = (
     "The assignment message: your focus genes (with locus, distance to the nearest SNP, defline and provisional score), focus loci (region and lead SNP), the orchestrator's instructions and rationale, and findings already recorded on these genes.",
     "Evidence the harvest already stored for these genes; fetch it with get_evidence when you need the details behind an E<n> alias.",

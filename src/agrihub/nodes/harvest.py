@@ -19,7 +19,7 @@ import json
 import math
 from collections import Counter
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from langchain_core.runnables import RunnableConfig
@@ -30,6 +30,7 @@ from agrihub.configuration import run_id_from_config
 from agrihub.evidence_store import EvidenceStore
 from agrihub.nodes.locus_builder import candidate_ref, load_candidates
 from agrihub.state import CandidateGene, EvidenceItem, Locus, SourceRef, StudyState
+from agrihub_data.availability import DomainStatus, domain_status
 from agrihub_data.bundle import Bundle, open_bundle
 from agrihub_data.query import annotation, orthology, overlap
 from agrihub_data.query.common import AssemblyMismatchError, Region
@@ -42,7 +43,6 @@ BRIEF_TOKEN_BUDGET = 4_000
 CHARS_PER_TOKEN = 4
 POSITIONAL_ONLY_SHOWN = 8
 HARVESTED_CATEGORIES = ("positional", "functional_annotation", "ortholog", "association", "known_gene")
-NOT_YET_AVAILABLE = ("expression", "network", "regulation", "variant", "literature")
 
 
 @dataclass(frozen=True)
@@ -53,6 +53,12 @@ class HarvestContext:
     assembly: str
     profile: TraitProfile
     canonical: bool
+    domains: dict[str, DomainStatus] = field(default_factory=dict)
+
+    @property
+    def available(self) -> set[str]:
+        """Return the evidence domains the bundle and installed binaries can serve."""
+        return {key for key, status in self.domains.items() if status.available}
 
 
 @dataclass(frozen=True)
@@ -176,6 +182,7 @@ def harvest_context(study: dict[str, Any]) -> HarvestContext:
         assembly=assembly,
         profile=map_trait(str(study.get("trait_text") or ""), registry.species, bundle),
         canonical=assembly == registry.canonical_assembly,
+        domains=domain_status(registry.species),
     )
 
 
@@ -288,7 +295,7 @@ def _triage(
         "evidence_items": sum(counts.values()),
         "evidence_by_category": counts,
         "matrix_ref": matrix_ref,
-        "not_yet_available": list(NOT_YET_AVAILABLE),
+        "domains": brief_domains(context.domains),
         "skipped": skipped,
         "loci": [
             _locus_brief(locus, scores, per_gene, known, context, top_k)
@@ -420,6 +427,14 @@ def _symbols(items: list[EvidenceItem]) -> dict[str, str]:
         if item.category == "known_gene" and isinstance(item.value, dict) and item.value.get("symbols"):
             symbols.setdefault(item.gene_id, str(item.value["symbols"][0]))
     return symbols
+
+
+def brief_domains(domains: dict[str, DomainStatus]) -> dict[str, Any]:
+    """Return the evidence domains the bundle serves and why the others are missing."""
+    return {
+        "available": sorted(key for key, status in domains.items() if status.available),
+        "unavailable": {key: str(status.reason) for key, status in sorted(domains.items()) if not status.available},
+    }
 
 
 def render_brief(brief: dict[str, Any]) -> str:

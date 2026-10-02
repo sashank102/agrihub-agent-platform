@@ -30,11 +30,14 @@ from langchain_core.messages import (
     AIMessage,
     BaseMessage,
     HumanMessage,
+    SystemMessage,
     ToolCall,
     ToolMessage,
 )
 from langchain_core.outputs import ChatGeneration, ChatResult
 from pydantic import ConfigDict
+
+from agrihub.prompts import UNAVAILABLE_HEADING
 
 PREFIX = "agrihub-fake:"
 Script = Callable[[list[BaseMessage], tuple[str, ...]], AIMessage]
@@ -245,7 +248,7 @@ def _specialist(messages: list[BaseMessage]) -> AIMessage:
             return reply(*(call("record_finding", finding, f"{prefix}-{index}") for index, finding in enumerate(findings)))
         phase = "done"
     recorded = [str(message.artifact["finding_id"]) for message in messages if isinstance(message, ToolMessage) and isinstance(message.artifact, dict) and message.artifact.get("finding_id")]
-    return reply(call("specialist_done", {"summary": _summary(specialist, genes, recorded)}, f"{prefix}-0"))
+    return reply(call("specialist_done", {"summary": _summary(specialist, genes, recorded, messages)}, f"{prefix}-0"))
 
 
 def _findings(specialist: str, genes: list[str], messages: list[BaseMessage]) -> list[dict[str, Any]]:
@@ -286,15 +289,28 @@ def _finding(target: str, claim: str, stance: str, strength: str, evidence_ids: 
     return {"target": target, "claim": claim, "stance": stance, "strength": strength, "evidence_ids": evidence_ids}
 
 
-def _summary(specialist: str, genes: list[str], recorded: list[str]) -> str:
-    gaps = {
-        "locus_variant": "LD, variant consequences, TFBS/CNS hits and haplotypes are not available in this build.",
-        "qtl_gwas": "Cross-species convergence is not available in this build.",
-        "function_orthology": "Pathways, UniProt records and rice orthologs are not available in this build.",
-        "expression_network": "Expression, co-expression, network and regulation data are not available in this build.",
-        "literature": "The offline script read gene2pubmed only; Europe PMC, PubMed and PubTator3 were not searched.",
-    }
-    return f"Covered {len(genes)} genes; recorded {', '.join(recorded) or 'no findings'}. {gaps.get(specialist, '')}".strip()
+def unavailable_domains(messages: list[BaseMessage]) -> list[str]:
+    """Return the domain labels the system prompt lists as unavailable."""
+    system = next((str(message.content) for message in messages if isinstance(message, SystemMessage)), "")
+    _, found, rest = system.partition(f"\n{UNAVAILABLE_HEADING}\n")
+    if not found:
+        return []
+    labels = []
+    for line in rest.splitlines()[1:]:
+        if not line.startswith("- "):
+            break
+        labels.append(line[2:].split(":", 1)[0])
+    return labels
+
+
+def _summary(specialist: str, genes: list[str], recorded: list[str], messages: list[BaseMessage]) -> str:
+    gaps = unavailable_domains(messages)
+    text = f"Covered {len(genes)} genes; recorded {', '.join(recorded) or 'no findings'}."
+    if gaps:
+        text += f" Not available in this build: {'; '.join(gaps)}."
+    if specialist == "literature":
+        text += " The offline script read gene2pubmed only; Europe PMC, PubMed and PubTator3 were not searched."
+    return text
 
 
 register_script("poster", poster_script)

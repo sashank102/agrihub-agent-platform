@@ -4,6 +4,7 @@ from agrihub.prompts import AgentPrompt
 from agrihub.prompts.shared import (
     COMMON_TOOLS,
     SPECIALIST_CONTRACT,
+    SPECIALIST_DOMAINS,
     SPECIALIST_INPUTS,
     SPECIALIST_STOP,
 )
@@ -26,10 +27,5 @@ FUNCTION_ORTHOLOGY = AgentPrompt(
     output_contract=SPECIALIST_CONTRACT,
     stop_rules=SPECIALIST_STOP,
     tools=("gene_annotation", "annotation_relevance", "get_orthologs", "arabidopsis_knowledge", "map_trait", *COMMON_TOOLS),
-    unavailable=(
-        "pathways (get_pathways: PlantCyc/PMN, Plant Reactome, MapMan)",
-        "UniProt protein records (get_protein)",
-        "gene-family trees beyond PANTHER/Pfam labels (gene_family)",
-        "rice orthologs (not in the soybean bundle yet)",
-    ),
+    domains=SPECIALIST_DOMAINS["function_orthology"],
 )

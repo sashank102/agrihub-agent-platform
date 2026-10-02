@@ -4,6 +4,7 @@ from agrihub.prompts import AgentPrompt
 from agrihub.prompts.shared import (
     COMMON_TOOLS,
     SPECIALIST_CONTRACT,
+    SPECIALIST_DOMAINS,
     SPECIALIST_INPUTS,
     SPECIALIST_STOP,
 )
@@ -31,4 +32,5 @@ LITERATURE = AgentPrompt(
     ),
     stop_rules=SPECIALIST_STOP,
     tools=("gene_aliases", "gene_publications", "search_literature", "extract_passages", "web_search", *COMMON_TOOLS),
+    domains=SPECIALIST_DOMAINS["literature"],
 )

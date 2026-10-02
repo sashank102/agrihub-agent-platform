@@ -4,17 +4,39 @@ The orchestrator falls back to it when its model fails or runs out of
 steps, and the scripted fake model uses it as its policy. Each specialist
 gets the genes its domain can say something about, read from the rubric
 reasons in the brief (``A`` positional, ``B`` curated gene, ``C`` ortholog,
-``D`` annotation, ``G`` QTL/GWAS convergence).
+``D`` annotation, ``E`` expression, ``G`` QTL/GWAS convergence).
+Expression and network work is dispatched only when the brief's ``domains``
+say the bundle has expression, co-expression, network or regulation data;
+otherwise the specialist is skipped with the reasons the bundle gave.
 """
 
 from typing import Any
 
-UNAVAILABLE_EXPRESSION = "expression, co-expression, network and regulation data are not in this build"
+from agrihub_data.availability import SPECIALIST_REQUIRES
+
+EXPRESSION_GENES_PER_LOCUS = 3
 
 
 def reason_codes(gene: dict[str, Any]) -> set[str]:
     """Return the rubric categories that gave a brief gene points."""
     return {str(reason).split(" ", 1)[0] for reason in gene.get("why") or [] if str(reason).strip()}
+
+
+def unavailable_reason(brief: dict[str, Any], specialist: str) -> str | None:
+    """Return why none of the domains a specialist needs can be served, or ``None`` when one can.
+
+    Specialists with core-tier tools (and briefs without ``domains``) are never declined here.
+    """
+    keys = SPECIALIST_REQUIRES.get(specialist) or ()
+    domains = brief.get("domains")
+    if not keys or not isinstance(domains, dict):
+        return None
+    available = set(domains.get("available") or [])
+    if available & set(keys):
+        return None
+    missing = domains.get("unavailable") or {}
+    reasons = list(dict.fromkeys(str(missing[key]) for key in keys if key in missing))
+    return "; ".join(reasons) or "its data is not in this build"
 
 
 def plan_from_brief(
@@ -119,8 +141,26 @@ def plan_from_brief(
         + (f"; {len(overlapping)} genes overlap a lead SNP" if overlapping else "")
         + ", so papers are worth checking.",
     )
-    if "expression_network" in enabled:
-        skipped.append({"specialist": "expression_network", "reason": UNAVAILABLE_EXPRESSION})
+    declined = unavailable_reason(brief, "expression_network")
+    if "expression_network" in enabled and declined is not None:
+        skipped.append({"specialist": "expression_network", "reason": f"no expression or network data: {declined}"})
+    elif "expression_network" in enabled:
+        expressed = [
+            str(gene["gene_id"])
+            for entry in loci
+            for gene in (entry.get("top") or [])[:EXPRESSION_GENES_PER_LOCUS]
+        ]
+        expressed += [str(known["gene_id"]) for entry in loci for known in entry.get("known_genes") or []]
+        add(
+            "expression_network",
+            expressed,
+            [],
+            f"Check expression of these genes in {trait}-relevant tissues and their tissue specificity, their co-expression "
+            "and network proximity to known trait genes, and whether they are or are regulated by transcription factors.",
+            f"The top {EXPRESSION_GENES_PER_LOCUS} genes of each of the {len(locus_ids)} loci"
+            + (" and the curated trait genes" if any(entry.get("known_genes") for entry in loci) else "")
+            + " need expression (E) and network (F) evidence, which harvest scores only in part.",
+        )
     summary = (
         f"Dispatch {len(dispatches)} specialists on different genes of {len(locus_ids)} loci: "
         + ", ".join(f"{item['specialist']} ({len(item['focus_gene_ids'])} genes)" for item in dispatches)

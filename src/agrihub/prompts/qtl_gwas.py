@@ -4,6 +4,7 @@ from agrihub.prompts import AgentPrompt
 from agrihub.prompts.shared import (
     COMMON_TOOLS,
     SPECIALIST_CONTRACT,
+    SPECIALIST_DOMAINS,
     SPECIALIST_INPUTS,
     SPECIALIST_STOP,
 )
@@ -27,5 +28,5 @@ QTL_GWAS = AgentPrompt(
     output_contract=SPECIALIST_CONTRACT,
     stop_rules=SPECIALIST_STOP,
     tools=("map_trait", "qtl_overlap", "gwas_catalog_overlap", "known_trait_genes", *COMMON_TOOLS),
-    unavailable=("cross-species convergence: orthologs near same-trait hits in rice, maize or sorghum (cross_species_convergence)",),
+    domains=SPECIALIST_DOMAINS["qtl_gwas"],
 )

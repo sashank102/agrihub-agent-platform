@@ -52,6 +52,13 @@ from agrihub.tools import bundle_tools as bt
 from agrihub.tools import literature_tools as lt
 from agrihub.tools.agent_tools import COMMON_TOOLS
 from agrihub.tools.store_tools import store_for_config
+from agrihub_data.availability import (
+    DomainStatus,
+    domain_status,
+    tool_is_served,
+    unavailable_lines,
+)
+from agrihub_data.registry import UnknownSpeciesError
 
 DONE_TOOL = "specialist_done"
 INPUT_SUMMARY_CHARS = 240
@@ -67,9 +74,19 @@ class SpecialistSpec:
     max_steps: int | None = None
     model: str | None = None
 
-    def bound_tools(self, settings: StudyConfiguration) -> list[BaseTool]:
-        """Return the tools for this run; ``web_search`` only when the web fallback is enabled."""
-        return [tool for tool in self.tools if tool.name != "web_search" or settings.enable_web_fallback]
+    def bound_tools(self, settings: StudyConfiguration, available: set[str] | None = None) -> list[BaseTool]:
+        """Return the tools for this run.
+
+        ``web_search`` is bound only when the web fallback is enabled; with
+        ``available`` domains given, tools whose every domain is unavailable
+        are left out (the prompt lists those domains as gaps).
+        """
+        return [
+            tool
+            for tool in self.tools
+            if (tool.name != "web_search" or settings.enable_web_fallback)
+            and (available is None or tool_is_served(tool.name, available))
+        ]
 
 
 SPECS: dict[SpecialistName, SpecialistSpec] = {
@@ -115,6 +132,8 @@ class SpecialistRunState(TypedDict, total=False):
     study: dict[str, Any]
     context: dict[str, Any]
     messages: Annotated[list[AnyMessage], add_messages]
+    available: list[str]
+    """Evidence domains the study's bundle serves, fixed when the lane starts."""
     step: int
     max_steps: int
     tool_calls: int
@@ -136,6 +155,8 @@ async def prepare(state: SpecialistRunState, config: RunnableConfig) -> dict[str
     max_steps = max_steps_for(spec, settings)
     study = state.get("study") or {}
     profile = study.get("profile") or {}
+    statuses = await asyncio.to_thread(study_domains, study)
+    available = {key for key, status in statuses.items() if status.available}
     context = PromptContext(
         species=str(study.get("species") or ""),
         assembly=str(study.get("assembly") or ""),
@@ -147,10 +168,12 @@ async def prepare(state: SpecialistRunState, config: RunnableConfig) -> dict[str
         seed_families=tuple(profile.get("seed_families") or ()),
         focus_gene_ids=tuple(state.get("focus_gene_ids") or ()),
         focus_loci=tuple(state.get("focus_loci") or ()),
+        unavailable=unavailable_lines(statuses, spec.prompt.domains),
     )
-    tools = tuple(tool.name for tool in spec.bound_tools(settings))
+    tools = tuple(tool.name for tool in spec.bound_tools(settings, available))
     assignment = await asyncio.to_thread(_assignment, state, config, max_steps)
     return {
+        "available": sorted(available),
         "messages": [SystemMessage(content=render(spec.prompt, context, tools=tools)), HumanMessage(content=assignment)],
         "step": 0,
         "max_steps": max_steps,
@@ -168,7 +191,7 @@ async def agent(state: SpecialistRunState, config: RunnableConfig) -> dict[str, 
     model_name = spec.model or settings.specialist_model
     model = models.tool_model(
         model_name,
-        spec.bound_tools(settings),
+        spec.bound_tools(settings, _available(state)),
         max_tokens=settings.model_max_tokens,
         max_retries=settings.model_max_retries,
     )
@@ -209,7 +232,7 @@ async def tools(state: SpecialistRunState, config: RunnableConfig) -> dict[str, 
     settings = StudyConfiguration.from_runnable_config(config)
     spec = SPECS[state["specialist"]]
     lane = _agent_for(state)
-    by_name = {tool.name: tool for tool in spec.bound_tools(settings)}
+    by_name = {tool.name: tool for tool in spec.bound_tools(settings, _available(state))}
     last = (state.get("messages") or [])[-1]
     calls = list(getattr(last, "tool_calls", None) or [])
     limit = int(config.get("max_concurrency") or 0) or max(1, len(calls))
@@ -423,6 +446,19 @@ def _assignment(state: SpecialistRunState, config: RunnableConfig, max_steps: in
     }
     lines.append("Assignment JSON: " + json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
     return "\n".join(lines)
+
+
+def study_domains(study: dict[str, Any]) -> dict[str, DomainStatus]:
+    """Return the domain status of a study's species, or nothing when the species is unknown."""
+    try:
+        return domain_status(str(study.get("species") or ""))
+    except UnknownSpeciesError:
+        return {}
+
+
+def _available(state: SpecialistRunState) -> set[str] | None:
+    available = state.get("available")
+    return set(available) if available is not None else None
 
 
 def _agent_for(task: SpecialistTask | SpecialistRunState) -> events.AgentRef:

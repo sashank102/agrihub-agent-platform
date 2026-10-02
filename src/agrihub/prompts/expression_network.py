@@ -4,6 +4,7 @@ from agrihub.prompts import AgentPrompt
 from agrihub.prompts.shared import (
     COMMON_TOOLS,
     SPECIALIST_CONTRACT,
+    SPECIALIST_DOMAINS,
     SPECIALIST_INPUTS,
     SPECIALIST_STOP,
 )
@@ -27,11 +28,5 @@ EXPRESSION_NETWORK = AgentPrompt(
     output_contract=SPECIALIST_CONTRACT,
     stop_rules=(*SPECIALIST_STOP, "Two tool rounds are usually enough here; finish early."),
     tools=("gene_annotation", "annotation_relevance", "map_trait", *COMMON_TOOLS),
-    unavailable=(
-        "trait-relevant tissues and stages (trait_relevant_tissues)",
-        "expression profiles and tissue specificity (expression_profile, tissue_specificity; JGI gene atlas)",
-        "co-expression neighbours (coexpression_neighbors)",
-        "network neighbours and seed propagation from known trait genes (network_neighbors, seed_propagation; STRING/ATTED)",
-        "regulators and TF targets (get_regulation; PlantTFDB/PlantRegMap)",
-    ),
+    domains=SPECIALIST_DOMAINS["expression_network"],
 )

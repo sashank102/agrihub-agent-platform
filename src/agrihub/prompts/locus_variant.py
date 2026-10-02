@@ -4,6 +4,7 @@ from agrihub.prompts import AgentPrompt
 from agrihub.prompts.shared import (
     COMMON_TOOLS,
     SPECIALIST_CONTRACT,
+    SPECIALIST_DOMAINS,
     SPECIALIST_INPUTS,
     SPECIALIST_STOP,
 )
@@ -27,10 +28,5 @@ LOCUS_VARIANT = AgentPrompt(
     output_contract=SPECIALIST_CONTRACT,
     stop_rules=SPECIALIST_STOP,
     tools=("genes_in_window", "define_locus", "gene_annotation", "map_gene_ids", "liftover", "resolve_marker", "normalize_chrom", *COMMON_TOOLS),
-    unavailable=(
-        "LD with the lead SNP (ld_with_lead; needs a genotype VCF and the plan-6 LD tool)",
-        "variant consequences in CDS/UTR/splice/promoter (annotate_variants, VEP/SnpEff)",
-        "SNPs in TF binding sites or conserved non-coding sequence (snp_in_tfbs_or_cns)",
-        "homeolog pairs from synteny (homeologs) and haplotypes (gene_haplotypes, GmHapMap)",
-    ),
+    domains=SPECIALIST_DOMAINS["locus_variant"],
 )

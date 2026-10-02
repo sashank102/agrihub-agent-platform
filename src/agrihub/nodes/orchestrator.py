@@ -310,6 +310,10 @@ def validate(
         if specialist in seen:
             rejected.append({"specialist": specialist, "reason": "already dispatched in this call"})
             continue
+        declined = planning.unavailable_reason(view.brief, specialist)
+        if declined is not None:
+            rejected.append({"specialist": specialist, "reason": f"no data for its domains: {declined}"})
+            continue
         genes = [str(gene).strip() for gene in raw.get("focus_gene_ids") or [] if str(gene).strip()]
         unknown_genes = [gene for gene in genes if gene.casefold() not in by_case]
         focus_loci = [str(locus).strip() for locus in raw.get("focus_loci") or [] if str(locus).strip()]

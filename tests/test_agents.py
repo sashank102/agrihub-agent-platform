@@ -9,6 +9,7 @@ import asyncio
 import json
 import uuid
 from collections.abc import Callable, Iterator
+from dataclasses import replace
 from typing import Any
 
 import pytest
@@ -356,8 +357,9 @@ def test_prompts_carry_guardrails_study_values_tools_and_gaps():
         assert "Every claim cites evidence" in text and "Absence of evidence is not negative evidence" in text
         assert set(spec.prompt.tools) == {tool.name for tool in spec.tools}, name
         assert "{" not in text and "}" not in text
-        if name != "literature":
-            assert "## Unavailable domains in this build" in text
+        assert "## Unavailable domains in this build" not in text
+        gaps = replace(context, unavailable=("co-expression neighbours (ATTED-II): no edges rows",))
+        assert "- co-expression neighbours (ATTED-II): no edges rows" in render(spec.prompt, gaps)
     orchestrator = render(
         ORCHESTRATOR,
         PromptContext(
