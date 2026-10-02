@@ -3,7 +3,7 @@
 Each locator returns ``None`` when the binary is not installed, so tools can
 report an "unavailable" evidence gap instead of failing. Locations, in order:
 
-- PLINK2: ``AGRIHUB_PLINK2``, ``<data_dir>/_tools/bin/plink2``, ``plink2`` on PATH.
+- PLINK2: ``AGRIHUB_PLINK2`` when set, else ``<data_dir>/_tools/bin/plink2``, else ``plink2`` on PATH.
 - VEP: ``AGRIHUB_VEP`` (a native ``vep`` script), else the Docker image
   ``AGRIHUB_VEP_IMAGE`` (default ``ensemblorg/ensembl-vep:release_116.2``)
   when Docker runs and the image is pulled.
@@ -41,12 +41,14 @@ class VepRunner:
 
 
 def plink2_path() -> Path | None:
-    """Return the PLINK2 executable, or ``None`` when it is not installed."""
+    """Return the PLINK2 executable, or ``None`` when it is not installed.
+
+    A set ``AGRIHUB_PLINK2`` is the only candidate, so it can also switch PLINK2 off.
+    """
     configured = os.environ.get("AGRIHUB_PLINK2")
-    candidates = [Path(configured)] if configured else []
-    candidates.append(data_root() / "_tools" / "bin" / "plink2")
+    candidates = [Path(configured)] if configured else [data_root() / "_tools" / "bin" / "plink2"]
     found = shutil.which("plink2")
-    if found:
+    if found and not configured:
         candidates.append(Path(found))
     for candidate in candidates:
         if candidate.is_file() and os.access(candidate, os.X_OK):

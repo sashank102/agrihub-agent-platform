@@ -12,6 +12,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from agent_platform.core.settings import get_data_paths
 from agrihub.evidence_store import EvidenceStore
 from agrihub.graph import build_study_graph
+from agrihub_data import availability
 from agrihub_data.bundle import close_bundles, open_bundle
 
 BUNDLE = get_data_paths().data_dir / "soybean" / "bundle.duckdb"
@@ -82,7 +83,8 @@ def test_poster_study_ranks_real_loci_with_explanations_in_under_30_seconds():
     explanations = store.get_output(report["provenance"]["score_explanations_ref"])
     wrky = next(row for row in explanations["rows"] if row["gene_id"] == "Glyma.18G092200")
     assert wrky["locus_id"] == wrky_locus and wrky["categories"]["A"]["points"] == 20
-    assert wrky["categories"]["A"]["evidence_ids"] and wrky["categories"]["E"]["available"] is False
+    assert wrky["categories"]["A"]["evidence_ids"]
+    assert wrky["categories"]["E"]["available"] is ("expression" in availability.available_domains("soybean"))
     assert {candidate["locus_id"] for candidate in report["candidates"]} == {locus["locus_id"] for locus in report["loci"]}
     assert values["triage_brief"]["token_estimate"] <= 4_000
     progress = [event["data"] for event in received if event["type"] == "evidence.progress"]
@@ -113,4 +115,52 @@ def test_snps_near_a_known_trait_gene_rank_it_in_the_top_three(trait: str, gene_
     top = {item["gene_id"]: item for item in ranked if item["rank_in_locus"] <= 3}
     assert gene_id in top, [(item["gene_id"], item["score"]) for item in ranked]
     assert top[gene_id]["tier"] == "T1"
+    store.close()
+
+
+def _lanes(received: list[dict[str, Any]]) -> dict[str, set[str]]:
+    lanes: dict[str, set[str]] = {}
+    for event in received:
+        if event["type"] == "tool.started" and event["agent"]["kind"] == "specialist":
+            lanes.setdefault(event["agent"]["id"].rsplit("-", 1)[-1], set()).add(event["data"]["name"])
+    return lanes
+
+
+@pytest.mark.skipif("expression" not in availability.available_domains("soybean"), reason="needs the extended tier")
+def test_poster_study_dispatches_expression_and_scores_a_e_f():
+    received, values, store, _ = _study(POSTER)
+    decision = next(event["data"] for event in received if event["type"] == "orchestrator.decision")
+    assert "expression_network" in {item["specialist"] for item in decision["dispatched"]}
+    assert not any(item["specialist"] == "expression_network" for item in decision["rejected"])
+    lanes = _lanes(received)
+    assert {"tissue_specificity", "seed_propagation", "coexpression_neighbors", "get_regulation"} <= lanes["expression_network"]
+    assert {"annotate_variants", "snp_in_tfbs_or_cns"} <= lanes["locus_variant"]
+    points = [item["category_points"] for item in values["report"]["candidates"]]
+    for code in ("A", "E", "F"):
+        assert any(row.get(code, 0) > 0 for row in points), code
+    findings = store.findings()
+    assert findings
+    for finding in findings:
+        assert store.resolve(finding.evidence_ids)[1] == []
+    store.close()
+
+
+def test_poster_study_completes_and_reports_gaps_without_heavy_binaries(monkeypatch: pytest.MonkeyPatch):
+    from agrihub_data import external
+
+    monkeypatch.setenv("AGRIHUB_PLINK2", "/nonexistent/plink2")
+    monkeypatch.setenv("AGRIHUB_VEP_IMAGE", "agrihub-test/no-such-vep:0")
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    external.reset_probes()
+    availability.clear_cache()
+    try:
+        received, values, store, _ = _study(POSTER)
+    finally:
+        external.reset_probes()
+        availability.clear_cache()
+    assert values["run_status"] == "completed" and values["report"]
+    assert "ld_with_lead" not in _lanes(received).get("locus_variant", set())
+    summary = next(event["data"]["summary"] for event in received if event["type"] == "agent.completed" and event["agent"]["id"].endswith("locus_variant"))
+    assert "LD with the lead SNP" in summary and "variant consequences" in summary
+    assert any("PLINK2 is not installed" in item for item in values["report"]["limitations"])
     store.close()
