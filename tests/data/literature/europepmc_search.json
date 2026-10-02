@@ -1,0 +1,142 @@
+{
+ "recorded": "2026-10-02",
+ "url": "https://www.ebi.ac.uk/europepmc/webservices/rest/search",
+ "params": {
+  "query": "(\"GH3\" OR \"Glyma.05G101300\" OR \"GmGH3.3\") AND (\"Glycine max\" OR \"soybean\" OR \"soybeans\") AND (\"plant height\" OR \"dwarf\" OR \"internode length\")",
+  "format": "json",
+  "resultType": "lite",
+  "pageSize": 3
+ },
+ "response": {
+  "version": "6.9",
+  "hitCount": 245,
+  "nextCursorMark": "AoIIQQqReCg1NTc2NTE0MA==",
+  "nextPageUrl": "https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=%28%22GH3%22+OR+%22Glyma.05G101300%22+OR+%22GmGH3.3%22%29+AND+%28%22Glycine+max%22+OR+%22soybean%22+OR+%22soybeans%22%29+AND+%28%22plant+height%22+OR+%22dwarf%22+OR+%22internode+length%22%29&cursorMark=AoIIQQqReCg1NTc2NTE0MA%3D%3D&resultType=lite&pageSize=3&format=json",
+  "request": {
+   "queryString": "(\"GH3\" OR \"Glyma.05G101300\" OR \"GmGH3.3\") AND (\"Glycine max\" OR \"soybean\" OR \"soybeans\") AND (\"plant height\" OR \"dwarf\" OR \"internode length\")",
+   "resultType": "lite",
+   "cursorMark": "*",
+   "pageSize": 3,
+   "sort": "",
+   "synonym": false
+  },
+  "resultList": {
+   "result": [
+    {
+     "id": "42452234",
+     "source": "MED",
+     "pmid": "42452234",
+     "pmcid": "PMC13364422",
+     "fullTextIdList": {
+      "fullTextId": [
+       "PMC13364422"
+      ]
+     },
+     "doi": "10.3390/plants15132028",
+     "title": "The Auxin-Induced Protein Gene (MsARG4) Regulates Rapid Stem Elongation and Nutritional Quality Enhancement in Alfalfa.",
+     "authorString": "Hao X, Huang S, Liu Z, Jia SA, He L, Sun L, Wang S, Tuerdi A, Maimaitiyiming T, Li Y, Dawuti Y, Wan J, Jin G, Qi J.",
+     "journalTitle": "Plants (Basel)",
+     "issue": "13",
+     "journalVolume": "15",
+     "pubYear": "2026",
+     "journalIssn": "2223-7747",
+     "pageInfo": "2028",
+     "pubType": "research-article; journal article",
+     "isOpenAccess": "Y",
+     "inEPMC": "Y",
+     "inPMC": "Y",
+     "citedByCount": 0,
+     "hasReferences": "Y",
+     "hasTextMinedTerms": "Y",
+     "hasDbCrossReferences": "N",
+     "hasPDF": "Y",
+     "hasBook": "N",
+     "hasSuppl": "Y",
+     "hasLabsLinks": "N",
+     "hasTMAccessionNumbers": "N",
+     "firstPublicationDate": "2026-06-30",
+     "firstIndexDate": "2026-07-16"
+    },
+    {
+     "id": "39435023",
+     "source": "MED",
+     "pmid": "39435023",
+     "pmcid": "PMC11491365",
+     "fullTextIdList": {
+      "fullTextId": [
+       "PMC11491365"
+      ]
+     },
+     "doi": "10.3389/fpls.2024.1477616",
+     "title": "Molecular and genetic basis of plant architecture in soybean.",
+     "authorString": "Li W, Wang L, Xue H, Zhang M, Song H, Qin M, Dong Q.",
+     "journalTitle": "Front Plant Sci",
+     "journalVolume": "15",
+     "pubYear": "2024",
+     "journalIssn": "1664-462x",
+     "pageInfo": "1477616",
+     "pubType": "review-article; review; journal article",
+     "isOpenAccess": "Y",
+     "inEPMC": "Y",
+     "inPMC": "Y",
+     "citedByCount": 5,
+     "hasReferences": "Y",
+     "hasTextMinedTerms": "Y",
+     "hasDbCrossReferences": "N",
+     "hasPDF": "Y",
+     "hasBook": "N",
+     "hasSuppl": "N",
+     "hasLabsLinks": "Y",
+     "hasTMAccessionNumbers": "Y",
+     "tmAccessionTypeList": {
+      "accessionType": [
+       "doi"
+      ]
+     },
+     "firstPublicationDate": "2024-10-07",
+     "firstIndexDate": "2024-10-23"
+    },
+    {
+     "id": "42286450",
+     "source": "MED",
+     "pmid": "42286450",
+     "pmcid": "PMC13487925",
+     "fullTextIdList": {
+      "fullTextId": [
+       "PMC13487925"
+      ]
+     },
+     "doi": "10.1186/s12870-026-09241-y",
+     "title": "Quantitative trait loci analysis identifying novel genomic regions for off-target dicamba tolerance in soybean [Glycine max (L.) Merr.].",
+     "authorString": "Lee D, do Nascimento EF, Acuna-Galindo A, Harrison D, Florez-Palacios L, Marmo RG, Wu C, Rogers D, Ravelombola F, Lin F, Shannon JG, Nguyen HT, Vieira CC.",
+     "journalTitle": "BMC Plant Biol",
+     "issue": "1",
+     "journalVolume": "26",
+     "pubYear": "2026",
+     "journalIssn": "1471-2229",
+     "pageInfo": "1415",
+     "pubType": "research-article; journal article",
+     "isOpenAccess": "Y",
+     "inEPMC": "Y",
+     "inPMC": "Y",
+     "citedByCount": 0,
+     "hasReferences": "Y",
+     "hasTextMinedTerms": "Y",
+     "hasDbCrossReferences": "N",
+     "hasPDF": "Y",
+     "hasBook": "N",
+     "hasSuppl": "Y",
+     "hasLabsLinks": "N",
+     "hasTMAccessionNumbers": "Y",
+     "tmAccessionTypeList": {
+      "accessionType": [
+       "doi"
+      ]
+     },
+     "firstPublicationDate": "2026-06-12",
+     "firstIndexDate": "2026-06-13"
+    }
+   ]
+  }
+ }
+}

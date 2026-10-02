@@ -22,6 +22,8 @@ from agrihub.graph import build_study_graph
 from agrihub.state import EvidenceItem, Finding, OrthologRef
 from agrihub.tools.store_tools import get_evidence, record_finding
 
+pytestmark = pytest.mark.usefixtures("fake_llm")
+
 CATEGORIES = ("positional", "ortholog", "expression", "literature")
 
 

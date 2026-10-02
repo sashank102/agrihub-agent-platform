@@ -13,6 +13,8 @@ from agrihub.graph import build_study_graph
 from agrihub.nodes.harvest import BRIEF_TOKEN_BUDGET, STEPS, brief_tokens, fit_brief
 from agrihub_data.bundle import open_bundle
 
+pytestmark = pytest.mark.usefixtures("fake_llm")
+
 STUDY = {
     "mode": "snps",
     "species": "soybean",

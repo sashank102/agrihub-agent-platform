@@ -1,0 +1,38 @@
+{
+ "recorded": "2026-10-02",
+ "url": "https://www.ncbi.nlm.nih.gov/research/pubtator3-api/search/",
+ "params": {
+  "text": "@GENE_100811309 AND (\"plant height\" OR \"dwarf\" OR \"internode length\")",
+  "page": 1
+ },
+ "response": {
+  "count": 11,
+  "total_pages": 2,
+  "results": [
+   {
+    "_id": "35955771",
+    "pmid": 35955771,
+    "title": "GmIAA27 Encodes an AUX/IAA Protein Involved in Dwarfing and Multi-Branching in Soybean",
+    "journal": "Int J Mol Sci",
+    "date": "2022-08-03T00:00:00Z",
+    "doi": "10.3390/ijms23158643"
+   },
+   {
+    "_id": "39435023",
+    "pmid": 39435023,
+    "title": "Molecular and genetic basis of plant architecture in soybean",
+    "journal": "Front Plant Sci",
+    "date": "2024-10-07T00:00:00Z",
+    "doi": "10.3389/fpls.2024.1477616"
+   },
+   {
+    "_id": "39771193",
+    "pmid": 39771193,
+    "title": "Effects of Far-Red Light and Ultraviolet Light-A on Growth, Photosynthesis, Transcriptome, and Metabolome of Mint (Mentha haplocalyx Briq.)",
+    "journal": "Plants (Basel)",
+    "date": "2024-12-14T00:00:00Z",
+    "doi": "10.3390/plants13243495"
+   }
+  ]
+ }
+}

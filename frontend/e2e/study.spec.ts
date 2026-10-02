@@ -64,7 +64,9 @@ test("runs the poster study from the form to the collapsed report and replays it
   await page.getByRole("button", { name: "Open full trace" }).click();
   const sheet = page.getByRole("dialog");
   await sheet.locator('li[data-kind="dispatch"]').hover();
-  await expect(sheet.locator("article[data-highlighted]")).toHaveCount(5);
+  await expect(sheet.locator("article[data-highlighted]")).toHaveCount(4);
+  await sheet.locator('li[data-kind="followup"]').hover();
+  await expect(sheet.locator("article[data-highlighted]")).toHaveCount(1);
   await page.keyboard.press("Escape");
 
   await page.reload();

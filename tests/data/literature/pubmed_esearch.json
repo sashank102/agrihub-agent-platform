@@ -1,0 +1,35 @@
+{
+ "recorded": "2026-10-02",
+ "url": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
+ "params": {
+  "db": "pubmed",
+  "term": "(\"GH3\"[tiab] OR \"Glyma.05G101300\"[tiab] OR \"GmGH3.3\"[tiab]) AND (\"Glycine max\"[tiab] OR \"soybean\"[tiab] OR \"soybeans\"[tiab]) AND (\"plant height\"[tiab] OR \"dwarf\"[tiab] OR \"internode length\"[tiab])",
+  "retmode": "json",
+  "retmax": 3,
+  "sort": "relevance"
+ },
+ "response": {
+  "header": {
+   "type": "esearch",
+   "version": "0.3"
+  },
+  "esearchresult": {
+   "count": "1",
+   "retmax": "1",
+   "retstart": "0",
+   "idlist": [
+    "35955771"
+   ],
+   "translationset": [],
+   "querytranslation": "\"GH3\"[Title/Abstract] AND (\"Glycine max\"[Title/Abstract] OR \"soybean\"[Title/Abstract] OR \"soybeans\"[Title/Abstract]) AND (\"plant height\"[Title/Abstract] OR \"dwarf\"[Title/Abstract] OR \"internode length\"[Title/Abstract])",
+   "warninglist": {
+    "phrasesignored": [],
+    "quotedphrasesnotfound": [
+     "\"Glyma.05G101300\"[tiab]",
+     "\"GmGH3.3\"[tiab]"
+    ],
+    "outputmessages": []
+   }
+  }
+ }
+}

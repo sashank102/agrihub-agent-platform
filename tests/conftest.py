@@ -12,6 +12,7 @@ from agrihub_fixtures import (
     publish_fixture_files,
 )
 
+from agrihub.configuration import MODEL_FIELDS
 from agrihub_data.build import build
 from agrihub_data.bundle import close_bundles
 from agrihub_data.fetch import fetch
@@ -72,3 +73,12 @@ def fixture_env(
     finally:
         unregister_species("soybean")
         close_bundles()
+
+
+@pytest.fixture
+def fake_llm(monkeypatch: pytest.MonkeyPatch) -> str:
+    """Point every agent role at the scripted poster model so no test calls a model provider."""
+    for name in MODEL_FIELDS:
+        monkeypatch.delenv(name.upper(), raising=False)
+    monkeypatch.setenv("MODEL", "agrihub-fake:poster")
+    return "agrihub-fake:poster"

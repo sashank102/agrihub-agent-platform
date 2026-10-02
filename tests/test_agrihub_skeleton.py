@@ -1,4 +1,4 @@
-"""The agrihub_study graph walks every phase on the fixture bundle and fans out five lanes."""
+"""The agrihub_study graph walks every phase on the fixture bundle and fans out one lane per dispatch."""
 
 import asyncio
 import uuid
@@ -14,7 +14,9 @@ from agrihub import events
 from agrihub.evidence_store import EvidenceStore
 from agrihub.graph import build_study_graph
 from agrihub.nodes.intake import StudyInputError
-from agrihub.state import SPECIALISTS, Report
+from agrihub.state import Report
+
+pytestmark = pytest.mark.usefixtures("fake_llm")
 
 SNP_STUDY = {
     "mode": "snps",
@@ -107,15 +109,16 @@ def test_snp_study_emits_phases_in_order_and_closes_each():
     assert {candidate["gene_id"] for candidate in values["candidates"]} >= {"Glyma.05G032200", "Glyma.18G092200"}
 
 
-def test_five_specialists_get_distinct_lanes_that_all_complete():
+def test_dispatched_specialists_get_distinct_lanes_that_all_complete():
     received, values, run_id = _run(SNP_STUDY)
     started = [event for event in received if event["type"] == "agent.started"]
     completed = [event for event in received if event["type"] == "agent.completed"]
     started_ids = [event["agent"]["id"] for event in started]
 
-    assert len(started) == 5
-    assert len(set(started_ids)) == 5
+    assert len(started) == len(values["dispatches"]) >= 4
+    assert len(set(started_ids)) == len(started_ids)
     assert sorted(event["agent"]["id"] for event in completed) == sorted(started_ids)
+    assert all(event["data"]["status"] == "completed" for event in completed)
     for event in started:
         assert event["agent"]["kind"] == "specialist"
         assert event["agent"]["parent_id"] == events.ORCHESTRATOR.id
@@ -127,22 +130,20 @@ def test_five_specialists_get_distinct_lanes_that_all_complete():
         for event in received
         if event["type"] == "orchestrator.decision" and event["data"]["kind"] == "dispatch"
     )
-    assert [item["agent_id"] for item in dispatch["data"]["dispatched"]] == [
-        item["agent_id"] for item in values["dispatches"]
-    ]
-    assert sorted(item["specialist"] for item in values["dispatches"]) == sorted(SPECIALISTS)
+    first_round = [item for item in values["dispatches"] if item["round"] == 1]
+    assert [item["agent_id"] for item in dispatch["data"]["dispatched"]] == [item["agent_id"] for item in first_round]
+    assert len({item["specialist"] for item in first_round}) == len(first_round) >= 3
+    assert {item["specialist"] for item in dispatch["data"]["rejected"]} == {"expression_network"}
     assert set(started_ids) == {item["agent_id"] for item in values["dispatches"]}
 
     lane_of_ns = {event["ns"][0]: event["agent"]["id"] for event in started}
     for event in received:
-        if event["type"].startswith(("agent.", "tool.")):
+        if event["type"].startswith(("agent.", "tool.")) and event["agent"]["kind"] == "specialist":
             assert lane_of_ns[event["ns"][0]] == event["agent"]["id"]
 
     store = EvidenceStore.for_run(run_id)
-    lane = {item["specialist"]: item["agent_id"] for item in values["dispatches"]}
     recorded = {finding.agent_id for finding in store.findings()}
-    assert {lane["locus_variant"], lane["function_orthology"]} <= recorded <= set(started_ids)
-    assert lane["expression_network"] not in recorded
+    assert recorded and recorded <= set(started_ids)
     assert sorted(values["findings"]) == sorted(
         str(finding.finding_id) for finding in store.findings()
     )
@@ -207,8 +208,9 @@ def test_final_state_has_a_report_and_artifacts_follow_the_ledger():
 def test_disabled_specialists_are_rejected_in_the_decision():
     study = {**SNP_STUDY, "specialists_enabled": ["literature", "qtl_gwas"]}
     received, values, _ = _run(study)
-    assert sorted(item["specialist"] for item in values["dispatches"]) == ["literature", "qtl_gwas"]
-    assert len([event for event in received if event["type"] == "agent.started"]) == 2
+    first_round = [item for item in values["dispatches"] if item["round"] == 1]
+    assert sorted(item["specialist"] for item in first_round) == ["literature", "qtl_gwas"]
+    assert len([event for event in received if event["type"] == "agent.started"]) == len(values["dispatches"])
     dispatch = next(event for event in received if event["type"] == "orchestrator.decision")
     assert sorted(item["specialist"] for item in dispatch["data"]["rejected"]) == [
         "expression_network",

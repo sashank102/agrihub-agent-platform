@@ -1,0 +1,198 @@
+{
+ "recorded": "2026-10-02",
+ "url": "https://www.ncbi.nlm.nih.gov/research/pubtator3-api/publications/export/biocjson",
+ "params": {
+  "pmids": "35955771"
+ },
+ "response": {
+  "PubTator3": [
+   {
+    "_id": "35955771|None",
+    "id": "35955771",
+    "infons": {},
+    "passages": [
+     {
+      "infons": {
+       "journal": "Int J Mol Sci. 2022 Aug 3;23(15):8643. doi: 10.3390/ijms23158643.",
+       "year": "2022",
+       "article-id_pmc": "PMC9368862",
+       "type": "title",
+       "authors": "Su B, Wu H, Guo Y, Gao H, Wei Z, Zhao Y, Qiu L"
+      },
+      "offset": 0,
+      "text": "GmIAA27 Encodes an AUX/IAA Protein Involved in Dwarfing and Multi-Branching in Soybean.",
+      "sentences": [],
+      "annotations": [
+       {
+        "id": "1",
+        "infons": {
+         "identifier": "3847",
+         "type": "Species",
+         "valid": true,
+         "normalized": [
+          3847
+         ],
+         "database": "ncbi_taxonomy",
+         "normalized_id": 3847,
+         "biotype": "species",
+         "name": "3847",
+         "accession": null
+        },
+        "text": "Soybean",
+        "locations": [
+         {
+          "offset": 79,
+          "length": 7
+         }
+        ]
+       }
+      ],
+      "relations": []
+     },
+     {
+      "infons": {
+       "type": "abstract"
+      },
+      "offset": 88,
+      "text": "Soybean plant height and branching affect plant architecture and yield potential in soybean. In this study, the mutant dmbn was obtained by treating the cultivar Zhongpin 661 with ethylmethane sulfonate. The dmbn mutant plants were shorter and more branched than the wild type. The genetic analysis showed that the mutant trait was controlled by a semi-dominant gene. The candidate gene was fine-mapped to a 91 kb interval on Chromosome 9 by combining BSA-seq and linkage analysis. Sequence analysis revealed that Glyma.09g193000 encoding an Aux/IAA protein (GmIAA27) was mutated from C to T in the second exon of the coding region, resulting to amino acid substitution of proline to leucine. Overexpression of the mutant type of this gene in Arabidopsis thaliana inhibited apical dominance and promoted lateral branch development. Expression analysis of GmIAA27 and auxin response genes revealed that some GH3 genes were induced. GmIAA27 relies on auxin to interact with TIR1, whereas Gmiaa27 cannot interact with TIR1 owing to the mutation in the degron motif. Identification of this unique gene that controls soybean plant height and branch development provides a basis for investigating the mechanisms regulating soybean plant architecture development.",
+      "sentences": [],
+      "annotations": [
+       {
+        "id": "10",
+        "infons": {
+         "identifier": "3847",
+         "type": "Species",
+         "valid": true,
+         "normalized": [
+          3847
+         ],
+         "database": "ncbi_taxonomy",
+         "normalized_id": 3847,
+         "biotype": "species",
+         "name": "3847",
+         "accession": null
+        },
+        "text": "Soybean",
+        "locations": [
+         {
+          "offset": 88,
+          "length": 7
+         }
+        ]
+       },
+       {
+        "id": "11",
+        "infons": {
+         "identifier": "3847",
+         "type": "Species",
+         "valid": true,
+         "normalized": [
+          3847
+         ],
+         "database": "ncbi_taxonomy",
+         "normalized_id": 3847,
+         "biotype": "species",
+         "name": "3847",
+         "accession": null
+        },
+        "text": "soybean",
+        "locations": [
+         {
+          "offset": 172,
+          "length": 7
+         }
+        ]
+       },
+       {
+        "id": "13",
+        "infons": {
+         "identifier": "3702",
+         "type": "Species",
+         "valid": true,
+         "normalized": [
+          3702
+         ],
+         "database": "ncbi_taxonomy",
+         "normalized_id": 3702,
+         "biotype": "species",
+         "name": "3702",
+         "accession": null
+        },
+        "text": "Arabidopsis thaliana",
+        "locations": [
+         {
+          "offset": 831,
+          "length": 20
+         }
+        ]
+       },
+       {
+        "id": "16",
+        "infons": {
+         "identifier": "3847",
+         "type": "Species",
+         "valid": true,
+         "normalized": [
+          3847
+         ],
+         "database": "ncbi_taxonomy",
+         "normalized_id": 3847,
+         "biotype": "species",
+         "name": "3847",
+         "accession": null
+        },
+        "text": "soybean",
+        "locations": [
+         {
+          "offset": 1200,
+          "length": 7
+         }
+        ]
+       },
+       {
+        "id": "17",
+        "infons": {
+         "identifier": "3847",
+         "type": "Species",
+         "valid": true,
+         "normalized": [
+          3847
+         ],
+         "database": "ncbi_taxonomy",
+         "normalized_id": 3847,
+         "biotype": "species",
+         "name": "3847",
+         "accession": null
+        },
+        "text": "soybean",
+        "locations": [
+         {
+          "offset": 1305,
+          "length": 7
+         }
+        ]
+       }
+      ],
+      "relations": []
+     }
+    ],
+    "relations": [],
+    "pmid": 35955771,
+    "pmcid": null,
+    "meta": {},
+    "date": "2022-08-03T00:00:00Z",
+    "journal": "Int J Mol Sci",
+    "authors": [
+     "Su B",
+     "Wu H",
+     "Guo Y",
+     "Gao H",
+     "Wei Z",
+     "Zhao Y",
+     "Qiu L"
+    ],
+    "relations_display": []
+   }
+  ]
+ }
+}

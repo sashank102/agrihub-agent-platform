@@ -1,0 +1,49 @@
+{
+ "recorded": "2026-10-02",
+ "url": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
+ "params": {
+  "db": "pubmed",
+  "id": "35955771",
+  "retmode": "json"
+ },
+ "response": {
+  "result": {
+   "uids": [
+    "35955771"
+   ],
+   "35955771": {
+    "uid": "35955771",
+    "title": "GmIAA27 Encodes an AUX/IAA Protein Involved in Dwarfing and Multi-Branching in Soybean.",
+    "pubdate": "2022 Aug 3",
+    "source": "Int J Mol Sci",
+    "articleids": [
+     {
+      "idtype": "pubmed",
+      "idtypen": 1,
+      "value": "35955771"
+     },
+     {
+      "idtype": "pmc",
+      "idtypen": 8,
+      "value": "PMC9368862"
+     },
+     {
+      "idtype": "pmcid",
+      "idtypen": 5,
+      "value": "pmc-id: PMC9368862;"
+     },
+     {
+      "idtype": "doi",
+      "idtypen": 3,
+      "value": "10.3390/ijms23158643"
+     },
+     {
+      "idtype": "pii",
+      "idtypen": 4,
+      "value": "ijms23158643"
+     }
+    ]
+   }
+  }
+ }
+}

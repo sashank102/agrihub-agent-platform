@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from langchain_core.language_models import BaseChatModel
 from langgraph.checkpoint.memory import InMemorySaver
 
 from agent_platform.core.settings import get_data_paths
@@ -29,19 +28,15 @@ POSTER = {
 }
 
 pytestmark = [
+    pytest.mark.usefixtures("fake_llm"),
     pytest.mark.bundle,
     pytest.mark.skipif(not BUNDLE.exists(), reason=f"no soybean bundle at {BUNDLE}"),
 ]
 
 
 @pytest.fixture(autouse=True)
-def no_language_models(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    def refuse(*args: Any, **kwargs: Any) -> Any:
-        raise AssertionError("the deterministic study must not call a language model")
-
+def run_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("AGRIHUB_RUN_DIR", str(tmp_path))
-    for name in ("generate", "agenerate", "invoke", "ainvoke"):
-        monkeypatch.setattr(BaseChatModel, name, refuse)
     yield
     close_bundles()
 
@@ -93,7 +88,7 @@ def test_poster_study_ranks_real_loci_with_explanations_in_under_30_seconds():
     progress = [event["data"] for event in received if event["type"] == "evidence.progress"]
     assert all(event["done"] == event["total"] == 123 for event in progress if event["done"] == event["total"])
     assert {event["agent"]["id"] for event in received if event["type"] == "agent.usage"}
-    assert {event["data"]["model"] for event in received if event["type"] == "agent.usage"} == {"stub"}
+    assert {event["data"]["model"] for event in received if event["type"] == "agent.usage"} == {"agrihub-fake:poster"}
     assert any("Known-gene coverage is thin" in item for item in report["limitations"])
     store.close()
 

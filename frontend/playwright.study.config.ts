@@ -38,6 +38,8 @@ export default defineConfig({
         API_KEY_PEPPER: "playwright-pepper-0123456789",
         API_KEY_PREFIX: "aghub",
         GRAPH_FIXTURE: "true",
+        ORCHESTRATOR_MODEL: "agrihub-fake:poster",
+        SPECIALIST_MODEL: "agrihub-fake:poster",
         API_HOST: "127.0.0.1",
         API_PORT: apiPort,
         API_ALLOWED_ORIGINS: JSON.stringify([webUrl]),

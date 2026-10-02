@@ -30,7 +30,7 @@ from agrihub.nodes import harvest
 from alembic import command
 from alembic.config import Config
 
-pytestmark = pytest.mark.postgres
+pytestmark = [pytest.mark.postgres, pytest.mark.usefixtures("fake_llm")]
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 STUDY = {
     "mode": "snps",
@@ -185,9 +185,8 @@ def test_study_run_streams_custom_events_and_stores_artifacts(postgres_database_
                 assert run_events
                 assert all(event["schema"] == events.SCHEMA for event in run_events)
                 lane_names = {name for name in names if name.startswith("custom|specialist:")}
-                assert len(lane_names) == 5
                 started = [event for event in run_events if event["type"] == "agent.started"]
-                assert len({event["agent"]["id"] for event in started}) == 5
+                assert len(lane_names) == len({event["agent"]["id"] for event in started}) >= 3
                 phases = [
                     (event["data"]["phase"], event["data"]["status"])
                     for event in run_events

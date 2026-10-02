@@ -1,0 +1,29 @@
+{
+ "recorded": "2026-10-02",
+ "url": "https://www.ebi.ac.uk/europepmc/webservices/rest/search",
+ "params": {
+  "query": "(EXT_ID:35955771) AND SRC:MED",
+  "format": "json",
+  "resultType": "core",
+  "pageSize": 1
+ },
+ "response": {
+  "hitCount": 1,
+  "resultList": {
+   "result": [
+    {
+     "id": "35955771",
+     "source": "MED",
+     "pmid": "35955771",
+     "pmcid": "PMC9368862",
+     "doi": "10.3390/ijms23158643",
+     "title": "<i>GmIAA27</i> Encodes an AUX/IAA Protein Involved in Dwarfing and Multi-Branching in Soybean.",
+     "abstractText": "Soybean plant height and branching affect plant architecture and yield potential in soybean. In this study, the mutant <i>dmbn</i> was obtained by treating the cultivar Zhongpin 661 with ethylmethane sulfonate. The <i>dmbn</i> mutant plants were shorter and more branched than the wild type. The genetic analysis showed that the mutant trait was controlled by a semi-dominant gene. The candidate gene was fine-mapped to a 91 kb interval on Chromosome 9 by combining BSA-seq and linkage analysis. Sequence analysis revealed that <i>Glyma.09g193000</i> encoding an Aux/IAA protein (GmIAA27) was mutated from C to T in the second exon of the coding region, resulting to amino acid substitution of proline to leucine. Overexpression of the mutant type of this gene in <i>Arabidopsis thaliana</i> inhibited apical dominance and promoted lateral branch development. Expression analysis of <i>GmIAA27</i> and auxin response genes revealed that some GH3 genes were induced. GmIAA27 relies on auxin to interact with TIR1, whereas Gmiaa27 cannot interact with TIR1 owing to the mutation in the degron motif. Identification of this unique gene that controls soybean plant height and branch development provides a basis for investigating the mechanisms regulating soybean plant architecture development.",
+     "isOpenAccess": "N",
+     "pubYear": "2022",
+     "journalTitle": null
+    }
+   ]
+  }
+ }
+}
