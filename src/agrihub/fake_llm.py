@@ -44,6 +44,9 @@ Script = Callable[[list[BaseMessage], tuple[str, ...]], AIMessage]
 _SCRIPTS: dict[str, Script] = {}
 _ALIAS_PREFIX = re.compile(r"^((?:E\d+(?:\.\.E\d+)?,?)+) ")
 _DISTANCE = re.compile(r"dist=(\d+)")
+_GENE_DISTANCE = re.compile(r"gene_dist=(\d+)")
+_SPAN = re.compile(r"span=([\d.]+)Mb")
+_MARKERS = re.compile(r"markers=(\d+)/")
 
 
 class ScriptedChatModel(BaseChatModel):
@@ -267,8 +270,13 @@ def _findings(specialist: str, genes: list[str], messages: list[BaseMessage]) ->
         for gene in genes:
             hits = [item for item in rows if f"[{gene}]" in item[1]]
             if hits:
+                hits.sort(key=lambda item: not _narrow_trait_hit(item[1]))
                 aliases = [alias for item in hits for alias in item[0]][:6]
-                findings.append(_finding(gene, f"{len(hits)} trait-matched QTL or catalog GWAS records overlap {gene} or lie within 50 kb of it.", "supports", "moderate", aliases))
+                narrow = sum(1 for item in hits if _narrow_trait_hit(item[1]))
+                claim = f"{len(hits)} trait-matched QTL or catalog GWAS records overlap {gene} or lie within 50 kb of it" + (
+                    f"; {narrow} of them are narrow ontology-matched QTLs or GWAS hits within 50 kb." if narrow else "; all are wide, single-marker or keyword-matched."
+                )
+                findings.append(_finding(gene, claim, "supports", "moderate" if narrow else "weak", aliases))
     elif specialist == "function_orthology":
         rows = tool_rows(messages, "annotation_relevance")
         for gene in genes:
@@ -283,6 +291,25 @@ def _findings(specialist: str, genes: list[str], messages: list[BaseMessage]) ->
                 pmids = ", ".join(item[1].split()[1] for item in linked[:3])
                 findings.append(_finding(gene, f"NCBI gene2pubmed links {gene} to {len(linked)} non-hub papers ({pmids}); no passage was read.", "neutral", "weak", [alias for item in linked for alias in item[0]][:5]))
     return findings
+
+
+def _narrow_trait_hit(line: str) -> bool:
+    """Return whether a qtl_overlap or gwas_catalog_overlap row qualifies for a moderate claim."""
+    if "match=ontology" not in line:
+        return False
+    gene_distance = _GENE_DISTANCE.search(line)
+    if gene_distance is not None:
+        return int(gene_distance.group(1)) <= 50_000
+    span = _SPAN.search(line)
+    markers = _MARKERS.search(line)
+    return (
+        span is not None
+        and markers is not None
+        and float(span.group(1)) <= 1.0
+        and int(markers.group(1)) >= 2
+        and " WIDE" not in line
+        and "marker_within" not in line
+    )
 
 
 def _finding(target: str, claim: str, stance: str, strength: str, evidence_ids: list[str]) -> dict[str, Any]:

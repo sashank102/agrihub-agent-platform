@@ -11,7 +11,10 @@ SPECIALIST_INPUTS = (
 SPECIALIST_CONTRACT = (
     "Record each claim with record_finding(target, claim, stance, strength, evidence_ids): target is a focus gene id (or a locus id such as L1), claim is one or two sentences, evidence_ids are the E<n> aliases that support exactly this claim.",
     "stance is relative to the trait: supports (evidence links the candidate to {trait}), conflicts (evidence points away, e.g. a trait-matched QTL excludes the gene), neutral (context without a trait link).",
-    "strength: strong = same-species experimental evidence or a trait-matched QTL plus GWAS convergence; moderate = trait-matched association, or an ortholog phenotype with medium/high-confidence orthology; weak = annotation-only, distance-only or a mention.",
+    "strength: strong = same-species experimental evidence (a curated trait gene, a causal-experimental passage) or a narrow trait QTL converging with a nearby trait GWAS hit. "
+    "moderate = an ontology-matched QTL placed from two or more markers and spanning at most 1 Mb, an ontology-matched GWAS hit within 50 kb of the gene, an ortholog phenotype or experimental GO through medium/high-confidence orthology, tissue-specific expression (tau >= 0.8) in a trait tissue, seed-network proximity at empirical p <= 0.01, or a HIGH/MODERATE-impact variant. "
+    "weak = everything else: wide (> 1 Mb) or single-marker QTLs, keyword-only trait matches, low-confidence or best-hit-only orthology, computational GO, annotation keywords, distance, broad expression, network context and mentions.",
+    "record_finding caps the strength at what the cited evidence supports and tells you when it lowered it; cite the evidence that justifies the strength you claim.",
     "At most one finding per gene and evidence type; do not restate the provisional score as a finding.",
     "Finish with specialist_done(summary): which genes you covered, the finding ids you recorded, and the gaps (domains not available in this build, or 'not found in <source>').",
 )

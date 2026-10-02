@@ -64,6 +64,8 @@ async def record_finding(
 ) -> tuple[str, dict[str, Any]]:
     """Record one evidence-backed claim about a gene or locus; rejected if any evidence id is unknown.
 
+    The strength is capped at what the cited evidence supports, and the result says when it was lowered.
+
     Args:
         target: A focus gene id, or a locus id such as L1.
         claim: One or two sentences stating what the cited evidence shows.
@@ -77,13 +79,16 @@ async def record_finding(
     )
     if not isinstance(result, dict) or result.get("status") != "recorded":
         raise ToolException(str(result))
+    note = result.get("strength_note")
     return (
-        f"recorded {result['finding_id']} on {target} ({stance}, {strength}) citing {len(result['evidence_ids'])} evidence items",
+        f"recorded {result['finding_id']} on {target} ({stance}, {result['strength']}) citing {len(result['evidence_ids'])} evidence items"
+        + (f"; {note}" if note else ""),
         {
             "finding_id": result["finding_id"],
             "evidence_ids": list(result["evidence_ids"]),
             "aliases": list(dict.fromkeys(evidence_ids)),
             "target": target,
+            "strength": result["strength"],
         },
     )
 
