@@ -199,3 +199,15 @@ sources:
     parser: ontology
     files:
       - {url: "{base}/crop_ontology_soybean/CO_336.owl", path: CO_336.owl}
+  - id: ncbi_gene
+    name: NCBI Gene fixture
+    tier: core
+    version: NCBI Gene FTP DATA
+    rolling: true
+    license: Public domain
+    assemblies: [Wm82.a2.v1, TAIR10]
+    parser: ncbi_gene
+    files:
+      - {url: "{base}/ncbi_gene/All_Plants.gene_info.gz", path: All_Plants.gene_info.gz}
+      - {url: "{base}/ncbi_gene/gene2pubmed.gz", path: gene2pubmed.gz}
+      - {url: "{base}/ncbi_gene/gene2go.gz", path: gene2go.gz}

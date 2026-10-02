@@ -116,7 +116,7 @@ def test_fetch_fails_a_required_file_that_is_missing(tiny):
 
 def test_fixture_fetch_resolves_collections_and_optional_files(fixture_bundle: FixtureBundle):
     report = fixture_bundle.fetch_report
-    assert len(report.downloaded) == 40 and not report.failed
+    assert len(report.downloaded) == 43 and not report.failed
     assert sorted(report.absent) == [
         "lis_qtl/Gamma_x_Delta.qtl.Test_2021/README.Gamma_x_Delta.qtl.Test_2021.yml",
         "lis_qtl/Gamma_x_Delta.qtl.Test_2021/glyma.Gamma_x_Delta.qtl.Test_2021.obo.tsv.gz",
@@ -140,6 +140,9 @@ def test_fixture_bundle_builds_and_verifies(fixture_bundle: FixtureBundle):
     assert report.tables["genes"] == 7 + 7 + 2
     assert report.tables["qtl"] == 6
     assert report.tables["known_genes"] == 4
+    assert report.tables["ncbi_genes"] == 5
+    assert report.tables["ncbi_gene_pubmed"] == 4
+    assert report.tables["ncbi_gene_go"] == 3
     stats = report.stats
     assert stats["lis_wm82_a2"]["genes_out_of_bounds"] == 1
     assert stats["lis_wm82_a2"]["genes_skipped_unknown_seqid"] == 1

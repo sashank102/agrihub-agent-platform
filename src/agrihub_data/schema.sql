@@ -232,3 +232,51 @@ CREATE TABLE gene_publications (
     year INTEGER,
     source_db VARCHAR NOT NULL
 );
+
+-- NCBI Gene records of the bundle species and Arabidopsis. gene_id is the
+-- registry gene id on assembly, mapped from the locus tag (mapping: ancestor,
+-- same_id or locus_tag); NULL when the locus tag maps to no bundle gene.
+CREATE TABLE ncbi_genes (
+    species VARCHAR NOT NULL,
+    assembly VARCHAR NOT NULL,
+    source_version VARCHAR NOT NULL,
+    ncbi_gene_id VARCHAR NOT NULL,
+    tax_id INTEGER NOT NULL,
+    gene_id VARCHAR,
+    mapping VARCHAR NOT NULL,
+    symbol VARCHAR NOT NULL,
+    locus_tag VARCHAR,
+    synonyms VARCHAR[] NOT NULL,
+    description VARCHAR,
+    designations VARCHAR[] NOT NULL,
+    gene_type VARCHAR,
+    source_db VARCHAR NOT NULL
+);
+
+-- gene2pubmed links; genes_per_pmid counts the GeneIDs linked to the PMID
+-- across every species, so genome and other hub papers can be dropped.
+CREATE TABLE ncbi_gene_pubmed (
+    species VARCHAR NOT NULL,
+    assembly VARCHAR NOT NULL,
+    source_version VARCHAR NOT NULL,
+    ncbi_gene_id VARCHAR NOT NULL,
+    gene_id VARCHAR,
+    pmid VARCHAR NOT NULL,
+    genes_per_pmid INTEGER NOT NULL,
+    source_db VARCHAR NOT NULL
+);
+
+CREATE TABLE ncbi_gene_go (
+    species VARCHAR NOT NULL,
+    assembly VARCHAR NOT NULL,
+    source_version VARCHAR NOT NULL,
+    ncbi_gene_id VARCHAR NOT NULL,
+    gene_id VARCHAR,
+    go_id VARCHAR NOT NULL,
+    go_term VARCHAR,
+    evidence_code VARCHAR NOT NULL,
+    qualifier VARCHAR,
+    category VARCHAR,
+    pmids VARCHAR[] NOT NULL,
+    source_db VARCHAR NOT NULL
+);

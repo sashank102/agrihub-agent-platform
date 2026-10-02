@@ -1,0 +1,7 @@
+#tax_id	GeneID	Symbol	LocusTag	Synonyms	dbXrefs	chromosome	map_location	description	type_of_gene	Symbol_from_nomenclature_authority	Full_name_from_nomenclature_authority	Nomenclature_status	Other_designations	Modification_date	Feature_type
+3847	100779533	LOC100779533	GLYMA_18G092200v4	-	-	18	-	WRKY transcription factor 6	protein-coding	-	-	-	WRKY transcription factor 6	20260421	-
+3847	100800001	GmDW1	GLYMA_18G092000v4	GmDWARF1|DW1	-	18	-	zinc finger CCCH domain protein	protein-coding	-	-	-	dwarf protein 1|zinc finger CCCH domain protein	20260421	-
+3847	100800002	GH3	GLYMA_05G032200	-	-	5	-	auxin-responsive protein GH3	protein-coding	-	-	-	auxin-responsive protein GH3	20260421	-
+3847	100800003	LOC100800003	GLYMA_20G000100v4	-	-	20	-	uncharacterized protein	protein-coding	-	-	-	-	20260421	-
+3702	842527	WRKY6	AT1G62300	ATWRKY6|F19K23.22	-	1	-	WRKY family transcription factor	protein-coding	-	-	-	WRKY family transcription factor	20260421	-
+4530	4326001	OsWRKY6	Os01g0000100	-	-	1	-	WRKY protein	protein-coding	-	-	-	-	20260421	-

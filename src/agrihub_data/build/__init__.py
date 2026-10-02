@@ -33,6 +33,7 @@ from agrihub_data.build.lis_genome import (
     build_lis_markers,
     build_lis_pangenes,
 )
+from agrihub_data.build.ncbi_gene import build_ncbi_gene
 from agrihub_data.build.ontology import build_ontology
 from agrihub_data.build.orthology import build_ensembl_compara, build_plaza_orthology
 from agrihub_data.build.tair import build_tair
@@ -72,6 +73,7 @@ PARSERS: tuple[Parser, ...] = (
     Parser("ensembl_compara", build_ensembl_compara, after=("lis_annotation",)),
     Parser("plaza_orthology", build_plaza_orthology, after=("lis_annotation", "lis_pangenes")),
     Parser("tair", build_tair),
+    Parser("ncbi_gene", build_ncbi_gene, after=("lis_annotation",)),
 )
 
 

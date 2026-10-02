@@ -526,6 +526,28 @@ sources:
     files:
       - url: https://cropontology.org/ontology/CO_336/Soybean/owl
         path: CO_336.owl
+  - id: ncbi_gene
+    name: NCBI Gene gene_info, gene2pubmed and gene2go (soybean and Arabidopsis rows)
+    tier: core
+    version: NCBI Gene FTP DATA
+    rolling: true
+    license: Public domain (NCBI data are not copyrighted; see https://www.ncbi.nlm.nih.gov/home/about/policies/)
+    homepage: https://ftp.ncbi.nlm.nih.gov/gene/DATA/
+    citation: Sayers et al. 2025, Nucleic Acids Res 53:D20-D29 (NCBI database resources)
+    assemblies: [Wm82.a2.v1, TAIR10]
+    parser: ncbi_gene
+    notes: >-
+      The build keeps tax_id 3847 (soybean) and 3702 (Arabidopsis) rows only.
+      Soybean GeneIDs map to Wm82.a2.v1 gene ids through their GLYMA_ locus
+      tags; publication hub counts are taken over every species in
+      gene2pubmed.
+    files:
+      - url: https://ftp.ncbi.nlm.nih.gov/gene/DATA/GENE_INFO/Plants/All_Plants.gene_info.gz
+        path: All_Plants.gene_info.gz
+      - url: https://ftp.ncbi.nlm.nih.gov/gene/DATA/gene2pubmed.gz
+        path: gene2pubmed.gz
+      - url: https://ftp.ncbi.nlm.nih.gov/gene/DATA/gene2go.gz
+        path: gene2go.gz
   - id: lis_expression_atlas
     name: LIS JGI soybean gene atlas (Sreedasyam, Plott et al. 2023)
     tier: extended

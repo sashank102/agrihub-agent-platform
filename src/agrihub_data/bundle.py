@@ -14,7 +14,7 @@ import duckdb
 
 from agrihub_data.paths import species_paths
 
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "2"
 DATA_TABLES: tuple[str, ...] = (
     "genes",
     "id_map",
@@ -29,6 +29,9 @@ DATA_TABLES: tuple[str, ...] = (
     "trait_map",
     "phenotypes",
     "gene_publications",
+    "ncbi_genes",
+    "ncbi_gene_pubmed",
+    "ncbi_gene_go",
 )
 NON_GENOMIC_TABLES = frozenset({"ontology_terms", "trait_map", "sources"})
 """Tables whose rows must carry ``assembly = 'none'``."""
