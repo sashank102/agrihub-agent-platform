@@ -1,0 +1,4 @@
+Glyma.18G092200	regulates	Glyma.19G194300	Glycine max	motif
+Glyma.18G092200	regulates	Glyma.19G194300	Glycine max	FunTFBS
+Glyma.18G273600	regulates	Glyma.18G092200	Glycine max	motif
+Glyma.18G092200	regulates	Glyma.99G000002	Glycine max	motif

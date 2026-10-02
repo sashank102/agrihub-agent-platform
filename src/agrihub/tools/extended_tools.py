@@ -12,10 +12,11 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool, tool
 from pydantic import BaseModel
 
-from agrihub.tools.bundle_tools import _bundle, _clip, _respond, _run
+from agrihub.tools.bundle_tools import SnpPosition, _as, _bundle, _clip, _respond, _run
 from agrihub_data.availability import domain_status
 from agrihub_data.bundle import Bundle
-from agrihub_data.query import expression, network, traits
+from agrihub_data.query import expression, network, pathways, regulation, traits
+from agrihub_data.query.common import Region
 
 
 class DatasetTissues(BaseModel):
@@ -299,8 +300,127 @@ async def seed_propagation(
     return await _run(work)
 
 
+@tool(response_format="content_and_artifact", parse_docstring=True)
+async def get_regulation(
+    gene_ids: list[str],
+    config: RunnableConfig,
+    species: str = "soybean",
+) -> tuple[str, dict[str, Any]]:
+    """Return whether each gene is a transcription factor (PlantTFDB family, motifs) and its PlantRegMap targets and regulators.
+
+    Args:
+        gene_ids: Canonical-assembly gene ids.
+        species: Registered species, e.g. soybean.
+    """
+
+    def work() -> tuple[str, dict[str, Any]]:
+        bundle = _bundle(species)
+        rows = regulation.get_regulation(bundle, gene_ids)
+        return _respond(
+            config,
+            "get_regulation",
+            f"get_regulation {len(rows)} genes: {sum(1 for row in rows if row.is_tf)} transcription factors",
+            [row for row in rows if row.is_tf or row.n_regulators],
+            lambda row: (
+                f"{row.gene_id} "
+                + (f"TF {row.family}" + (f" motifs={','.join(row.motif_ids[:3])}" if row.motif_ids else "") + f" targets={row.n_targets}" if row.is_tf else "not a TF")
+                + (f" (focus targets: {', '.join(row.focus_targets[:4])})" if row.focus_targets else "")
+                + f" regulators={row.n_regulators}"
+                + (" [" + ", ".join(" ".join(filter(None, (partner.gene_id, partner.family))) for partner in row.regulators[:3]) + "]" if row.regulators else "")
+            ),
+            evidence=True,
+            notes=[
+                *([f"not found in PlantTFDB/PlantRegMap: {', '.join(row.gene_id for row in rows if not row.is_tf and not row.n_regulators)}"] if any(not row.is_tf and not row.n_regulators for row in rows) else []),
+                *_gap(bundle, "regulation"),
+            ],
+        )
+
+    return await _run(work)
+
+
+@tool(response_format="content_and_artifact", parse_docstring=True)
+async def snp_in_tfbs_or_cns(
+    snps: list[SnpPosition],
+    config: RunnableConfig,
+    species: str = "soybean",
+    assembly: str | None = None,
+) -> tuple[str, dict[str, Any]]:
+    """Check whether SNPs fall in a promoter TF binding site (PlantRegMap FunTFBS) or a conserved element (phastCons), and whose promoter it is.
+
+    Args:
+        snps: SNP positions with labels (lead SNP ids).
+        species: Registered species, e.g. soybean.
+        assembly: Assembly of the positions; defaults to the canonical assembly.
+    """
+
+    def work() -> tuple[str, dict[str, Any]]:
+        bundle = _bundle(species)
+        positions = _as(SnpPosition, snps)
+        regions = [Region(label=snp.label or f"{snp.chrom}:{snp.pos}", chrom=snp.chrom, start=snp.pos, end=snp.pos, snp_pos=snp.pos, assembly=assembly) for snp in positions]
+        rows = regulation.snp_in_tfbs_or_cns(bundle, regions, assembly)
+        hit = {row.snp for row in rows}
+        return _respond(
+            config,
+            "snp_in_tfbs_or_cns",
+            f"snp_in_tfbs_or_cns {len(regions)} SNPs: {len(rows)} hits ({sum(1 for row in rows if row.kind == 'tfbs')} TFBS, {sum(1 for row in rows if row.kind == 'cns')} conserved elements)",
+            rows,
+            lambda row: (
+                f"{row.snp} {row.chrom}:{row.pos} in {row.kind.upper()} {row.region_id} {row.start}-{row.end}"
+                + (f" of TF {row.tf_gene_id} ({row.tf_family})" if row.tf_gene_id else "")
+                + (f" -> {row.relation} of {row.gene_id}" if row.gene_id else " (no gene within 2 kb)")
+            ),
+            evidence=True,
+            notes=[
+                *([f"in no TFBS or conserved element: {', '.join(region.name for region in regions if region.name not in hit)}"] if len(hit) < len(regions) else []),
+                *_gap(bundle, "tfbs_cns"),
+            ],
+        )
+
+    return await _run(work)
+
+
+@tool(response_format="content_and_artifact", parse_docstring=True)
+async def get_pathways(
+    gene_ids: list[str],
+    config: RunnableConfig,
+    trait: str | None = None,
+    species: str = "soybean",
+) -> tuple[str, dict[str, Any]]:
+    """Return the PMN SoyCyc and Plant Reactome pathways of each gene, marking pathways whose names match the trait (KEGG is not bundled).
+
+    Args:
+        gene_ids: Canonical-assembly gene ids.
+        trait: Trait text; pathway names matching its keywords are marked.
+        species: Registered species, e.g. soybean.
+    """
+
+    def work() -> tuple[str, dict[str, Any]]:
+        bundle = _bundle(species)
+        profile = traits.map_trait(trait, bundle.species, bundle) if trait else None
+        rows = pathways.get_pathways(bundle, gene_ids, profile)
+        covered = {row.gene_id for row in rows}
+        missing = [gene for gene in dict.fromkeys(gene_ids) if gene not in covered]
+        return _respond(
+            config,
+            "get_pathways",
+            f"get_pathways {len(covered)} of {len(set(gene_ids))} genes in {len({row.pathway_id for row in rows})} pathways"
+            + (f"; {sum(1 for row in rows if row.matched)} match '{trait}'" if trait else ""),
+            rows,
+            lambda row: (
+                f"{row.gene_id} [{row.database}] {row.pathway_id} {_clip(row.pathway_name, 70)}"
+                + (f" match={','.join(row.matched)}" if row.matched else "")
+                + (f" EC {','.join(row.ec[:2])}" if row.ec else "")
+            ),
+            evidence=True,
+            notes=[*([f"in no bundled pathway: {', '.join(missing)}"] if missing else []), *_gap(bundle, "pathways")],
+        )
+
+    return await _run(work)
+
+
 EXPRESSION_TOOLS: tuple[BaseTool, ...] = (trait_relevant_tissues, expression_profile, tissue_specificity)
 NETWORK_TOOLS: tuple[BaseTool, ...] = (network_neighbors, coexpression_neighbors, seed_propagation)
-EXTENDED_TOOLS: tuple[BaseTool, ...] = (*EXPRESSION_TOOLS, *NETWORK_TOOLS)
+REGULATION_TOOLS: tuple[BaseTool, ...] = (get_regulation, snp_in_tfbs_or_cns)
+EXTENDED_TOOLS: tuple[BaseTool, ...] = (*EXPRESSION_TOOLS, *NETWORK_TOOLS, *REGULATION_TOOLS, get_pathways)
 for _tool in EXTENDED_TOOLS:
     _tool.handle_tool_error = True

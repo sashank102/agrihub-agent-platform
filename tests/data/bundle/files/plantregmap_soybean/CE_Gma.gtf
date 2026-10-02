@@ -1,0 +1,3 @@
+Chr18	PHAST	phastCons_predicted	9263900	9263990	30	+	.	Element_ID "1";
+Chr05	PHAST	phastCons_predicted	2899000	2899300	15	+	.	Element_ID "2";
+ChrUn	PHAST	phastCons_predicted	1	10	5	+	.	Element_ID "3";

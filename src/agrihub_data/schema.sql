@@ -380,7 +380,7 @@ CREATE TABLE regulation (
 );
 
 -- Regulatory intervals: kind tfbs (a FunTFBS site of tf_gene_id in a
--- promoter, score its PlantRegMap score) or cns (a phastCons conserved
+-- promoter, score its FunTFBS p-value) or cns (a phastCons conserved
 -- element, score its LOD).
 CREATE TABLE regulatory_regions (
     species VARCHAR NOT NULL,

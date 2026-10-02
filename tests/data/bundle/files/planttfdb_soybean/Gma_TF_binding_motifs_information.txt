@@ -1,0 +1,2 @@
+Gene_id	Family	Matrix_id	Species	Method	Datasource	Datasource_ID
+Glyma.18G092200	WRKY	MP00117	Glycine max	DAP	PlantTFDB	transfer from AT1G62300(Arabidopsis thaliana)

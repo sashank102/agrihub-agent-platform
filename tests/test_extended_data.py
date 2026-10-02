@@ -10,7 +10,8 @@ from agrihub_fixtures import FixtureBundle
 from agrihub.evidence_store import evidence_id_for
 from agrihub.tools import extended_tools
 from agrihub_data.bundle import open_bundle
-from agrihub_data.query import expression, network
+from agrihub_data.query import expression, network, pathways, regulation
+from agrihub_data.query.common import Region
 from agrihub_data.query.traits import map_trait
 
 
@@ -155,6 +156,56 @@ def test_seed_propagation_tool_on_the_fixture_network(bundle):
     assert "not in the string network: Glyma.05G032200" in content and len(artifact["evidence_ids"]) == 2
     content, artifact = _tool(extended_tools.coexpression_neighbors, {"gene_ids": ["Glyma.19G194300"], "min_z": 2.0})
     assert "Glyma.19G194300 -> Glyma.18G092200 z=6.5 rank=1" in content and len(artifact["aliases"]) == 2
+
+
+def test_regulation_and_pathway_builds_drop_unmapped_ids(heavy_bundle: FixtureBundle):
+    stats = heavy_bundle.build_report.stats
+    assert stats["planttfdb_soybean"] == {"tf": 2, "tf_with_motifs": 1, "unmapped_genes": 1}
+    assert stats["plantregmap_soybean"] == {"cns": 2, "links_with_unmapped_genes": 1, "regulation": 3, "tfbs": 2, "tfbs_unplaced": 1}
+    assert stats["pmn_soycyc"] == {"pathway_genes": 2, "unmapped_genes": 1}
+    assert stats["plant_reactome"] == {"pathway_genes": 2, "unmapped_genes": 1}
+
+
+def test_get_regulation_reports_tf_family_targets_and_regulators(bundle):
+    records = {row.gene_id: row for row in regulation.get_regulation(bundle, ["Glyma.18G092200", "Glyma.19G194300", "Glyma.05G032200"])}
+    wrky = records["Glyma.18G092200"]
+    assert (wrky.is_tf, wrky.family, wrky.motif_ids, wrky.n_targets) == (True, "WRKY", ["MP00117"], 1)
+    assert wrky.targets[0].evidence == ["FunTFBS", "motif"] and wrky.focus_targets == ["Glyma.19G194300"]
+    assert [(partner.gene_id, partner.family) for partner in wrky.regulators] == [("Glyma.18G273600", "MIKC_MADS")]
+    target = records["Glyma.19G194300"]
+    assert not target.is_tf and target.n_regulators == 1 and target.evidence()[0].subtype == "regulation:target"
+    assert records["Glyma.05G032200"].evidence() == []
+
+
+def test_snps_in_promoter_tfbs_and_conserved_elements(bundle):
+    snps = [
+        Region(label="S18_9267505", chrom="Gm18", start=9_267_505, end=9_267_505),
+        Region(label="S18_9263941", chrom="Gm18", start=9_263_941, end=9_263_941),
+        Region(label="S19_45099505", chrom="19", start=45_099_505, end=45_099_505),
+        Region(label="S5_1", chrom="5", start=1_000, end=1_000),
+    ]
+    hits = regulation.snp_in_tfbs_or_cns(bundle, snps)
+    found = {(hit.snp, hit.kind, hit.gene_id, hit.relation, hit.tf_gene_id) for hit in hits}
+    assert found == {
+        ("S18_9267505", "tfbs", "Glyma.18G092200", "promoter", "Glyma.18G273600"),
+        ("S18_9263941", "cns", "Glyma.18G092200", "in_gene", None),
+        ("S19_45099505", "tfbs", "Glyma.19G194300", "promoter", "Glyma.18G092200"),
+    }
+    _unique_ids(hits)
+    content, artifact = _tool(extended_tools.snp_in_tfbs_or_cns, {"snps": [{"chrom": "18", "pos": 9_267_505, "label": "S18_9267505"}, {"chrom": "5", "pos": 1000, "label": "S5_1"}]})
+    assert "in TFBS Glyma.18G273600_1" in content and "-> promoter of Glyma.18G092200" in content
+    assert "in no TFBS or conserved element: S5_1" in content and len(artifact["evidence_ids"]) == 1
+
+
+def test_get_pathways_marks_trait_matching_pathways(bundle):
+    rows = pathways.get_pathways(bundle, ["Glyma.18G092300", "Glyma.19G194300", "Glyma.05G032200"], map_trait("plant height", "soybean", bundle))
+    by_gene = {row.gene_id: row for row in rows}
+    gibberellin = by_gene["Glyma.18G092300"]
+    assert (gibberellin.database, gibberellin.pathway_id, gibberellin.reactions, gibberellin.matched) == ("PMN SoyCyc", "PWY-5070", ["RXN-1", "RXN-2"], ["gibberellin"])
+    assert by_gene["Glyma.19G194300"].database == "Plant Reactome" and by_gene["Glyma.05G032200"].matched == []
+    _unique_ids(rows)
+    content, artifact = _tool(extended_tools.get_pathways, {"gene_ids": ["Glyma.18G092300", "Glyma.18G092200"], "trait": "plant height"})
+    assert "match=gibberellin" in content and "in no bundled pathway: Glyma.18G092200" in content and len(artifact["evidence_ids"]) == 1
 
 
 def test_specificity_of_flat_and_single_tissue_profiles():

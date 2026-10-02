@@ -252,3 +252,45 @@ sources:
     files:
       - {url: "{base}/atted_soybean/Gma-u.vtest.G6-S6.combat_pca.subagging.z.d.zip", path: Gma-u.vtest.G6-S6.combat_pca.subagging.z.d.zip}
       - {url: "{base}/atted_soybean/Gma-u.c5-0_gene_xref.tsv.zip", path: Gma-u.c5-0_gene_xref.tsv.zip}
+  - id: planttfdb_soybean
+    name: PlantTFDB fixture
+    tier: extended
+    version: PlantTFDB v5.0 (Gma)
+    license: Academic use
+    academic_only: true
+    assemblies: [Wm82.a2.v1]
+    parser: planttfdb
+    files:
+      - {url: "{base}/planttfdb_soybean/Gma_TF_list.txt.gz", path: Gma_TF_list.txt.gz}
+      - {url: "{base}/planttfdb_soybean/Gma_TF_binding_motifs_information.txt", path: Gma_TF_binding_motifs_information.txt}
+  - id: plantregmap_soybean
+    name: PlantRegMap fixture
+    tier: extended
+    version: PlantRegMap v5 (Glycine_max)
+    license: Academic use
+    academic_only: true
+    assemblies: [Wm82.a2.v1]
+    parser: plantregmap
+    files:
+      - {url: "{base}/plantregmap_soybean/regulation_merged_Gma.txt", path: regulation_merged_Gma.txt}
+      - {url: "{base}/plantregmap_soybean/TFBS_from_FunTFBS_inProm_Gma.gff", path: TFBS_from_FunTFBS_inProm_Gma.gff}
+      - {url: "{base}/plantregmap_soybean/CE_Gma.gtf.gz", path: CE_Gma.gtf.gz}
+  - id: pmn_soycyc
+    name: PMN SoyCyc fixture
+    tier: extended
+    version: PMN16 (soycyc_pathways.20251021)
+    license: Free download
+    assemblies: [Wm82.a2.v1]
+    parser: pmn_pathways
+    files:
+      - {url: "{base}/pmn_soycyc/soycyc_pathways.20251021.tsv", path: soycyc_pathways.20251021.tsv}
+  - id: plant_reactome
+    name: Plant Reactome fixture
+    tier: extended
+    version: Plant Reactome current
+    rolling: true
+    license: CC-BY-4.0
+    assemblies: [Wm82.a2.v1]
+    parser: plant_reactome
+    files:
+      - {url: "{base}/plant_reactome/gene_ids_by_pathway_and_species.tab", path: gene_ids_by_pathway_and_species.tab}

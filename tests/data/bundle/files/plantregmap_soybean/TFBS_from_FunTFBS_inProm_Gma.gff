@@ -1,0 +1,4 @@
+##gff-version 3
+Chr18	PlantRegMap	FunTFBS	9267500	9267510	55	+	.	Name=Glyma.18G273600;ID=Glyma.18G273600_1;correlation=0.61;pvalue=1.2e-02;sequence=CCATATATGGA;
+Chr19	PlantRegMap	FunTFBS	45099500	45099510	52	-	.	Name=Glyma.18G092200;ID=Glyma.18G092200_1;correlation=0.55;pvalue=3.0e-02;sequence=TTGACCTTGAC;
+scaffold_bad	PlantRegMap	FunTFBS	100	110	50	+	.	Name=Glyma.18G092200;ID=Glyma.18G092200_2;pvalue=4.0e-02;

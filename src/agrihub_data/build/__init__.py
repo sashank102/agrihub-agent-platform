@@ -38,6 +38,8 @@ from agrihub_data.build.ncbi_gene import build_ncbi_gene
 from agrihub_data.build.networks import build_atted, build_string
 from agrihub_data.build.ontology import build_ontology
 from agrihub_data.build.orthology import build_ensembl_compara, build_plaza_orthology
+from agrihub_data.build.pathways import build_plant_reactome, build_pmn_pathways
+from agrihub_data.build.regulation import build_plantregmap, build_planttfdb
 from agrihub_data.build.tair import build_tair
 from agrihub_data.bundle import DATA_TABLES, SCHEMA_VERSION
 from agrihub_data.fetch import Manifest
@@ -79,6 +81,10 @@ PARSERS: tuple[Parser, ...] = (
     Parser("lis_expression", build_lis_expression, after=("lis_annotation", "lis_pangenes")),
     Parser("string", build_string, after=("lis_annotation",)),
     Parser("atted", build_atted, after=("lis_annotation", "lis_pangenes")),
+    Parser("planttfdb", build_planttfdb, after=("lis_annotation",)),
+    Parser("plantregmap", build_plantregmap, after=("lis_annotation",)),
+    Parser("pmn_pathways", build_pmn_pathways, after=("lis_annotation",)),
+    Parser("plant_reactome", build_plant_reactome, after=("lis_annotation",)),
 )
 
 

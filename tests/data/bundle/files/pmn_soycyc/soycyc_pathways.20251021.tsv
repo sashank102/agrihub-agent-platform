@@ -1,0 +1,4 @@
+Pathway-id	Pathway-name	Reaction-id	EC	Protein-id	Protein-name	Gene-id	Gene-name
+PWY-5070	gibberellin biosynthesis I (non C-3, non C-13 hydroxylation)	RXN-1	EC-1.14.11.12	GLYMA.18G092300.1.P	gibberellin 20-oxidase	GLYMA.18G092300	Glyma.18G092300
+PWY-5070	gibberellin biosynthesis I (non C-3, non C-13 hydroxylation)	RXN-2	EC-1.14.11.15	GLYMA.18G092300.1.P	gibberellin 3-oxidase	GLYMA.18G092300	Glyma.18G092300
+PWY-6000	starch degradation	RXN-3	EC-3.2.1.1	MONOMER-1	amylase	MONOMER-1	CHS5_SOYBN
