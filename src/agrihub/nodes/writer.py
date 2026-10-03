@@ -233,6 +233,12 @@ def _limitations(
     ]
     if missing_done:
         items.append("Lanes that ended without a specialist_done tool call: " + ", ".join(missing_done) + ".")
+    if study.get("lifted_from_assembly"):
+        items.append(
+            f"The SNPs were given on {study['lifted_from_assembly']} and lifted to {study.get('assembly')} through "
+            "one-to-one pangene gene anchors; each SNP keeps its original position, the method and a confidence. "
+            "Confirm the source assembly with whoever produced the SNPs."
+        )
     if scoring.get("skipped_steps"):
         items.append(
             "Orthology, TAIR and curated-gene evidence are keyed to the canonical assembly and were skipped for "

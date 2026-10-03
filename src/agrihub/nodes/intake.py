@@ -1,7 +1,7 @@
 """Validate the study request, place its SNPs, and route by input mode."""
 
 import asyncio
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from agent_platform.services.errors import RunInputError
 from agrihub import events
 from agrihub.state import (
+    LiftedFrom,
     SnpInput,
     SnpStudy,
     StudyInputIssue,
@@ -23,6 +24,7 @@ from agrihub.state import (
 from agrihub_data.availability import domain_status
 from agrihub_data.bundle import Bundle, BundleMissingError, open_bundle
 from agrihub_data.query.ids import parse_positional, resolve_marker
+from agrihub_data.query.liftover import LiftAnchorsMissingError, liftover_for
 from agrihub_data.registry import (
     SpeciesRegistry,
     UnknownAssemblyError,
@@ -33,6 +35,8 @@ from agrihub_data.registry import (
 )
 
 MAX_DETAIL_WARNINGS = 5
+OUT_OF_BOUNDS_SHARE = 0.02
+"""Above this share of positions past chromosome ends, the input is probably on another assembly."""
 _UNION_TAG_ERRORS = frozenset({"union_tag_invalid", "union_tag_not_found"})
 
 
@@ -74,16 +78,23 @@ def check_study(raw: Any) -> StudyCheck:
         return StudyCheck(errors=errors, detail=f"the study request is invalid: {reasons}")
     try:
         registry = load_species(study.species)
-        assembly = registry.assembly(study.assembly).id
+        requested = registry.assembly(study.assembly)
     except (UnknownSpeciesError, UnknownAssemblyError) as exc:
         message = str(exc.args[0]) if isinstance(exc, KeyError) and exc.args else str(exc)
         loc: list[str | int] = ["species"] if isinstance(exc, UnknownSpeciesError) else ["assembly"]
         return StudyCheck(errors=[StudyInputIssue(loc=loc, message=message)], detail=message)
-    study = study.model_copy(update={"species": registry.species, "assembly": assembly})
+    assembly = requested.lift_to or requested.id
+    study = study.model_copy(
+        update={
+            "species": registry.species,
+            "assembly": assembly,
+            "lifted_from_assembly": requested.id if requested.lift_to else None,
+        }
+    )
     warnings = window_warnings(registry, study)
     if not isinstance(study, SnpStudy):
         return StudyCheck(study=study, warnings=warnings, detail="trait mode: SNPs come from the model step")
-    placed, snp_warnings = place_snps(study, study.snps)
+    placed, snp_warnings = place_and_lift(study, study.snps, requested.id)
     warnings.extend(snp_warnings)
     if not placed:
         reasons = "; ".join(warning.message for warning in snp_warnings[:MAX_DETAIL_WARNINGS])
@@ -193,18 +204,122 @@ def window_warnings(registry: SpeciesRegistry, study: SnpStudy | TraitStudy) -> 
     return []
 
 
-def place_snps(study: SnpStudy | TraitStudy, snps: list[SnpInput]) -> tuple[list[SnpInput], list[StudyWarning]]:
+def place_and_lift(
+    study: SnpStudy | TraitStudy,
+    snps: list[SnpInput],
+    given_on: str | None = None,
+) -> tuple[list[SnpInput], list[StudyWarning]]:
+    """Place SNPs given on ``given_on`` (the study assembly by default) and lift them to the study assembly.
+
+    When at least two SNPs, and more than ``OUT_OF_BOUNDS_SHARE`` of them,
+    fall past chromosome ends on ``given_on``, a warning says they are
+    probably on another assembly.
+    """
+    source = load_species(study.species).assembly(given_on or study.assembly)
+    placed, warnings = place_snps(study, snps, source.id)
+    beyond = sum(1 for warning in warnings if warning.code == "out_of_bounds")
+    if beyond >= 2 and beyond / len(snps) > OUT_OF_BOUNDS_SHARE:
+        warnings.append(
+            StudyWarning(
+                code="assembly_mismatch_suspected",
+                message=(
+                    f"{beyond} of {len(snps)} positions ({beyond / len(snps):.0%}) fall past chromosome ends on "
+                    f"{source.id}; the SNPs are probably on another assembly"
+                ),
+            )
+        )
+    if source.lift_to is None or not placed:
+        return placed, warnings
+    lifted, lift_warnings = lift_snps(study.species, source.id, placed)
+    return lifted, [*warnings, *lift_warnings]
+
+
+def lift_snps(species: str, given_on: str, snps: list[SnpInput]) -> tuple[list[SnpInput], list[StudyWarning]]:
+    """Lift placed SNPs from ``given_on`` to its ``lift_to`` assembly through the bundle's gene anchors.
+
+    Each lifted SNP keeps its original position, the method and the
+    confidence in ``lifted_from``. SNPs that cannot be lifted are dropped
+    with a warning; low-confidence lifts are kept and flagged.
+    """
+    registry = load_species(species)
+    source = registry.assembly(given_on)
+    target = registry.assembly(source.lift_to)
+    try:
+        liftover = liftover_for(
+            open_bundle(registry.species),
+            source.id,
+            target.id,
+            {chromosome.name: chromosome.length for chromosome in target.chromosomes},
+        )
+    except (BundleMissingError, LiftAnchorsMissingError) as exc:
+        message = f"SNPs on {source.id} cannot be lifted to {target.id}: {exc}"
+        return [], [StudyWarning(code="lift_unavailable", message=message)]
+    warnings: list[StudyWarning] = []
+    lifted: list[SnpInput] = []
+    levels: Counter[str] = Counter()
+    for snp in snps:
+        chrom, pos = str(snp.chrom), int(snp.pos or 0)
+        result = liftover.lift(chrom, pos)
+        if not result.ok or result.confidence is None:
+            warnings.append(
+                StudyWarning(
+                    code="unlifted",
+                    message=f"{snp.raw}: {source.id} {chrom}:{pos} could not be lifted to {target.id}: {result.detail}",
+                    snp=snp.raw,
+                )
+            )
+            continue
+        levels[result.confidence] += 1
+        origin = LiftedFrom(
+            assembly=source.id,
+            chrom=chrom,
+            pos=pos,
+            method=result.method,
+            confidence=result.confidence,
+            detail=result.detail,
+            anchors=list(result.anchors),
+        )
+        lifted.append(snp.model_copy(update={"chrom": result.chrom, "pos": result.pos, "lifted_from": origin}))
+        if result.confidence == "low":
+            warnings.append(
+                StudyWarning(
+                    code="lift_low_confidence",
+                    message=f"{snp.raw}: lifted from {source.id} {chrom}:{pos} to {result.chrom}:{result.pos} with low confidence ({result.detail})",
+                    snp=snp.raw,
+                )
+            )
+    counts = ", ".join(f"{levels[level]} {level}" for level in ("high", "medium", "low") if levels[level])
+    dropped = len(snps) - len(lifted)
+    warnings.insert(
+        0,
+        StudyWarning(
+            code="lifted_assembly",
+            message=(
+                f"{len(lifted)} of {len(snps)} SNPs were lifted from {source.id} to {target.id} through one-to-one "
+                f"pangene gene anchors ({counts or 'none'})" + (f"; {dropped} could not be lifted" if dropped else "")
+            ),
+        ),
+    )
+    unique, duplicates = _dedupe(lifted)
+    return unique, [*warnings, *duplicates]
+
+
+def place_snps(
+    study: SnpStudy | TraitStudy,
+    snps: list[SnpInput],
+    assembly: str | None = None,
+) -> tuple[list[SnpInput], list[StudyWarning]]:
     """Normalize chromosomes, resolve marker ids, check bounds and dedupe.
 
-    Every returned SNP has a canonical chromosome and a position on the
-    study assembly. A SNP given only as ``raw`` text is parsed as a
-    positional id first and resolved as a marker name otherwise. Positions
-    are never taken from another assembly: a BARC name's embedded Wm82.a1
-    position is ignored in favour of the marker-set placement on the study
-    assembly, and flagged.
+    Every returned SNP has a canonical chromosome and a position on
+    ``assembly`` (the study assembly by default). A SNP given only as
+    ``raw`` text is parsed as a positional id first and resolved as a marker
+    name otherwise. Positions are never taken from another assembly: a BARC
+    name's embedded Wm82.a1 position is ignored in favour of the marker-set
+    placement on the study assembly, and flagged.
     """
     registry = load_species(study.species)
-    target = registry.assembly(study.assembly)
+    target = registry.assembly(assembly or study.assembly)
     warnings: list[StudyWarning] = []
     bundle: Bundle | None = None
     bundle_checked = False
@@ -263,9 +378,15 @@ def place_snps(study: SnpStudy | TraitStudy, snps: list[SnpInput]) -> tuple[list
                     message=f"{chrom} was given as {', '.join(sorted(given))}; all were normalized to {chrom}",
                 )
             )
+    unique, duplicates = _dedupe(placed)
+    return unique, [*warnings, *duplicates]
+
+
+def _dedupe(snps: list[SnpInput]) -> tuple[list[SnpInput], list[StudyWarning]]:
+    warnings: list[StudyWarning] = []
     unique: list[SnpInput] = []
     first: dict[tuple[str, int], SnpInput] = {}
-    for snp in placed:
+    for snp in snps:
         key = (str(snp.chrom), int(snp.pos or 0))
         if key in first:
             warnings.append(

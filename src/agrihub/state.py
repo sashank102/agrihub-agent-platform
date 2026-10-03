@@ -51,12 +51,25 @@ class Window(BaseModel):
     r2: float = Field(default=0.2, ge=0.0, le=1.0)
 
 
+class LiftedFrom(BaseModel):
+    """Where a lifted SNP was given, and how its position on the study assembly was derived."""
+
+    assembly: str
+    chrom: str
+    pos: int = Field(ge=1)
+    method: str
+    confidence: Literal["high", "medium", "low"]
+    detail: str = ""
+    anchors: list[str] = Field(default_factory=list)
+
+
 class SnpInput(BaseModel):
     """One user-supplied SNP: positioned, a marker id, or raw text placed at intake.
 
     With neither ``chrom``/``pos`` nor ``marker_id``, intake parses ``raw``
     as a positional id (``S18_9263941``, ``Chr18:9263941``) and otherwise
-    resolves it as a marker name.
+    resolves it as a marker name. ``lifted_from`` is set by intake when the
+    position was converted from another assembly.
     """
 
     raw: str = Field(min_length=1)
@@ -66,6 +79,7 @@ class SnpInput(BaseModel):
     score: float | None = None
     p_value: float | None = Field(default=None, ge=0.0, le=1.0)
     method: str | None = None
+    lifted_from: LiftedFrom | None = None
 
     @model_validator(mode="after")
     def require_complete_position(self) -> "SnpInput":
@@ -91,6 +105,8 @@ class _StudyBase(BaseModel):
         default_factory=lambda: list(SPECIALISTS),
         min_length=1,
     )
+    lifted_from_assembly: str | None = None
+    """Set by intake when the SNPs were given on an assembly that is lifted to ``assembly``."""
 
 
 class SnpStudy(_StudyBase):
