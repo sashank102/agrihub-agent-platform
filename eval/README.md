@@ -53,7 +53,8 @@ Reading the 2026-10-03 scorecards (scripted model):
 
 - Soybean: the rubric beats distance only on recall@3 (55% vs 15%); without
   seed families and keyword priors it keeps 40%.
-- Rice: neither beats the other (rubric 6%, distance 9% at recall@3). Rice
+- Rice: the rubric edges distance only at recall@3 (12% [3-25%] vs 9%
+  [0-22%]) and the intervals overlap, so this is not a demonstrated win. Rice
   curation is dense (RAP-DB, Oryzabase and funRiceGenes list about 20,000
   gene-trait records), so the held-out target competes with neighbouring
   curated genes that stay visible, often its own paralogs or the cloned gene

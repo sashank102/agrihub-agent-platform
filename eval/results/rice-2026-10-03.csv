@@ -1,0 +1,97 @@
+trait,method,gene_id,symbol,snp,hit_distance_bp,locus_id,n_genes,in_locus,rank,distance_rank,tier
+plant height,rubric_only,Os07g0566500,"NAC10, ONAC010",plant_height:IRGSP1.0:7_22872696,115144,L6,38,True,33,33,T4
+plant height,rubric_only,Os08g0529000,"PIN5B, PIN5C",plant_height:MSU6.1:8_26234733,94492,L7,49,True,33,32,T4
+plant height,rubric_only,Os01g0197100,"D2, D2a",plant_height:MSU6.1:1_5238516,0,L1,29,True,1,1,T2
+plant height,rubric_only,Os04g0518400,"OsPAL, OsPAL6",plant_height:MSU7:4_25856348,70729,L4,31,True,20,19,T4
+plant height,rubric_only,Os02g0154200,LRK1,plant_height:IRGSP1.0:2_3052149,69793,L3,55,True,29,25,T4
+plant height,rubric_only,Os07g0192300,"NAL11, LM7",plant_height:IRGSP1.0:7_4847779,130188,L5,32,True,31,28,T4
+plant height,rubric_only,Os01g0296200,"PSL1, OsPGL13",plant_height:IRGSP1.0:1_10922162,90251,L2,28,True,19,19,T4
+plant height,rubric_only,Os11g0129700,"WRI1-1, OsWRI1-1",plant_height:IRGSP1.0:11_1226313,137897,L8,39,True,36,35,T4
+plant height,rubric_no_priors,Os07g0566500,"NAC10, ONAC010",plant_height:IRGSP1.0:7_22872696,115144,L6,38,True,33,33,T4
+plant height,rubric_no_priors,Os08g0529000,"PIN5B, PIN5C",plant_height:MSU6.1:8_26234733,94492,L7,49,True,32,32,T4
+plant height,rubric_no_priors,Os01g0197100,"D2, D2a",plant_height:MSU6.1:1_5238516,0,L1,29,True,3,1,T2
+plant height,rubric_no_priors,Os04g0518400,"OsPAL, OsPAL6",plant_height:MSU7:4_25856348,70729,L4,31,True,19,19,T4
+plant height,rubric_no_priors,Os02g0154200,LRK1,plant_height:IRGSP1.0:2_3052149,69793,L3,55,True,29,25,T4
+plant height,rubric_no_priors,Os07g0192300,"NAL11, LM7",plant_height:IRGSP1.0:7_4847779,130188,L5,32,True,30,28,T4
+plant height,rubric_no_priors,Os01g0296200,"PSL1, OsPGL13",plant_height:IRGSP1.0:1_10922162,90251,L2,28,True,19,19,T4
+plant height,rubric_no_priors,Os11g0129700,"WRI1-1, OsWRI1-1",plant_height:IRGSP1.0:11_1226313,137897,L8,39,True,35,35,T4
+plant height,agents,Os07g0566500,"NAC10, ONAC010",plant_height:IRGSP1.0:7_22872696,115144,L6,38,True,33,33,T4
+plant height,agents,Os08g0529000,"PIN5B, PIN5C",plant_height:MSU6.1:8_26234733,94492,L7,49,True,33,32,T4
+plant height,agents,Os01g0197100,"D2, D2a",plant_height:MSU6.1:1_5238516,0,L1,29,True,1,1,T2
+plant height,agents,Os04g0518400,"OsPAL, OsPAL6",plant_height:MSU7:4_25856348,70729,L4,31,True,20,19,T4
+plant height,agents,Os02g0154200,LRK1,plant_height:IRGSP1.0:2_3052149,69793,L3,55,True,29,25,T4
+plant height,agents,Os07g0192300,"NAL11, LM7",plant_height:IRGSP1.0:7_4847779,130188,L5,32,True,31,28,T4
+plant height,agents,Os01g0296200,"PSL1, OsPGL13",plant_height:IRGSP1.0:1_10922162,90251,L2,28,True,19,19,T4
+plant height,agents,Os11g0129700,"WRI1-1, OsWRI1-1",plant_height:IRGSP1.0:11_1226313,137897,L8,39,True,36,35,T4
+heading date,rubric_only,Os12g0545900,"PMS3, LDMAR",heading_date:MSU6.1:12_21865734,148510,L8,13,True,9,13,T3
+heading date,rubric_only,Os01g0971800,"PCL1, OsPCL1",heading_date:MSU6.1:1_42973891,99420,L2,42,True,9,24,T3
+heading date,rubric_only,Os06g0157500,"RFT1, RFT",heading_date:IRGSP Build 4.0:6_2964095,36620,L6,51,True,4,15,T3
+heading date,rubric_only,Os01g0218500,"FTL, FTL1",heading_date:IRGSP Build 4.0:1_6577922,79176,L1,41,True,4,23,T3
+heading date,rubric_only,Os07g0694000,OsPLC1,heading_date:IRGSP Build 4.0:7_30155546,50511,L7,41,True,15,16,T4
+heading date,rubric_only,Os06g0127100,"DREB1C, OsDREB1C",heading_date:MSU6.1:6_1469352,34818,L5,48,True,16,15,T4
+heading date,rubric_only,Os02g0170500,"HAP5A, OsNF-YC1",heading_date:MSU6.1:2_3876821,26711,L3,32,True,8,6,T4
+heading date,rubric_only,Os03g0229500,"GFD1, GS3.1",heading_date:MSU6.1:3_6850504,2287,L4,36,True,1,1,T4
+heading date,rubric_no_priors,Os12g0545900,"PMS3, LDMAR",heading_date:MSU6.1:12_21865734,148510,L8,13,True,13,13,T4
+heading date,rubric_no_priors,Os01g0971800,"PCL1, OsPCL1",heading_date:MSU6.1:1_42973891,99420,L2,42,True,18,24,T4
+heading date,rubric_no_priors,Os06g0157500,"RFT1, RFT",heading_date:IRGSP Build 4.0:6_2964095,36620,L6,51,True,3,15,T3
+heading date,rubric_no_priors,Os01g0218500,"FTL, FTL1",heading_date:IRGSP Build 4.0:1_6577922,79176,L1,41,True,23,23,T4
+heading date,rubric_no_priors,Os07g0694000,OsPLC1,heading_date:IRGSP Build 4.0:7_30155546,50511,L7,41,True,15,16,T4
+heading date,rubric_no_priors,Os06g0127100,"DREB1C, OsDREB1C",heading_date:MSU6.1:6_1469352,34818,L5,48,True,16,15,T4
+heading date,rubric_no_priors,Os02g0170500,"HAP5A, OsNF-YC1",heading_date:MSU6.1:2_3876821,26711,L3,32,True,8,6,T4
+heading date,rubric_no_priors,Os03g0229500,"GFD1, GS3.1",heading_date:MSU6.1:3_6850504,2287,L4,36,True,1,1,T4
+heading date,agents,Os12g0545900,"PMS3, LDMAR",heading_date:MSU6.1:12_21865734,148510,L8,13,True,9,13,T3
+heading date,agents,Os01g0971800,"PCL1, OsPCL1",heading_date:MSU6.1:1_42973891,99420,L2,42,True,9,24,T3
+heading date,agents,Os06g0157500,"RFT1, RFT",heading_date:IRGSP Build 4.0:6_2964095,36620,L6,51,True,4,15,T3
+heading date,agents,Os01g0218500,"FTL, FTL1",heading_date:IRGSP Build 4.0:1_6577922,79176,L1,41,True,4,23,T3
+heading date,agents,Os07g0694000,OsPLC1,heading_date:IRGSP Build 4.0:7_30155546,50511,L7,41,True,15,16,T4
+heading date,agents,Os06g0127100,"DREB1C, OsDREB1C",heading_date:MSU6.1:6_1469352,34818,L5,48,True,16,15,T4
+heading date,agents,Os02g0170500,"HAP5A, OsNF-YC1",heading_date:MSU6.1:2_3876821,26711,L3,32,True,8,6,T4
+heading date,agents,Os03g0229500,"GFD1, GS3.1",heading_date:MSU6.1:3_6850504,2287,L4,36,True,1,1,T4
+grain yield,rubric_only,Os04g0271700,OscZOG1,grain_yield:IRGSP1.0:4_11460063,82746,L6,17,True,12,12,T4
+grain yield,rubric_only,Os03g0230500,"DSM3, DSM3/OsITPK2",grain_yield:MSU6.1:3_6983278,76871,L5,44,True,20,19,T4
+grain yield,rubric_only,Os02g0595900,"NAR2.1, OsNAR2.1",grain_yield:IRGSP1.0:2_23065933,55200,L3,39,True,18,16,T4
+grain yield,rubric_only,Os01g0208600,"ES1, TUT1",grain_yield:IRGSP1.0:1_5970981,72850,L1,38,True,23,23,T4
+grain yield,rubric_only,Os10g0533600,"MPK6, OsMPK4",grain_yield:IRGSP1.0:10_20887140,127194,L8,42,True,34,34,T4
+grain yield,rubric_only,Os06g0128800,"ROD1, OsROD1",grain_yield:IRGSP1.0:6_1391691,134847,L7,40,True,38,38,T4
+grain yield,rubric_only,Os02g0125700,"OsLIL3, LIL3",grain_yield:IRGSP1.0:2_1466026,119003,L2,51,True,37,38,T4
+grain yield,rubric_only,Os02g0641000,OsPLIM2a,grain_yield:MSU6.1:2_25753970,18577,L4,40,True,6,6,T4
+grain yield,rubric_no_priors,Os04g0271700,OscZOG1,grain_yield:IRGSP1.0:4_11460063,82746,L6,17,True,12,12,T4
+grain yield,rubric_no_priors,Os03g0230500,"DSM3, DSM3/OsITPK2",grain_yield:MSU6.1:3_6983278,76871,L5,44,True,20,19,T4
+grain yield,rubric_no_priors,Os02g0595900,"NAR2.1, OsNAR2.1",grain_yield:IRGSP1.0:2_23065933,55200,L3,39,True,18,16,T4
+grain yield,rubric_no_priors,Os01g0208600,"ES1, TUT1",grain_yield:IRGSP1.0:1_5970981,72850,L1,38,True,23,23,T4
+grain yield,rubric_no_priors,Os10g0533600,"MPK6, OsMPK4",grain_yield:IRGSP1.0:10_20887140,127194,L8,42,True,34,34,T4
+grain yield,rubric_no_priors,Os06g0128800,"ROD1, OsROD1",grain_yield:IRGSP1.0:6_1391691,134847,L7,40,True,38,38,T4
+grain yield,rubric_no_priors,Os02g0125700,"OsLIL3, LIL3",grain_yield:IRGSP1.0:2_1466026,119003,L2,51,True,38,38,T4
+grain yield,rubric_no_priors,Os02g0641000,OsPLIM2a,grain_yield:MSU6.1:2_25753970,18577,L4,40,True,6,6,T4
+grain yield,agents,Os04g0271700,OscZOG1,grain_yield:IRGSP1.0:4_11460063,82746,L6,17,True,12,12,T4
+grain yield,agents,Os03g0230500,"DSM3, DSM3/OsITPK2",grain_yield:MSU6.1:3_6983278,76871,L5,44,True,20,19,T4
+grain yield,agents,Os02g0595900,"NAR2.1, OsNAR2.1",grain_yield:IRGSP1.0:2_23065933,55200,L3,39,True,18,16,T4
+grain yield,agents,Os01g0208600,"ES1, TUT1",grain_yield:IRGSP1.0:1_5970981,72850,L1,38,True,23,23,T4
+grain yield,agents,Os10g0533600,"MPK6, OsMPK4",grain_yield:IRGSP1.0:10_20887140,127194,L8,42,True,34,34,T4
+grain yield,agents,Os06g0128800,"ROD1, OsROD1",grain_yield:IRGSP1.0:6_1391691,134847,L7,40,True,38,38,T4
+grain yield,agents,Os02g0125700,"OsLIL3, LIL3",grain_yield:IRGSP1.0:2_1466026,119003,L2,51,True,37,38,T4
+grain yield,agents,Os02g0641000,OsPLIM2a,grain_yield:MSU6.1:2_25753970,18577,L4,40,True,6,6,T4
+grain weight,rubric_only,Os07g0663900,"SDR7-6, OsSDR7-6",grain_weight:IRGSP1.0:7_27898107,115704,L8,48,True,41,41,T4
+grain weight,rubric_only,Os02g0164900,"ARF6, ARF6A",grain_weight:IRGSP1.0:2_3571843,78938,L3,40,True,23,18,T4
+grain weight,rubric_only,Os05g0415400,"NAC24, OsNAC24",grain_weight:IRGSP1.0:5_20251937,56549,L6,29,True,13,15,T4
+grain weight,rubric_only,Os06g0726400,"SBE1, BE1",grain_weight:IRGSP1.0:6_30974438,68635,L7,47,True,20,20,T4
+grain weight,rubric_only,Os02g0281000,"PP23, OsPKG",grain_weight:IRGSP1.0:2_10359249,59813,L5,20,True,10,10,T4
+grain weight,rubric_only,Os01g0194300,"NH1, OsNH1",grain_weight:IRGSP1.0:1_5083493,18284,L1,31,True,3,3,T4
+grain weight,rubric_only,Os02g0236200,"GSK4, OsGSK3",grain_weight:IRGSP Build 4.0:2_7726595,21364,L4,28,True,9,7,T4
+grain weight,rubric_only,Os01g0748900,"SPL17, OsCAD1",grain_weight:MSU6.1:1_31420218,68159,L2,44,True,3,17,T3
+grain weight,rubric_no_priors,Os07g0663900,"SDR7-6, OsSDR7-6",grain_weight:IRGSP1.0:7_27898107,115704,L8,48,True,41,41,T4
+grain weight,rubric_no_priors,Os02g0164900,"ARF6, ARF6A",grain_weight:IRGSP1.0:2_3571843,78938,L3,40,True,18,18,T4
+grain weight,rubric_no_priors,Os05g0415400,"NAC24, OsNAC24",grain_weight:IRGSP1.0:5_20251937,56549,L6,29,True,13,15,T4
+grain weight,rubric_no_priors,Os06g0726400,"SBE1, BE1",grain_weight:IRGSP1.0:6_30974438,68635,L7,47,True,20,20,T4
+grain weight,rubric_no_priors,Os02g0281000,"PP23, OsPKG",grain_weight:IRGSP1.0:2_10359249,59813,L5,20,True,10,10,T4
+grain weight,rubric_no_priors,Os01g0194300,"NH1, OsNH1",grain_weight:IRGSP1.0:1_5083493,18284,L1,31,True,6,3,T4
+grain weight,rubric_no_priors,Os02g0236200,"GSK4, OsGSK3",grain_weight:IRGSP Build 4.0:2_7726595,21364,L4,28,True,9,7,T4
+grain weight,rubric_no_priors,Os01g0748900,"SPL17, OsCAD1",grain_weight:MSU6.1:1_31420218,68159,L2,44,True,18,17,T4
+grain weight,agents,Os07g0663900,"SDR7-6, OsSDR7-6",grain_weight:IRGSP1.0:7_27898107,115704,L8,48,True,41,41,T4
+grain weight,agents,Os02g0164900,"ARF6, ARF6A",grain_weight:IRGSP1.0:2_3571843,78938,L3,40,True,23,18,T4
+grain weight,agents,Os05g0415400,"NAC24, OsNAC24",grain_weight:IRGSP1.0:5_20251937,56549,L6,29,True,13,15,T4
+grain weight,agents,Os06g0726400,"SBE1, BE1",grain_weight:IRGSP1.0:6_30974438,68635,L7,47,True,20,20,T4
+grain weight,agents,Os02g0281000,"PP23, OsPKG",grain_weight:IRGSP1.0:2_10359249,59813,L5,20,True,10,10,T4
+grain weight,agents,Os01g0194300,"NH1, OsNH1",grain_weight:IRGSP1.0:1_5083493,18284,L1,31,True,3,3,T4
+grain weight,agents,Os02g0236200,"GSK4, OsGSK3",grain_weight:IRGSP Build 4.0:2_7726595,21364,L4,28,True,9,7,T4
+grain weight,agents,Os01g0748900,"SPL17, OsCAD1",grain_weight:MSU6.1:1_31420218,68159,L2,44,True,3,17,T3

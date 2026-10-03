@@ -1,0 +1,16 @@
+trait,method,gene_id,symbol,snp,hit_distance_bp,locus_id,n_genes,in_locus,rank,distance_rank,tier
+plant height,rubric_only,SORBI_3006G067700,"Dw2, SbKIPK",plant_height:PhytozomeV9:6_42736415,24037,L1,22,True,7,8,T4
+plant height,rubric_only,SORBI_3009G229800,Dw1,plant_height:PhytozomeV9:9_57236778,24098,L2,28,True,10,10,T4
+plant height,rubric_no_priors,SORBI_3006G067700,"Dw2, SbKIPK",plant_height:PhytozomeV9:6_42736415,24037,L1,22,True,8,8,T4
+plant height,rubric_no_priors,SORBI_3009G229800,Dw1,plant_height:PhytozomeV9:9_57236778,24098,L2,28,True,10,10,T4
+plant height,agents,SORBI_3006G067700,"Dw2, SbKIPK",plant_height:PhytozomeV9:6_42736415,24037,L1,22,True,7,8,T4
+plant height,agents,SORBI_3009G229800,Dw1,plant_height:PhytozomeV9:9_57236778,24098,L2,28,True,10,10,T4
+flowering time,rubric_only,SORBI_3001G087100,"Ma5, SbPHYC",flowering_time:Sbiv3.0:1_6752145,0,L1,24,True,1,1,T2
+flowering time,rubric_only,SORBI_3001G394400,"Ma3, SbPHYB",flowering_time:Sbiv3.0:1_68089858,46500,L2,29,True,14,14,T4
+flowering time,rubric_only,SORBI_3002G302700,Ma2,flowering_time:Sbiv3.0:2_67836766,45840,L3,28,True,17,17,T4
+flowering time,rubric_no_priors,SORBI_3001G087100,"Ma5, SbPHYC",flowering_time:Sbiv3.0:1_6752145,0,L1,24,True,1,1,T2
+flowering time,rubric_no_priors,SORBI_3001G394400,"Ma3, SbPHYB",flowering_time:Sbiv3.0:1_68089858,46500,L2,29,True,14,14,T4
+flowering time,rubric_no_priors,SORBI_3002G302700,Ma2,flowering_time:Sbiv3.0:2_67836766,45840,L3,28,True,17,17,T4
+flowering time,agents,SORBI_3001G087100,"Ma5, SbPHYC",flowering_time:Sbiv3.0:1_6752145,0,L1,24,True,1,1,T2
+flowering time,agents,SORBI_3001G394400,"Ma3, SbPHYB",flowering_time:Sbiv3.0:1_68089858,46500,L2,29,True,14,14,T4
+flowering time,agents,SORBI_3002G302700,Ma2,flowering_time:Sbiv3.0:2_67836766,45840,L3,28,True,17,17,T4
