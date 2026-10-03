@@ -1,0 +1,99 @@
+# Models and precomputed results the trait-mode model step may use.
+#
+# adapter names the code that runs an entry (agrihub.trait_models.adapters).
+# assemblies are the assemblies the output positions are on; positions on an
+# assembly with lift_to in the species registry are lifted before loci.
+# score_type says what a SNP score measures. Score types are never merged.
+# path templates are relative to AGRIHUB_MODEL_RESULTS_DIR.
+models:
+  - id: sister_team_kinship_gnnexplainer
+    name: Sister-team kinship-graph GNN, GNNExplainer top 50 SNPs
+    adapter: precomputed_results
+    status: active
+    species: [soybean]
+    assemblies: [Lee.gnm2]
+    populations: [sister-team soybean association panel]
+    required_inputs: []
+    score_type: gnnexplainer
+    label: Precomputed sister-team model output (GNNExplainer importance, not a p-value)
+    description: >-
+      Top 50 SNPs per trait and year by GNNExplainer importance from a GNN on
+      a kinship graph of the panel. The files carry no reference assembly;
+      their positions fit Lee.gnm2 and are lifted to Wm82.a2.v1.
+    path: 2_Sep/Lee/top50_kinshipgraph_gnnexplainer_{trait}_{year}_lee.csv
+    notes: Confirm the reference assembly and genotype panel with the sister team.
+    traits:
+      - {code: PH, name: plant height, terms: [plant height, height]}
+      - {code: GY, name: grain yield, terms: [grain yield, seed yield, yield]}
+      - {code: CT, name: CT (trait code not defined in the sister-team files), terms: [CT], defined: false}
+      - {code: NN, name: NN (trait code not defined in the sister-team files), terms: [NN], defined: false}
+    benchmarks:
+      - name: 5-fold phenotype prediction of soybean plant height (sister team, poster)
+        reference: 'poster.tex, table "Sister team: soybean plant height"'
+        metrics: {PCC: 0.426, MAE: 0.109, RMSE: 0.142, R2: 0.176}
+      - name: Trait-wise model comparison
+        reference: Results/2_Sep/final_model_comparison_trait_wise.xlsx
+
+  - id: gwas_atlas_top_hits
+    name: GWAS Atlas top hits for the trait
+    adapter: catalog_top_hits
+    status: active
+    species: ["*"]
+    assemblies: [canonical]
+    populations: [published GWAS panels]
+    required_inputs: []
+    score_type: p_value
+    label: previously published associations — not a new analysis
+    description: >-
+      The most significant catalog GWAS hits whose trait matches the study
+      trait, one per 250 kb, from the species bundle.
+    traits: []
+
+  - id: gapit_blink
+    name: BLINK (GAPIT) association scan
+    adapter: gwas_runner
+    status: planned
+    species: ["*"]
+    assemblies: [canonical]
+    populations: []
+    required_inputs: [genotype_vcf, phenotype_table]
+    score_type: p_value
+    label: New association scan (planned)
+    description: GAPIT BLINK in an R container on the user's genotypes and phenotypes.
+    traits: []
+  - id: gapit_farmcpu
+    name: FarmCPU (GAPIT/rMVP) association scan
+    adapter: gwas_runner
+    status: planned
+    species: ["*"]
+    assemblies: [canonical]
+    populations: []
+    required_inputs: [genotype_vcf, phenotype_table]
+    score_type: p_value
+    label: New association scan (planned)
+    description: FarmCPU through GAPIT or rMVP in an R container.
+    traits: []
+  - id: gapit_mlm
+    name: MLM (GAPIT/rMVP) association scan
+    adapter: gwas_runner
+    status: planned
+    species: ["*"]
+    assemblies: [canonical]
+    populations: []
+    required_inputs: [genotype_vcf, phenotype_table]
+    score_type: p_value
+    label: New association scan (planned)
+    description: Mixed linear model through GAPIT or rMVP in an R container.
+    traits: []
+  - id: sister_team_gnn_live
+    name: Sister-team SNP-GNN with Integrated Gradients or GNNExplainer
+    adapter: gnn_runner
+    status: planned
+    species: [soybean]
+    assemblies: [Lee.gnm2]
+    populations: [sister-team soybean association panel]
+    required_inputs: [genotype_vcf, phenotype_table, kinship_graph]
+    score_type: integrated_gradients
+    label: New GNN attribution run (planned)
+    description: Trains the team's GNN and ranks SNPs by attribution, instead of reading precomputed files.
+    traits: []

@@ -61,6 +61,7 @@ packages = [
     "agrihub.nodes",
     "agrihub.prompts",
     "agrihub.tools",
+    "agrihub.trait_models",
     "agrihub_data",
     "agrihub_data.build",
     "agrihub_data.query",
@@ -78,6 +79,7 @@ packages = [
 [tool.setuptools.package-data]
 "*" = ["py.typed"]
 "agrihub" = ["scoring_weights.yaml"]
+"agrihub.trait_models" = ["registry.yaml"]
 "agrihub_data" = ["schema.sql", "registry/*.yaml"]
 "agrihub_data.query" = ["traits/*.yaml", "tissues/*.yaml"]
 

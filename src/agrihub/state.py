@@ -79,6 +79,9 @@ class SnpInput(BaseModel):
     score: float | None = None
     p_value: float | None = Field(default=None, ge=0.0, le=1.0)
     method: str | None = None
+    score_type: str | None = None
+    """What ``score`` measures when a model produced it (``gnnexplainer``, ``p_value``)."""
+    model_id: str | None = None
     lifted_from: LiftedFrom | None = None
 
     @model_validator(mode="after")

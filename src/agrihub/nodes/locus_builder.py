@@ -353,7 +353,8 @@ def _nearest_snp(gene: GeneInWindow, positions: dict[str, int]) -> tuple[str | N
     return best[1], best[0]
 
 
-def _lead_key(item: SnpWindow) -> tuple[float, float, int]:
+def _lead_key(item: SnpWindow) -> tuple[float, str, float, int]:
+    """Order SNPs by p-value, then by score, comparing scores only within one score type."""
     p_value = item.snp.p_value if item.snp.p_value is not None else 2.0
     score = -item.snp.score if item.snp.score is not None else 0.0
-    return p_value, score, item.pos
+    return p_value, item.snp.score_type or "", score, item.pos
