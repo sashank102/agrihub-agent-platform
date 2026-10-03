@@ -327,6 +327,34 @@ def test_a_followup_run_reads_the_study_runs_evidence_even_after_its_directory_i
         asyncio.run(scenario())
 
 
+def test_the_registry_lists_lift_targets_and_the_models_that_apply_to_a_trait(
+    postgres_database_uri: str,
+    run_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("AGRIHUB_MODEL_RESULTS_DIR", str(run_dir.parent / "no-results"))
+
+    async def scenario() -> None:
+        app = _app(postgres_database_uri)
+        async with app.router.lifespan_context(app):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                species = (await client.get("/registry/species")).json()
+                soybean = next(item for item in species if item["species"] == "soybean")
+                lifts = {item["id"]: item["lift_to"] for item in soybean["assemblies"]}
+                assert lifts["Lee.gnm2"] == "Wm82.a2.v1" and lifts["Wm82.a2.v1"] is None
+                height = (await client.get("/registry/models", params={"species": "soybean", "trait": "plant height"})).json()
+                by_id = {item["model_id"]: item for item in height["models"]}
+                assert height["applicable"] == 1 and by_id["gwas_atlas_top_hits"]["applicability"]["ok"]
+                assert "no PH result files" in by_id["sister_team_kinship_gnnexplainer"]["applicability"]["reasons"][0]
+                none = (await client.get("/registry/models", params={"species": "soybean", "trait": "nodule colour"})).json()
+                assert none["applicable"] == 0
+                assert none["detail"] == "No applicable model is registered for nodule colour in soybean."
+                unknown = (await client.get("/registry/models", params={"species": "barley", "trait": "x"})).json()
+                assert unknown["models"] == [] and "barley" in unknown["detail"]
+
+    asyncio.run(scenario())
+
+
 def test_invalid_snps_and_mixed_chromosome_aliases_become_warnings(postgres_database_uri: str, run_dir: Path):
     async def scenario() -> None:
         app = _app(postgres_database_uri)
