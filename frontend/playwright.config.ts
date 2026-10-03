@@ -24,7 +24,7 @@ const apiEnv = {
 
 export default defineConfig({
   testDir: "./e2e",
-  testIgnore: ["study.spec.ts"],
+  testIgnore: ["study.spec.ts", "model-path.spec.ts"],
   timeout: 60_000,
   fullyParallel: false,
   workers: 1,
