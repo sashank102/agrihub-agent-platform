@@ -1,0 +1,65 @@
+# Curator-editable trait profiles for maize. Every id was checked against the
+# fetched to.obo, PPTO.obo.gz (GWAS Atlas), CO_322 OWL and go-basic.obo in
+# the maize bundle (2026-10-03).
+#
+# seed_families are textbook gene families only: plant height - GA and
+# brassinosteroid genes and ABCB auxin transporters (Hedden 2003, Trends Genet
+# 19:5-9; Multani et al. 2003, Science 302:81-84 on br2/dw3 ABCB1);
+# flowering - the photoperiod pathway with the FT-like ZCN genes (Andres and
+# Coupland 2012, Nat Rev Genet 13:627-639; Meng et al. 2011, Plant Cell
+# 23:942-960); kernel weight and yield - cytokinin oxidase and SPL regulators
+# (Xing and Zhang 2010, Annu Rev Plant Biol 61:421-442).
+profiles:
+  - key: plant_height
+    names: [plant height, height, PH, ear height, plant stature]
+    terms:
+      - TO:0000207      # plant height
+      - TO:0000576      # stem length
+      - TO:0000145      # shoot axis internode length
+      - PPTO:0000126    # plant height
+      - CO_322:0000994  # Plant height
+      - GO:0009686      # gibberellin biosynthetic process
+      - GO:0009740      # gibberellic acid mediated signaling pathway
+      - GO:0016132      # brassinosteroid biosynthetic process
+      - GO:0009742      # brassinosteroid mediated signaling pathway
+    keywords: [plant height, ear height, dwarf, brachytic, internode, gibberellin, brassinosteroid, stature]
+    seed_families: [GA20ox, GA3ox, DELLA, GID1, DWF4, BRI1, ABCB]
+  - key: flowering_time
+    names: [flowering time, days to anthesis, days to silking, days to silk, days to tassel, DTA, DTS, anthesis, silking]
+    terms:
+      - TO:0002616      # flowering time trait
+      - TO:0000344      # days to flowering trait
+      - TO:0000629      # days to tassel
+      - TO:0000463      # anthesis silking interval
+      - PPTO:0001204    # flowering time trait
+      - PPTO:0000342    # days to silk
+      - PPTO:0000343    # days to tassel
+      - CO_322:0000030  # Anthesis time
+      - CO_322:0000001  # Anthesis silking interval
+      - GO:0048573      # photoperiodism, flowering
+      - GO:0009909      # regulation of flower development
+      - GO:0010228      # vegetative to reproductive phase transition of meristem
+    keywords: [flowering time, flowering, anthesis, silking, days to silk, days to tassel, photoperiod]
+    seed_families: [FT, ZCN, CO, PRR, GI, PHY]
+  - key: grain_yield
+    names: [grain yield, yield, GY, ear weight]
+    terms:
+      - TO:0000396      # grain yield trait
+      - TO:0000371      # yield trait
+      - PPTO:0000355    # grain yield trait
+      - PPTO:0000113    # ear weight
+      - CO_322:0000005  # Grain yield
+      - CO_322:0000524  # Ear weight
+    keywords: [grain yield, yield, ear weight, ear length, kernel row number, kernel number]
+    seed_families: [CKX, SPL]
+  - key: kernel_weight
+    names: [kernel weight, hundred kernel weight, 100-kernel weight, grain weight, seed weight, kernel size]
+    terms:
+      - TO:0000919      # grain weight
+      - TO:0000935      # kernel weight per ear
+      - TO:0000181      # seed weight
+      - PPTO:0001033    # grain weight
+      - PPTO:0000361    # kernel weight per ear
+      - CO_322:0000133  # Grain weight
+    keywords: [kernel weight, grain weight, kernel size, seed weight, kernel length, kernel width]
+    seed_families: [CKX, SPL]

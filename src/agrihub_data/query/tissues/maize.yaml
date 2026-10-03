@@ -1,0 +1,36 @@
+# Curator-editable trait-relevant tissues for maize. trait_relevant_tissues
+# uses the entry whose key is the trait profile's key, then the first rule
+# whose keywords occur in the trait text. Tissue names are normalized sample
+# labels (expression build: normalize_tissue).
+#
+# The maize bundle loads no expression dataset yet (walley_fpkm.txt is on v4 ids and is planned),
+# so these name tissues for when one is added; expression tools report the gap meanwhile.
+profiles:
+  plant_height:
+    tissues: [shoot_apical_meristem, stem, internode]
+    note: Stalk height comes from internode number and elongation.
+  flowering_time:
+    tissues: [leaf, shoot_apical_meristem, tassel, ear]
+    note: Photoperiod is sensed in leaves (ZCN8 is made in leaves) and acts at the shoot apex.
+  grain_yield:
+    tissues: [ear, seed, endosperm]
+    note: Kernel number is set in the developing ear; filling happens in the endosperm.
+  kernel_weight:
+    tissues: [seed, endosperm, embryo]
+    note: Kernel weight is set during grain filling.
+rules:
+  - keywords: [root, nitrogen, nitrate, phosphate]
+    tissues: [root]
+    note: Root traits and nutrient uptake act in roots.
+  - keywords: [kernel, seed, grain, starch, oil, protein]
+    tissues: [seed, endosperm, embryo]
+    note: Kernel composition is set during grain filling.
+  - keywords: [flower, anthesis, silk, tassel, photoperiod]
+    tissues: [leaf, shoot_apical_meristem, tassel, ear]
+    note: Flowering responses act in leaves and the shoot apex.
+  - keywords: [height, internode, stalk, lodging]
+    tissues: [shoot_apical_meristem, stem, internode]
+    note: Shoot architecture is set at the shoot apex and in the stalk.
+  - keywords: [leaf, blight, rust, chlorophyll]
+    tissues: [leaf]
+    note: Leaf traits and foliar diseases.

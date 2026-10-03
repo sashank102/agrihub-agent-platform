@@ -1,0 +1,39 @@
+# Curator-editable trait-relevant tissues for rice. trait_relevant_tissues
+# uses the entry whose key is the trait profile's key, then the first rule
+# whose keywords occur in the trait text. Tissue names are normalized sample
+# labels (expression build: normalize_tissue).
+#
+# The rice bundle loads no expression dataset yet (MSU r7 matrix needs an SRR-to-tissue sheet),
+# so these name tissues for when one is added; expression tools report the gap meanwhile.
+profiles:
+  plant_height:
+    tissues: [shoot_apical_meristem, stem, internode, leaf_sheath]
+    note: Culm elongation is set in the shoot apex and the elongating internodes.
+  flowering_time:
+    tissues: [leaf, shoot_apical_meristem, inflorescence]
+    note: Day length is sensed in leaves (Hd1, Ehd1, Hd3a) and the florigen acts at the shoot apex.
+  grain_yield:
+    tissues: [inflorescence, panicle, seed, endosperm]
+    note: Grain number is set in the young panicle; grain filling happens in the endosperm.
+  grain_weight:
+    tissues: [seed, endosperm, panicle]
+    note: Grain size and weight are set by spikelet hull growth and endosperm filling.
+rules:
+  - keywords: [root, nitrogen, phosphate, uptake]
+    tissues: [root]
+    note: Root traits and nutrient uptake act in roots.
+  - keywords: [grain, seed, amylose, chalk, starch, protein]
+    tissues: [seed, endosperm]
+    note: Grain composition is set during grain filling.
+  - keywords: [heading, flower, photoperiod]
+    tissues: [leaf, shoot_apical_meristem, inflorescence]
+    note: Photoperiod responses act in leaves and the shoot apex.
+  - keywords: [height, culm, internode, lodging, tiller]
+    tissues: [shoot_apical_meristem, stem, internode]
+    note: Shoot architecture is set at the shoot apex and in the culm.
+  - keywords: [panicle, spikelet]
+    tissues: [inflorescence, panicle]
+    note: Panicle traits are set in the developing inflorescence.
+  - keywords: [leaf, chlorophyll, photosynth, blast, blight]
+    tissues: [leaf]
+    note: Leaf traits and foliar diseases.

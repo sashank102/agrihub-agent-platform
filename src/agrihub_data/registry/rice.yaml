@@ -3,6 +3,7 @@ scientific_name: Oryza sativa
 common_name: rice
 taxon_id: 4530
 abbrev: orysa
+symbol_prefixes: [Os]
 canonical_assembly: IRGSP-1.0
 default_window:
   flank_bp: 150000
@@ -40,69 +41,372 @@ id_namespaces:
   - id: rap
     pattern: '^Os\d{2}g\d{7}$'
     assembly: IRGSP-1.0
-    description: RAP-DB locus ids.
-    example: Os01g0100100
+    description: RAP-DB locus ids, the canonical rice gene ids.
+    example: Os01g0883800
+  - id: rap_transcript
+    pattern: '^Os(\d{2})t(\d{7})-\d{2}$'
+    kind: transcript
+    assembly: IRGSP-1.0
+    canonical: 'Os\1g\2'
+    description: RAP-DB transcript ids; the locus id swaps t for g and drops the suffix.
+    example: Os01t0883800-02
   - id: msu
     pattern: '^LOC_Os\d{2}g\d{5}$'
     assembly: IRGSP-1.0
-    description: MSU rice genome annotation release 7 locus ids.
-    example: LOC_Os01g01010
+    description: >-
+      MSU rice genome annotation release 7 loci on the same pseudomolecules;
+      mapped to RAP loci through the RAP-MSU table (many-to-many).
+    example: LOC_Os01g66100
+  - id: msu_transcript
+    pattern: '^(LOC_Os\d{2}g\d{5})\.\d+$'
+    kind: transcript
+    assembly: IRGSP-1.0
+    canonical: '\1'
+    example: LOC_Os01g66100.1
 linkouts:
+  - name: RAP-DB
+    template: "https://rapdb.dna.naro.go.jp/locus/?name={gene_id}"
+    id_namespace: rap
   - name: Ensembl Plants
     template: "https://plants.ensembl.org/Oryza_sativa/Gene/Summary?g={gene_id}"
     id_namespace: rap
-  - name: Gramene
-    template: "https://www.gramene.org/?idList={gene_id}"
-    id_namespace: rap
+  - name: PubMed
+    kind: publication
+    template: "https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
 sources:
+  - id: rapdb_gene_models
+    name: RAP-DB IRGSP-1.0 representative gene models
+    tier: core
+    version: IRGSP-1.0 representative 2026-02-05
+    license: RAP-DB data are free to use with citation (Sakai et al. 2013); see https://rapdb.dna.naro.go.jp/disclaimer.html
+    homepage: https://rapdb.dna.naro.go.jp/download/irgsp1.html
+    citation: Sakai et al. 2013, Plant Cell Physiol 54:e6; Kawahara et al. 2013, Rice 6:4
+    assemblies: [IRGSP-1.0]
+    parser: gff_gene_models
+    params:
+      files:
+        - {file: "*.tar.gz", member: locus.gff}
+        - {file: "*.tar.gz", member: transcripts.gff}
+      transcript_gene: Locus_id
+      description: [Note]
+      source_db: RAP-DB
+    notes: RAP-DB moved from rapdb.dna.affrc.go.jp to rapdb.dna.naro.go.jp; the old host serves an expired certificate.
+    files:
+      - url: https://rapdb.dna.naro.go.jp/download/archive/irgsp1/IRGSP-1.0_representative_2026-02-05.tar.gz
+        path: IRGSP-1.0_representative_2026-02-05.tar.gz
+        sha256: 9f041a149217b4c217b0b5f90955c8b0a6fb34ef9a4923fbe968eec9c4aa3806
+        size: 15521213
   - id: rapdb_annotation
-    name: RAP-DB IRGSP-1.0 representative models and annotation
+    name: RAP-DB representative transcript annotation (InterPro, GO)
     tier: core
-    status: planned
-    version: "2026-02-05"
-    license: RAP-DB terms of use
-    homepage: https://rapdb.dna.affrc.go.jp/
+    version: IRGSP-1.0 representative annotation 2026-02-05
+    license: RAP-DB data are free to use with citation (Sakai et al. 2013)
+    homepage: https://rapdb.dna.naro.go.jp/download/irgsp1.html
+    citation: Sakai et al. 2013, Plant Cell Physiol 54:e6
     assemblies: [IRGSP-1.0]
-    notes: IRGSP-1.0_representative_2026-02-05.tar.gz and IRGSP-1.0_representative_annotation_2026-02-05.tsv.gz.
+    parser: rapdb_annotation
+    files:
+      - url: https://rapdb.dna.naro.go.jp/download/archive/irgsp1/IRGSP-1.0_representative_annotation_2026-02-05.tsv.gz
+        path: IRGSP-1.0_representative_annotation_2026-02-05.tsv.gz
+        sha256: e7d13a7d2ff852061f5ac890efa117fbba5f0a580a4eda4233404d49a93c062d
+        size: 3305126
   - id: rapdb_msu_map
-    name: RAP-DB to MSU id map
+    name: RAP-DB to MSU locus map
     tier: core
-    status: planned
-    version: "2026-02-05"
-    license: RAP-DB terms of use
-    homepage: https://rapdb.dna.affrc.go.jp/
+    version: RAP-MSU 2026-02-05
+    license: RAP-DB data are free to use with citation (Sakai et al. 2013)
+    homepage: https://rapdb.dna.naro.go.jp/download/irgsp1.html
     assemblies: [IRGSP-1.0]
-  - id: gramene_rice_qtl
-    name: Gramene rice QTL with TO terms
+    parser: rapdb_msu
+    notes: >-
+      Many-to-many. RAP loci listed as None have no MSU counterpart and keep a
+      no_counterpart row; MSU ids resolve to RAP only when the link is unique.
+    files:
+      - url: https://rapdb.dna.naro.go.jp/download/archive/RAP-MSU_2026-02-05.txt.gz
+        path: RAP-MSU_2026-02-05.txt.gz
+        sha256: 75f3c7c2b81837ee0ec94c17b73ba36ae6e7c3f93192840399e8887553c77e00
+        size: 314930
+  - id: rapdb_curated_genes
+    name: RAP-DB curated and agronomic genes (Trait Ontology, PubMed)
     tier: core
-    status: planned
-    version: Rice_QTL.dat
-    license: Gramene terms of use
-    homepage: https://www.gramene.org/
+    version: RAP-DB curated_genes.json and agri_genes.json
+    rolling: true
+    license: RAP-DB data are free to use with citation (Sakai et al. 2013)
+    homepage: https://rapdb.dna.naro.go.jp/curated_genes/curated_gene_list.html
+    citation: Sakai et al. 2013, Plant Cell Physiol 54:e6
     assemblies: [IRGSP-1.0]
-    notes: Needs assembly checks and remapping.
+    parser: rapdb_curated_genes
+    files:
+      - url: https://rapdb.dna.naro.go.jp/curated_genes/curated_genes.json
+        path: curated_genes.json
+        size: 7230266
+      - url: https://rapdb.dna.naro.go.jp/agri_genes/agri_genes.json
+        path: agri_genes.json
+        size: 1397267
+  - id: oryzabase_genes
+    name: Oryzabase gene list (CGSNL symbols, Trait Ontology)
+    tier: core
+    version: Oryzabase GENE_LIST
+    rolling: true
+    license: NBRP Oryzabase; free to use with citation (Kurata and Yamazaki 2006)
+    homepage: https://shigen.nig.ac.jp/rice/oryzabase/download/gene
+    citation: Kurata and Yamazaki 2006, Plant Physiol 140:12-17
+    assemblies: [IRGSP-1.0]
+    parser: oryzabase_genes
+    notes: >-
+      Served as Windows-31J (Shift-JIS); the 2026-10 export is in fact UTF-8.
+      The parser decodes strict UTF-8 first and cp932 otherwise.
+    files:
+      - url: https://shigen.nig.ac.jp/rice/oryzabase/gene/download?classtag=GENE_LIST
+        path: OryzabaseGeneList.txt
+        size: 17111755
   - id: funricegenes
-    name: funRiceGenes curated gene keywords
+    name: funRiceGenes gene keywords (text-mined from publications)
     tier: core
-    status: planned
-    version: geneKeyword.table.txt
-    license: CC-BY-SA
+    version: funRiceGenes geneKeyword.table.txt
+    rolling: true
+    license: CC-BY-SA-4.0 (funRiceGenes)
     homepage: https://funricegenes.github.io/
+    citation: Yao et al. 2018, Mol Plant 11:1110-1112
     assemblies: [IRGSP-1.0]
-  - id: gwas_atlas
-    name: GWAS Atlas rice associations
+    parser: funricegenes
+    params: {weight: 0.5}
+    notes: Keywords come from paper titles and sentences, so they weigh half a curated trait link and match by keyword only.
+    files:
+      - url: https://funricegenes.github.io/geneKeyword.table.txt
+        path: geneKeyword.table.txt
+        size: 15189535
+  - id: gramene_rice_qtl
+    name: Gramene rice QTL (Trait Ontology), release 39 archive
+    tier: core
+    version: Gramene release 39 Rice_QTL.dat
+    license: Gramene data are freely available; cite Tello-Ruiz et al.
+    homepage: https://archive.gramene.org/qtl/
+    citation: Ni et al. 2009, Database bap005 (Gramene QTL database)
+    assemblies: [IRGSP-1.0]
+    parser: gramene_qtl
+    notes: >-
+      The file states no assembly. Checked on 2026-10-03: 0 of 8,216 intervals
+      fall past the IRGSP-1.0 chromosome ends and 103 plant-height QTL cover
+      sd1 (Os01g0883800), so the intervals are read as IRGSP-1.0. Ends are
+      flanking-marker projections, so rows are low precision.
+    files:
+      - url: https://ftp.gramene.org/archives/PAST_RELEASES/release39/data/qtl/Rice_QTL.dat
+        path: Rice_QTL.dat
+        sha256: 10001244b77876722afb07f45fd931f554832b09a0b39d331120429457089192
+        size: 717674
+  - id: qtaro
+    name: Q-TARO rice QTL annotation
     tier: core
     status: planned
-    version: GWAS Atlas
+    version: Q-TARO
+    license: Q-TARO terms
+    homepage: http://qtaro.abr.affrc.go.jp/
+    provides: [qtl]
+    notes: qtaro.abr.affrc.go.jp did not resolve on 2026-10-03; Gramene QTL covers rice QTL meanwhile.
+  - id: gwas_atlas
+    name: GWAS Atlas rice associations and the Plant Phenotype and Trait Ontology
+    tier: core
+    version: GWAS Atlas (rice file fetched 2026-10)
     license: GWAS Atlas terms; academic use only
     academic_only: true
     homepage: https://ngdc.cncb.ac.cn/gwas/
-    assemblies: [IRGSP-1.0]
+    citation: GWAS Atlas, National Genomics Data Center (CNCB-NGDC)
+    assemblies: [IRGSP-1.0, none]
+    parser: gwas_atlas
+    assembly_aliases: {"1": IRGSP-1.0, "IRGSP 1.0": IRGSP-1.0, "IRGSP1.0": IRGSP-1.0, "Nipponbare (IRGSP 1.0)": IRGSP-1.0}
+    notes: >-
+      Ref ver "1" (2,291 rows) is read as IRGSP-1.0: those rows carry
+      positions converted from the IRGSP Build 4 locations they report.
+    files:
+      - url: https://download.cncb.ac.cn/gwas_atlas/gwas_association_result_for_rice.txt.gz
+        path: gwas_association_result_for_rice.txt.gz
+        sha256: fc243ce64d551add237f3db8f1de62dd421feedb2547e67115e2baa4e68e9a2a
+        size: 2470760
+      - url: https://download.cncb.ac.cn/gwas_atlas/PPTO.obo.gz
+        path: PPTO.obo.gz
+        sha256: fce5c49069ac8c20f4d1d958d0d8265d38bacca28c69807669f1a0cea0eecb59
+        size: 53929
   - id: ensembl_compara
     name: Ensembl Plants 63 Compara protein homologies
     tier: core
-    status: planned
     version: Ensembl Plants 63 (Compara 116)
     license: Ensembl data are available without restriction
-    homepage: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/tsv/ensembl-compara/homologies/oryza_sativa/
+    homepage: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/tsv/ensembl-compara/homologies/
+    citation: Yates et al. 2022, Nucleic Acids Res 50:D996-D1003
     assemblies: [IRGSP-1.0, TAIR10]
+    parser: ensembl_compara
+    params: {ensembl_species: oryza_sativa}
+    files:
+      - url: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/tsv/ensembl-compara/homologies/oryza_sativa/Compara.116.protein_default.homologies.tsv.gz
+        path: oryza_sativa.Compara.116.protein_default.homologies.tsv.gz
+        sha256: 44593fb7ebbc5a20dd761a9c02a9a578615d3540b9bd15cb0ab136156ea5e712
+        size: 93287628
+      - url: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/tsv/ensembl-compara/homologies/arabidopsis_thaliana/Compara.116.protein_default.homologies.tsv.gz
+        path: arabidopsis_thaliana.Compara.116.protein_default.homologies.tsv.gz
+        sha256: 8cf0244bb93865a13982c7fded23517179dd194d19b1ebae7ef0b719b2336f1a
+        size: 30022723
+  - id: plaza_orthology
+    name: PLAZA 5.0 monocots integrative orthology for rice
+    tier: core
+    version: PLAZA 5.0 monocots
+    license: Freely downloadable; cite Van Bel et al. 2022
+    homepage: https://bioinformatics.psb.ugent.be/plaza/versions/plaza_v5_monocots/
+    citation: Van Bel et al. 2022, Nucleic Acids Res 50:D1468-D1474
+    assemblies: [IRGSP-1.0, TAIR10]
+    parser: plaza_orthology
+    notes: Gene ids are RAP-DB locus ids. With Ensembl Compara this gives each Arabidopsis call a second method, so it can reach medium confidence.
+    files:
+      - url: https://ftp.psb.ugent.be/pub/plaza/plaza_public_monocots_05/IntegrativeOrthologySpecies/integrative_orthology.osa.tsv.gz
+        path: integrative_orthology.osa.tsv.gz
+        size: 86040208
+  - id: tair
+    name: TAIR public functional annotation release
+    tier: core
+    version: TAIR 2024-10-01 (Zenodo 17371665)
+    license: CC-BY-4.0
+    homepage: https://zenodo.org/records/17371665
+    citation: Berardini et al. 2015, Genesis 53:474-485
+    assemblies: [TAIR10]
+    parser: tair
+    notes: ATH_GO_GOSLIM.txt.gz in this record is a zip archive despite its name; the parser sniffs magic bytes.
+    files:
+      - url: https://zenodo.org/records/17371665/files/Araport11_functional_descriptions_20241001.txt.gz?download=1
+        path: Araport11_functional_descriptions_20241001.txt.gz
+        sha256: bf45cdb59a1f711ab46d5ba3e8b1b473c1b114a8eac2fd78af48e989c65422de
+        size: 2629813
+      - url: https://zenodo.org/records/17371665/files/gene_aliases_20241001.txt.gz?download=1
+        path: gene_aliases_20241001.txt.gz
+        sha256: 036e25356166b3b30e6be064e028a58996e796c85796e40061341a363004d5e6
+        size: 372809
+      - url: https://zenodo.org/records/17371665/files/Locus_Germplasm_Phenotype_20241001.txt.gz?download=1
+        path: Locus_Germplasm_Phenotype_20241001.txt.gz
+        sha256: 7eb1ee0c5a7ac233cfa31cdf67e990ea491bb8160d7b8f28282294ad473637ed
+        size: 758991
+      - url: https://zenodo.org/records/17371665/files/Locus_Published_20241001.txt.gz?download=1
+        path: Locus_Published_20241001.txt.gz
+        sha256: 968c2712e99636ac55f3ab008e4151f8d5e38baa133a08e373796c0a441324fd
+        size: 2240401
+      - url: https://zenodo.org/records/17371665/files/ATH_GO_GOSLIM.txt.gz?download=1
+        path: ATH_GO_GOSLIM.txt.gz
+        sha256: 28d3a539fb42372058c60bbfa6946f53b055b376d5bf664928bc75a1cf331cc5
+        size: 7334287
+  - id: go_basic
+    name: Gene Ontology (basic)
+    tier: core
+    version: go-basic.obo
+    rolling: true
+    license: CC-BY-4.0
+    homepage: https://geneontology.org/docs/download-ontology/
+    assemblies: [none]
+    parser: ontology
+    files:
+      - url: https://purl.obolibrary.org/obo/go/go-basic.obo
+        path: go-basic.obo
+        size: 32227785
+  - id: plant_trait_ontology
+    name: Plant Trait Ontology (TO)
+    tier: core
+    version: to.obo
+    rolling: true
+    license: CC-BY-4.0
+    homepage: https://github.com/Planteome/plant-trait-ontology
+    assemblies: [none]
+    parser: ontology
+    files:
+      - url: https://purl.obolibrary.org/obo/to.obo
+        path: to.obo
+        size: 946875
+  - id: plant_ontology
+    name: Plant Ontology (PO)
+    tier: core
+    version: po.obo
+    rolling: true
+    license: CC-BY-4.0
+    homepage: https://github.com/Planteome/plant-ontology
+    assemblies: [none]
+    parser: ontology
+    files:
+      - url: https://purl.obolibrary.org/obo/po.obo
+        path: po.obo
+        size: 1338438
+  - id: crop_ontology_rice
+    name: Crop Ontology rice traits (CO_320)
+    tier: core
+    version: CO_320
+    rolling: true
+    license: CC-BY-4.0 (Crop Ontology)
+    homepage: https://cropontology.org/term/CO_320:ROOT
+    assemblies: [none]
+    parser: ontology
+    files:
+      - url: https://cropontology.org/ontology/CO_320/Rice/owl
+        path: CO_320.owl
+        size: 1472721
+  - id: pmn_oryzacyc
+    name: PMN16 OryzaCyc pathways
+    tier: extended
+    version: PMN16 (oryzacyc_pathways.20251021)
+    license: Free download (PMN FTP); see https://plantcyc.org for terms
+    homepage: https://plantcyc.org/
+    citation: Hawkins et al. 2025, Plant Physiol (Plant Metabolic Network 16)
+    assemblies: [IRGSP-1.0]
+    parser: pmn_pathways
+    params: {source_db: PMN OryzaCyc}
+    files:
+      - url: https://plantcyc-ftp.storage.googleapis.com/pmn/Pathways/Data_dumps/PMN16_July2024/pathways/oryzacyc_pathways.20251021
+        path: oryzacyc_pathways.20251021.tsv
+        sha256: 1e18f6a878e8a7e7cda841522411e093c69b57732fd8ff0aa58c67aee88f3578
+        size: 1045421
+  - id: plant_reactome
+    name: Plant Reactome gene-to-pathway map (Oryza sativa rows, UniProt route)
+    tier: extended
+    version: Plant Reactome current
+    rolling: true
+    license: CC-BY-4.0
+    homepage: https://plantreactome.gramene.org/
+    citation: Gupta et al. 2024, Nucleic Acids Res 52:D1538-D1547
+    assemblies: [IRGSP-1.0]
+    parser: plant_reactome
+    params:
+      species_names: [Oryza sativa]
+      uniprot_file: Oryza_sativa.IRGSP-1.0.63.uniprot.tsv.gz
+    notes: Rice rows name UniProt accessions; Ensembl's UniProt xref maps them to RAP loci.
+    files:
+      - url: https://plantreactome.gramene.org/download/current/gene_ids_by_pathway_and_species.tab
+        path: gene_ids_by_pathway_and_species.tab
+        size: 24388295
+      - url: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/tsv/oryza_sativa/Oryza_sativa.IRGSP-1.0.63.uniprot.tsv.gz
+        path: Oryza_sativa.IRGSP-1.0.63.uniprot.tsv.gz
+        size: 1008572
+  - id: ricenet
+    name: RiceNet v2 functional gene network
+    tier: extended
+    status: planned
+    version: RiceNet v2
+    license: See https://www.inetbio.org/ricenet/
+    homepage: https://www.inetbio.org/ricenet/
+    provides: [edges]
+    notes: Reachable; needs a parser for MSU-keyed edges and a network domain that is not STRING-specific.
+  - id: msu_expression
+    name: MSU r7 RNA-seq expression matrix
+    tier: extended
+    status: planned
+    version: MSU7 gene_exp_matrix
+    license: MSU Rice Genome Annotation Project terms
+    homepage: http://rice.uga.edu/
+    provides: [expression, samples]
+    notes: The matrix columns are SRR runs; a curated SRR-to-tissue sample sheet is needed before it can be loaded.
+  - id: ensembl_vep_cache
+    name: Ensembl Plants 63 VEP cache for IRGSP-1.0
+    tier: heavy
+    version: oryza_sativa_vep_63_IRGSP-1.0
+    license: Ensembl data are available without restriction
+    homepage: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/variation/indexed_vep_cache/
+    citation: McLaren et al. 2016, Genome Biol 17:122
+    assemblies: [IRGSP-1.0]
+    parser: vep_cache
+    files:
+      - url: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/variation/indexed_vep_cache/oryza_sativa_vep_63_IRGSP-1.0.tar.gz
+        path: oryza_sativa_vep_63_IRGSP-1.0.tar.gz
+        size: 461700000

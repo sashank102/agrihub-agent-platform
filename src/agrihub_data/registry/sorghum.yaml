@@ -3,6 +3,7 @@ scientific_name: Sorghum bicolor
 common_name: sorghum
 taxon_id: 4558
 abbrev: sorbi
+symbol_prefixes: [Sb]
 canonical_assembly: Sorghum_bicolor_NCBIv3
 default_window:
   flank_bp: 100000
@@ -36,49 +37,305 @@ id_namespaces:
   - id: sorbi
     pattern: '^SORBI_3\d{3}G\d{6}$'
     assembly: Sorghum_bicolor_NCBIv3
-    description: Ensembl/SorghumBase gene ids.
-    example: SORBI_3001G000100
+    description: Ensembl/SorghumBase NCBIv3 gene ids, the canonical sorghum ids.
+    example: SORBI_3007G163800
   - id: sobic
-    pattern: '^Sobic\.\d{3}G\d{6}$'
+    pattern: '^Sobic\.(\d{3})G(\d{6})$'
     assembly: Sorghum_bicolor_NCBIv3
-    description: Phytozome v3.1.1 ids; the SORBI_3 mapping must be validated.
-    example: Sobic.001G000100
+    canonical: 'SORBI_3\1G\2'
+    description: >-
+      Phytozome v3.1.1 ids. Sobic.CCCGNNNNNN is SORBI_3CCCGNNNNNN; the
+      rewrite was checked on the eight Grant et al. 2023 Ma/Dw genes
+      (identical v3 coordinates) and on GWAS Atlas reported genes (distance
+      to the reported SNP, see the gwas_atlas build stats).
+    example: Sobic.007G163800
+  - id: sorbi_transcript
+    pattern: '^(SORBI_3\d{3}G\d{6})\.\d+$'
+    kind: transcript
+    assembly: Sorghum_bicolor_NCBIv3
+    canonical: '\1'
+    example: SORBI_3007G163800.1
+  - id: sobic_transcript
+    pattern: '^Sobic\.(\d{3})G(\d{6})\.\d+(?:\.p)?$'
+    kind: transcript
+    assembly: Sorghum_bicolor_NCBIv3
+    canonical: 'SORBI_3\1G\2'
+    example: Sobic.007G163800.1
 linkouts:
+  - name: SorghumBase
+    template: "https://www.sorghumbase.org/?idList={gene_id}"
+    id_namespace: sorbi
   - name: Ensembl Plants
     template: "https://plants.ensembl.org/Sorghum_bicolor/Gene/Summary?g={gene_id}"
     id_namespace: sorbi
+  - name: PubMed
+    kind: publication
+    template: "https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
 sources:
-  - id: sorghumbase_ncbiv3
+  - id: sorghumbase_gene_models
     name: SorghumBase release 11 NCBIv3 gene models
     tier: core
-    status: planned
-    version: release-11
-    license: SorghumBase terms of use
+    version: SorghumBase release-11 (Sorghum_bicolor_NCBIv3)
+    license: SorghumBase data are freely available; cite Gladman et al. 2022
     homepage: http://ftp.sorghumbase.org/release-11/
+    citation: McCormick et al. 2018, Plant J 93:338-354; Gladman et al. 2022, Front Plant Sci 13:844510
     assemblies: [Sorghum_bicolor_NCBIv3]
+    parser: gff_gene_models
+    params: {source_db: SorghumBase}
+    notes: The v5.1 GFF of the same release is on another assembly and is not loaded.
+    files:
+      - url: http://ftp.sorghumbase.org/release-11/gff3/sorghum_bicolor/Sorghum_bicolor.Sorghum_bicolor_NCBIv3.gff3.gz
+        path: Sorghum_bicolor.Sorghum_bicolor_NCBIv3.gff3.gz
+        sha256: 184158868ae64903dc15346cccbcfec1fc7dd5fca72d71b661e74201f7070817
+        size: 5768570
+  - id: phytozome_annotation_info
+    name: Phytozome Sbicolor v3.1.1 annotation_info (Pfam, PANTHER, GO, best hits)
+    tier: core
+    version: Sbicolor_454_v3.1.1
+    license: JGI data usage policy (Phytozome); login required
+    homepage: https://phytozome-next.jgi.doe.gov/info/Sbicolor_v3_1_1
+    citation: McCormick et al. 2018, Plant J 93:338-354
+    assemblies: [Sorghum_bicolor_NCBIv3]
+    parser: phytozome_annotation_info
+    notes: >-
+      Manual download: sign in to Phytozome (JGI account or ORCID), download
+      Sbicolor_454_v3.1.1.annotation_info.txt and save it as
+      raw/phytozome_annotation_info/Sbicolor_454_v3.1.1.annotation_info.txt,
+      then fetch and build again. Without it sorghum genes have no domain or
+      best-hit annotation.
+    files:
+      - url: https://phytozome-next.jgi.doe.gov/info/Sbicolor_v3_1_1
+        path: Sbicolor_454_v3.1.1.annotation_info.txt
+        manual: true
   - id: sorghum_qtl_atlas
-    name: Sorghum QTL Atlas (QTL, GWAS and major genes)
+    name: Sorghum QTL Atlas (QTL, GWAS loci and major effect genes, v3 coordinates)
     tier: core
-    status: planned
-    version: query_qtl_atlas export
-    license: See github.com/jlboat/query_qtl_atlas
-    homepage: https://github.com/jlboat/query_qtl_atlas
+    version: Sorghum QTL Atlas export (query_qtl_atlas SorghumQtlAtlas.db)
+    license: See https://aussorgm.org.au/sorghum-qtl-atlas/ (Mace et al. 2019)
+    homepage: https://aussorgm.org.au/sorghum-qtl-atlas/
+    citation: Mace et al. 2019, Theor Appl Genet 132:751-766
     assemblies: [Sorghum_bicolor_NCBIv3]
-    notes: Rows on Sbi1.4 or v2.1 coordinates are dropped or lifted.
-  - id: gwas_atlas
-    name: GWAS Atlas sorghum associations
+    parser: sorghum_qtl_atlas
+    notes: >-
+      Manual export. On 2026-10-03 the Atlas search page served only a contact
+      form (reCAPTCHA), so no export could be scripted. Export the trait tables
+      as Excel, build SorghumQtlAtlas.db with github.com/jlboat/query_qtl_atlas
+      (generate_atlas_database.py), save it as
+      raw/sorghum_qtl_atlas/SorghumQtlAtlas.db and rebuild; a CSV/TSV export
+      with the same columns also works.
+    files:
+      - url: https://aussorgm.org.au/sorghum-qtl-atlas/search/
+        path: SorghumQtlAtlas.db
+        manual: true
+  - id: sorghum_major_genes
+    name: Cloned sorghum Ma and Dw genes (Grant et al. 2023, Table 1)
     tier: core
-    status: planned
-    version: GWAS Atlas
+    version: AgriHub curated list 2026-10 (Grant et al. 2023 Table 1)
+    license: CC-BY-4.0 (Scientific Reports article)
+    homepage: https://doi.org/10.1038/s41598-023-42306-8
+    citation: Grant et al. 2023, Sci Rep 13:16638
+    assemblies: [Sorghum_bicolor_NCBIv3]
+    parser: curated_genes
+    params: {source_db: Grant et al. 2023 Ma/Dw genes}
+    notes: Stands in for the QTL Atlas major genes until a manual Atlas export is loaded.
+    files:
+      - url: package:agrihub_data/curated/sorghum.known_genes.yaml
+        path: sorghum.known_genes.yaml
+  - id: gwas_atlas
+    name: GWAS Atlas sorghum associations and PPTO
+    tier: core
+    version: GWAS Atlas (sorghum file fetched 2026-10)
     license: GWAS Atlas terms; academic use only
     academic_only: true
     homepage: https://ngdc.cncb.ac.cn/gwas/
-    assemblies: [Sorghum_bicolor_NCBIv3]
+    citation: GWAS Atlas, National Genomics Data Center (CNCB-NGDC)
+    assemblies: [Sorghum_bicolor_NCBIv3, none]
+    parser: gwas_atlas
+    assembly_aliases:
+      Sorbi3.0: Sorghum_bicolor_NCBIv3
+      Sbiv3.1: Sorghum_bicolor_NCBIv3
+      Sorghum bicolor v3.0: Sorghum_bicolor_NCBIv3
+      Sorghum bicolor v3.1: Sorghum_bicolor_NCBIv3
+      Sorghum bicolor v3.1.1: Sorghum_bicolor_NCBIv3
+    notes: >-
+      v3.0, v3.1 and v3.1.1 share the BTx623 v3 pseudomolecules (3.1 and 3.1.1
+      are annotation releases). The 132 Sbi1.4 rows are dropped: no
+      Sbi1.4 -> v3 chain is published, and gene-anchor lifting would need the
+      v1.4 gene models.
+    files:
+      - url: https://download.cncb.ac.cn/gwas_atlas/gwas_association_result_for_sorghum.txt.gz
+        path: gwas_association_result_for_sorghum.txt.gz
+        sha256: 48f84b15368f1c3c9246aeb9c5343e5b504efb1ebff6023a6901cb5d9c065bd7
+        size: 82139
+      - url: https://download.cncb.ac.cn/gwas_atlas/PPTO.obo.gz
+        path: PPTO.obo.gz
+        sha256: fce5c49069ac8c20f4d1d958d0d8265d38bacca28c69807669f1a0cea0eecb59
+        size: 53929
   - id: ensembl_compara
     name: Ensembl Plants 63 Compara protein homologies
     tier: core
-    status: planned
     version: Ensembl Plants 63 (Compara 116)
     license: Ensembl data are available without restriction
-    homepage: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/tsv/ensembl-compara/homologies/sorghum_bicolor/
+    homepage: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/tsv/ensembl-compara/homologies/
+    citation: Yates et al. 2022, Nucleic Acids Res 50:D996-D1003
     assemblies: [Sorghum_bicolor_NCBIv3, TAIR10]
+    parser: ensembl_compara
+    params: {ensembl_species: sorghum_bicolor}
+    files:
+      - url: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/tsv/ensembl-compara/homologies/sorghum_bicolor/Compara.116.protein_default.homologies.tsv.gz
+        path: sorghum_bicolor.Compara.116.protein_default.homologies.tsv.gz
+        sha256: 310aba72b62ade76396fcbaed90cc036386c47b951f4d755bb42c98d6852b298
+        size: 44872171
+      - url: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/tsv/ensembl-compara/homologies/arabidopsis_thaliana/Compara.116.protein_default.homologies.tsv.gz
+        path: arabidopsis_thaliana.Compara.116.protein_default.homologies.tsv.gz
+        sha256: 8cf0244bb93865a13982c7fded23517179dd194d19b1ebae7ef0b719b2336f1a
+        size: 30022723
+  - id: plaza_orthology
+    name: PLAZA 5.0 monocots integrative orthology for sorghum
+    tier: core
+    version: PLAZA 5.0 monocots
+    license: Freely downloadable; cite Van Bel et al. 2022
+    homepage: https://bioinformatics.psb.ugent.be/plaza/versions/plaza_v5_monocots/
+    citation: Van Bel et al. 2022, Nucleic Acids Res 50:D1468-D1474
+    assemblies: [Sorghum_bicolor_NCBIv3, TAIR10]
+    parser: plaza_orthology
+    notes: Gene ids are Phytozome Sobic ids, resolved to SORBI_3 through the sobic namespace. With Ensembl Compara this gives each Arabidopsis call a second method, so it can reach medium confidence.
+    files:
+      - url: https://ftp.psb.ugent.be/pub/plaza/plaza_public_monocots_05/IntegrativeOrthologySpecies/integrative_orthology.sbi.tsv.gz
+        path: integrative_orthology.sbi.tsv.gz
+        size: 90775052
+  - id: tair
+    name: TAIR public functional annotation release
+    tier: core
+    version: TAIR 2024-10-01 (Zenodo 17371665)
+    license: CC-BY-4.0
+    homepage: https://zenodo.org/records/17371665
+    citation: Berardini et al. 2015, Genesis 53:474-485
+    assemblies: [TAIR10]
+    parser: tair
+    notes: ATH_GO_GOSLIM.txt.gz in this record is a zip archive despite its name; the parser sniffs magic bytes.
+    files:
+      - url: https://zenodo.org/records/17371665/files/Araport11_functional_descriptions_20241001.txt.gz?download=1
+        path: Araport11_functional_descriptions_20241001.txt.gz
+        sha256: bf45cdb59a1f711ab46d5ba3e8b1b473c1b114a8eac2fd78af48e989c65422de
+        size: 2629813
+      - url: https://zenodo.org/records/17371665/files/gene_aliases_20241001.txt.gz?download=1
+        path: gene_aliases_20241001.txt.gz
+        sha256: 036e25356166b3b30e6be064e028a58996e796c85796e40061341a363004d5e6
+        size: 372809
+      - url: https://zenodo.org/records/17371665/files/Locus_Germplasm_Phenotype_20241001.txt.gz?download=1
+        path: Locus_Germplasm_Phenotype_20241001.txt.gz
+        sha256: 7eb1ee0c5a7ac233cfa31cdf67e990ea491bb8160d7b8f28282294ad473637ed
+        size: 758991
+      - url: https://zenodo.org/records/17371665/files/Locus_Published_20241001.txt.gz?download=1
+        path: Locus_Published_20241001.txt.gz
+        sha256: 968c2712e99636ac55f3ab008e4151f8d5e38baa133a08e373796c0a441324fd
+        size: 2240401
+      - url: https://zenodo.org/records/17371665/files/ATH_GO_GOSLIM.txt.gz?download=1
+        path: ATH_GO_GOSLIM.txt.gz
+        sha256: 28d3a539fb42372058c60bbfa6946f53b055b376d5bf664928bc75a1cf331cc5
+        size: 7334287
+  - id: go_basic
+    name: Gene Ontology (basic)
+    tier: core
+    version: go-basic.obo
+    rolling: true
+    license: CC-BY-4.0
+    homepage: https://geneontology.org/docs/download-ontology/
+    assemblies: [none]
+    parser: ontology
+    files:
+      - url: https://purl.obolibrary.org/obo/go/go-basic.obo
+        path: go-basic.obo
+        size: 32227785
+  - id: plant_trait_ontology
+    name: Plant Trait Ontology (TO)
+    tier: core
+    version: to.obo
+    rolling: true
+    license: CC-BY-4.0
+    homepage: https://github.com/Planteome/plant-trait-ontology
+    assemblies: [none]
+    parser: ontology
+    files:
+      - url: https://purl.obolibrary.org/obo/to.obo
+        path: to.obo
+        size: 946875
+  - id: plant_ontology
+    name: Plant Ontology (PO)
+    tier: core
+    version: po.obo
+    rolling: true
+    license: CC-BY-4.0
+    homepage: https://github.com/Planteome/plant-ontology
+    assemblies: [none]
+    parser: ontology
+    files:
+      - url: https://purl.obolibrary.org/obo/po.obo
+        path: po.obo
+        size: 1338438
+  - id: crop_ontology_sorghum
+    name: Crop Ontology sorghum traits (CO_324)
+    tier: core
+    version: CO_324
+    rolling: true
+    license: CC-BY-4.0 (Crop Ontology)
+    homepage: https://cropontology.org/term/CO_324:ROOT
+    assemblies: [none]
+    parser: ontology
+    files:
+      - url: https://cropontology.org/ontology/CO_324/Sorghum/owl
+        path: CO_324.owl
+        size: 981625
+  - id: pmn_sorghumbicolorcyc
+    name: PMN16 SorghumBicolorCyc pathways
+    tier: extended
+    version: PMN16 (sorghumbicolorcyc_pathways.20251021)
+    license: Free download (PMN FTP); see https://plantcyc.org for terms
+    homepage: https://plantcyc.org/
+    citation: Hawkins et al. 2025, Plant Physiol (Plant Metabolic Network 16)
+    assemblies: [Sorghum_bicolor_NCBIv3]
+    parser: pmn_pathways
+    params: {source_db: PMN SorghumBicolorCyc}
+    files:
+      - url: https://plantcyc-ftp.storage.googleapis.com/pmn/Pathways/Data_dumps/PMN16_July2024/pathways/sorghumbicolorcyc_pathways.20251021
+        path: sorghumbicolorcyc_pathways.20251021.tsv
+        sha256: 446be9b5a2c80872b21a21b40dcded6f2799640516b837e8518afcb4e37924d8
+        size: 2435636
+  - id: plant_reactome
+    name: Plant Reactome gene-to-pathway map (Sorghum bicolor rows)
+    tier: extended
+    version: Plant Reactome current
+    rolling: true
+    license: CC-BY-4.0
+    homepage: https://plantreactome.gramene.org/
+    citation: Gupta et al. 2024, Nucleic Acids Res 52:D1538-D1547
+    assemblies: [Sorghum_bicolor_NCBIv3]
+    parser: plant_reactome
+    files:
+      - url: https://plantreactome.gramene.org/download/current/gene_ids_by_pathway_and_species.tab
+        path: gene_ids_by_pathway_and_species.tab
+        size: 24388295
+  - id: sorghum_expression
+    name: Sorghum expression atlas
+    tier: extended
+    status: planned
+    version: none
+    license: n/a
+    provides: [expression, samples]
+    notes: >-
+      Known gap. MOROKOSHI is down; EBI Expression Atlas baseline and the JGI
+      Plant Gene Atlas are candidates, neither checked yet.
+  - id: ensembl_vep_cache
+    name: Ensembl Plants 63 VEP cache for Sorghum_bicolor_NCBIv3
+    tier: heavy
+    version: sorghum_bicolor_vep_63_Sorghum_bicolor_NCBIv3
+    license: Ensembl data are available without restriction
+    homepage: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/variation/indexed_vep_cache/
+    citation: McLaren et al. 2016, Genome Biol 17:122
+    assemblies: [Sorghum_bicolor_NCBIv3]
+    parser: vep_cache
+    files:
+      - url: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/variation/indexed_vep_cache/sorghum_bicolor_vep_63_Sorghum_bicolor_NCBIv3.tar.gz
+        path: sorghum_bicolor_vep_63_Sorghum_bicolor_NCBIv3.tar.gz
+        size: 466002162

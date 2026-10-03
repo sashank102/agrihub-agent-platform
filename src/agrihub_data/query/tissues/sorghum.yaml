@@ -1,0 +1,36 @@
+# Curator-editable trait-relevant tissues for sorghum. trait_relevant_tissues
+# uses the entry whose key is the trait profile's key, then the first rule
+# whose keywords occur in the trait text. Tissue names are normalized sample
+# labels (expression build: normalize_tissue).
+#
+# Known gap: no sorghum expression dataset is registered (MOROKOSHI is down), so these name
+# tissues for when one is added; expression tools report the gap meanwhile.
+profiles:
+  plant_height:
+    tissues: [shoot_apical_meristem, stem, internode]
+    note: Dw genes act on internode elongation in the stem.
+  flowering_time:
+    tissues: [leaf, shoot_apical_meristem, inflorescence]
+    note: Ma genes act in the photoperiod pathway in leaves and at the shoot apex.
+  grain_yield:
+    tissues: [inflorescence, panicle, seed]
+    note: Grain number is set in the panicle; filling happens in the seed.
+  grain_weight:
+    tissues: [seed, endosperm]
+    note: Grain weight is set during grain filling.
+rules:
+  - keywords: [root, nitrogen, drought]
+    tissues: [root]
+    note: Root traits act in roots.
+  - keywords: [grain, seed, starch, tannin, protein]
+    tissues: [seed, endosperm]
+    note: Grain composition is set during grain filling.
+  - keywords: [flower, heading, photoperiod, maturity]
+    tissues: [leaf, shoot_apical_meristem, inflorescence]
+    note: Photoperiod responses act in leaves and the shoot apex.
+  - keywords: [height, internode, stem, lodging, sugar, juice]
+    tissues: [shoot_apical_meristem, stem, internode]
+    note: Stem traits.
+  - keywords: [panicle, branch]
+    tissues: [inflorescence, panicle]
+    note: Panicle architecture is set in the developing inflorescence.

@@ -3,6 +3,7 @@ scientific_name: Zea mays
 common_name: maize
 taxon_id: 4577
 abbrev: zea
+symbol_prefixes: [Zm]
 canonical_assembly: Zm-B73-REFERENCE-NAM-5.0
 default_window:
   flank_bp: 50000
@@ -36,7 +37,10 @@ assemblies:
       - {name: chr10, number: 10, length: 152435371}
   - id: B73_RefGen_v4
     aliases: [B73v4, AGPv4, Zm-B73-REFERENCE-GRAMENE-4.0]
-    description: B73 RefGen v4; GWAS Atlas maize coordinates, lifted to v5 with MaizeGDB chains.
+    description: >-
+      B73 RefGen v4. No genes are kept on it: GWAS Atlas maize rows are lifted
+      to v5 through the MaizeGDB chain file at build time, and v4 gene ids map
+      to v5 through the MaizeGDB gene xref.
     ncbi_accession: GCF_000005005.2
     chromosomes:
       - {name: chr1, number: 1, length: 307041717}
@@ -53,47 +57,330 @@ id_namespaces:
   - id: zm_v5
     pattern: '^Zm00001eb\d{6}$'
     assembly: Zm-B73-REFERENCE-NAM-5.0
-    example: Zm00001eb000010
+    description: B73 NAM-5.0 gene models (Zm00001eb.1), the canonical maize ids.
+    example: Zm00001eb054440
+  - id: zm_v5_transcript
+    pattern: '^(Zm00001eb\d{6})_[TP]\d{3}$'
+    kind: transcript
+    assembly: Zm-B73-REFERENCE-NAM-5.0
+    canonical: '\1'
+    example: Zm00001eb054440_T001
   - id: zm_v4
     pattern: '^Zm00001d\d{6}$'
     assembly: B73_RefGen_v4
+    description: B73 RefGen v4 gene ids; mapped to v5 through the MaizeGDB xref (one-to-many).
     example: Zm00001d027230
 linkouts:
+  - name: MaizeGDB
+    template: "https://www.maizegdb.org/gene_center/gene/{gene_id}"
+    id_namespace: zm_v5
   - name: Ensembl Plants
     template: "https://plants.ensembl.org/Zea_mays/Gene/Summary?g={gene_id}"
     id_namespace: zm_v5
+  - name: PubMed
+    kind: publication
+    template: "https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
 sources:
-  - id: maizegdb_nam5_annotation
-    name: MaizeGDB Zm00001eb.1 gene models and annotation
+  - id: maizegdb_gene_models
+    name: MaizeGDB Zm00001eb.1 gene models (B73 NAM-5.0)
     tier: core
-    status: planned
     version: Zm00001eb.1
-    license: MaizeGDB terms of use
-    homepage: https://download.maizegdb.org/
+    license: MaizeGDB data are freely available; cite Woodhouse et al. 2021
+    homepage: https://download.maizegdb.org/Zm-B73-REFERENCE-NAM-5.0/
+    citation: Hufford et al. 2021, Science 373:655-662; Woodhouse et al. 2021, Plant Direct 5:e00373
     assemblies: [Zm-B73-REFERENCE-NAM-5.0]
-    notes: Use download.maizegdb.org; the main site is behind Cloudflare.
+    parser: gff_gene_models
+    params: {source_db: MaizeGDB}
+    notes: Fetched from download.maizegdb.org; the main MaizeGDB site is behind Cloudflare and blocks scripts.
+    files:
+      - url: https://download.maizegdb.org/Zm-B73-REFERENCE-NAM-5.0/Zm-B73-REFERENCE-NAM-5.0_Zm00001eb.1.gff3.gz
+        path: Zm-B73-REFERENCE-NAM-5.0_Zm00001eb.1.gff3.gz
+        sha256: 6f45edc72695ff8215e54ac559eafce8f8088987fd19f91ecec44970fbc16f8a
+        size: 12251264
+  - id: maizegdb_annotation
+    name: MaizeGDB Zm00001eb.1 fulldata, GO terms and InterProScan
+    tier: core
+    version: Zm00001eb.1
+    license: MaizeGDB data are freely available; cite Woodhouse et al. 2021
+    homepage: https://download.maizegdb.org/Zm-B73-REFERENCE-NAM-5.0/
+    assemblies: [Zm-B73-REFERENCE-NAM-5.0]
+    parser: maizegdb_annotation
+    files:
+      - url: https://download.maizegdb.org/Zm-B73-REFERENCE-NAM-5.0/Zm00001eb.1.fulldata.txt.gz
+        path: Zm00001eb.1.fulldata.txt.gz
+        sha256: 3139092d50d5006fea4fcd3253d9c5014405f1fca4eb388b1a8ec42c1a099ab9
+        sha256: 3139092d50d5006fea4fcd3253d9c5014405f1fca4eb388b1a8ec42c1a099ab9
+        size: 2970324
+      - url: https://download.maizegdb.org/Zm-B73-REFERENCE-NAM-5.0/Zm-B73-REFERENCE-NAM-5.0-GMs-GOTerms.csv.gz
+        path: Zm-B73-REFERENCE-NAM-5.0-GMs-GOTerms.csv.gz
+        sha256: 8cb667c5113ede927655b2f24dd7c92e4ec031007b698191ae562b1aaee2fad9
+        size: 3556105
+      - url: https://download.maizegdb.org/Zm-B73-REFERENCE-NAM-5.0/Zm-B73-REFERENCE-NAM-5.0_Zm00001eb.1.interproscan.tsv.gz
+        path: Zm-B73-REFERENCE-NAM-5.0_Zm00001eb.1.interproscan.tsv.gz
+        sha256: dd4815c7009e4d8f461f687eb5ae1d1e261416fadeba3328175d9f1b306219f1
+        size: 3538937
   - id: maizegdb_v4_v5_xref
-    name: MaizeGDB B73 v3/v4 to v5 gene cross-reference
+    name: MaizeGDB B73 v4 to v5 gene cross-reference
     tier: core
-    status: planned
     version: Pan-genes B73_gene_xref
-    license: MaizeGDB terms of use
-    homepage: https://download.maizegdb.org/
+    license: MaizeGDB data are freely available
+    homepage: https://download.maizegdb.org/Pan-genes/B73_gene_xref/
     assemblies: [B73_RefGen_v4, Zm-B73-REFERENCE-NAM-5.0]
-  - id: gwas_atlas
-    name: GWAS Atlas maize associations
+    parser: maizegdb_xref
+    notes: One v4 gene can list several v5 genes; lookups use a link only when it names one.
+    files:
+      - url: https://download.maizegdb.org/Pan-genes/B73_gene_xref/B73v4_to_B73v5.tsv
+        path: B73v4_to_B73v5.tsv
+        sha256: 7bd5ed2692235b1eec100022c35fdab17075db58515393c6d32ee53824924cee
+        size: 1197480
+  - id: maizegdb_v4_v5_chain
+    name: MaizeGDB B73 RefGen_v4 to NAM-5.0 chain file
     tier: core
-    status: planned
-    version: GWAS Atlas
+    version: chain_files (B73_RefGen_v4_to_Zm-B73-REFERENCE-NAM-5.0)
+    license: MaizeGDB data are freely available
+    homepage: https://download.maizegdb.org/Zm-B73-REFERENCE-NAM-5.0/chain_files/
+    assemblies: [B73_RefGen_v4, Zm-B73-REFERENCE-NAM-5.0]
+    notes: Read by the gwas_atlas parser to lift v4 positions; it has no parser of its own.
+    files:
+      - url: https://download.maizegdb.org/Zm-B73-REFERENCE-NAM-5.0/chain_files/B73_RefGen_v4_to_Zm-B73-REFERENCE-NAM-5.0.chain
+        path: B73_RefGen_v4_to_Zm-B73-REFERENCE-NAM-5.0.chain
+        sha256: 166ace24eb05de53c0ab06a94b194d97c335a2b277d2a8cc22bb7c48d371cc42
+        size: 813819
+  - id: maizegdb_classical_genes
+    name: MaizeGDB named (classical) loci on v5
+    tier: core
+    version: Zm00001eb.1 fulldata
+    license: MaizeGDB data are freely available
+    homepage: https://download.maizegdb.org/Zm-B73-REFERENCE-NAM-5.0/
+    citation: Schnable and Freeling 2011, PLoS ONE 6:e17855 (maize classical genes)
+    assemblies: [Zm-B73-REFERENCE-NAM-5.0]
+    parser: maizegdb_classical_genes
+    params: {weight: 0.6}
+    notes: >-
+      Loci with a MaizeGDB symbol and full name (d8 dwarf plant8, tb1
+      teosinte branched1). No trait ontology terms, so trait matches are by
+      keyword; MaizeMine classical-gene records were not needed for this.
+    files:
+      - url: https://download.maizegdb.org/Zm-B73-REFERENCE-NAM-5.0/Zm00001eb.1.fulldata.txt.gz
+        path: Zm00001eb.1.fulldata.txt.gz
+        size: 2970324
+  - id: gwas_atlas
+    name: GWAS Atlas maize associations (B73 v4, lifted to v5) and PPTO
+    tier: core
+    version: GWAS Atlas (maize file fetched 2026-10)
     license: GWAS Atlas terms; academic use only
     academic_only: true
     homepage: https://ngdc.cncb.ac.cn/gwas/
-    assemblies: [B73_RefGen_v4]
+    citation: GWAS Atlas, National Genomics Data Center (CNCB-NGDC)
+    assemblies: [Zm-B73-REFERENCE-NAM-5.0, B73_RefGen_v4, none]
+    parser: gwas_atlas
+    assembly_aliases: {AGPv4: B73_RefGen_v4, B73_RefGenv4: B73_RefGen_v4, B73_RefGenV4: B73_RefGen_v4, B73_v4: B73_RefGen_v4}
+    params:
+      lift:
+        B73_RefGen_v4: {to: Zm-B73-REFERENCE-NAM-5.0, source: maizegdb_v4_v5_chain, file: "*.chain"}
+    notes: Every row is on B73 v4; positions are lifted to v5 through the MaizeGDB chain and keep placement lifted:<v4 position>.
+    files:
+      - url: https://download.cncb.ac.cn/gwas_atlas/gwas_association_result_for_maize.txt.gz
+        path: gwas_association_result_for_maize.txt.gz
+        sha256: 08e8e8304b9aae9beee3b399bcd5566847887296456bf951cb90bd543d7a84c7
+        size: 1142883
+      - url: https://download.cncb.ac.cn/gwas_atlas/PPTO.obo.gz
+        path: PPTO.obo.gz
+        sha256: fce5c49069ac8c20f4d1d958d0d8265d38bacca28c69807669f1a0cea0eecb59
+        size: 53929
+  - id: maizegdb_wallace_gwas
+    name: Wallace et al. 2014 NAM GWAS hits on v5 (MaizeGDB)
+    tier: core
+    version: B73v5_Wallace_2015_SNPs
+    license: MaizeGDB data are freely available; cite Wallace et al. 2014
+    homepage: https://download.maizegdb.org/SNPs_and_Maps/SNPs/
+    citation: Wallace et al. 2014, PLoS Genet 10:e1004845
+    assemblies: [Zm-B73-REFERENCE-NAM-5.0]
+    parser: maizegdb_wallace_gwas
+    notes: Hits carry no p-value in this file (resample model inclusion probabilities are in the paper).
+    files:
+      - url: https://download.maizegdb.org/SNPs_and_Maps/SNPs/B73v5_Wallace_2015_SNPs.gff
+        path: B73v5_Wallace_2015_SNPs.gff
+        sha256: 5457f6544d0586a73c1eb6fadb89e709869cda0c457ae07df0ed268416074569
+        size: 6209633
+  - id: maize_qtl
+    name: Maize QTL intervals
+    tier: core
+    status: planned
+    version: none
+    license: n/a
+    provides: [qtl]
+    notes: >-
+      Known gap. MaizeMine's QTL class (77,221 rows on 2026-10-03) holds only
+      GWAS Atlas and Wallace 2014 point hits, which are loaded as GWAS hits;
+      no positioned maize QTL table was found (ZEAMAP not checked).
   - id: ensembl_compara
     name: Ensembl Plants 63 Compara protein homologies
     tier: core
-    status: planned
     version: Ensembl Plants 63 (Compara 116)
     license: Ensembl data are available without restriction
-    homepage: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/tsv/ensembl-compara/homologies/zea_mays/
+    homepage: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/tsv/ensembl-compara/homologies/
+    citation: Yates et al. 2022, Nucleic Acids Res 50:D996-D1003
     assemblies: [Zm-B73-REFERENCE-NAM-5.0, TAIR10]
+    parser: ensembl_compara
+    params: {ensembl_species: zea_mays}
+    files:
+      - url: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/tsv/ensembl-compara/homologies/zea_mays/Compara.116.protein_default.homologies.tsv.gz
+        path: zea_mays.Compara.116.protein_default.homologies.tsv.gz
+        sha256: a2458bef944d6ad2915556529c843801c71815c9e467d4b44c2f4e5d82326d01
+        size: 76328808
+      - url: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/tsv/ensembl-compara/homologies/arabidopsis_thaliana/Compara.116.protein_default.homologies.tsv.gz
+        path: arabidopsis_thaliana.Compara.116.protein_default.homologies.tsv.gz
+        sha256: 8cf0244bb93865a13982c7fded23517179dd194d19b1ebae7ef0b719b2336f1a
+        size: 30022723
+  - id: plaza_orthology
+    name: PLAZA 5.0 monocots integrative orthology for maize
+    tier: core
+    version: PLAZA 5.0 monocots
+    license: Freely downloadable; cite Van Bel et al. 2022
+    homepage: https://bioinformatics.psb.ugent.be/plaza/versions/plaza_v5_monocots/
+    citation: Van Bel et al. 2022, Nucleic Acids Res 50:D1468-D1474
+    assemblies: [Zm-B73-REFERENCE-NAM-5.0, TAIR10]
+    parser: plaza_orthology
+    notes: Gene ids are Zm00001eb v5 ids. With Ensembl Compara this gives each Arabidopsis call a second method, so it can reach medium confidence.
+    files:
+      - url: https://ftp.psb.ugent.be/pub/plaza/plaza_public_monocots_05/IntegrativeOrthologySpecies/integrative_orthology.zma.tsv.gz
+        path: integrative_orthology.zma.tsv.gz
+        size: 99872686
+  - id: tair
+    name: TAIR public functional annotation release
+    tier: core
+    version: TAIR 2024-10-01 (Zenodo 17371665)
+    license: CC-BY-4.0
+    homepage: https://zenodo.org/records/17371665
+    citation: Berardini et al. 2015, Genesis 53:474-485
+    assemblies: [TAIR10]
+    parser: tair
+    notes: ATH_GO_GOSLIM.txt.gz in this record is a zip archive despite its name; the parser sniffs magic bytes.
+    files:
+      - url: https://zenodo.org/records/17371665/files/Araport11_functional_descriptions_20241001.txt.gz?download=1
+        path: Araport11_functional_descriptions_20241001.txt.gz
+        sha256: bf45cdb59a1f711ab46d5ba3e8b1b473c1b114a8eac2fd78af48e989c65422de
+        size: 2629813
+      - url: https://zenodo.org/records/17371665/files/gene_aliases_20241001.txt.gz?download=1
+        path: gene_aliases_20241001.txt.gz
+        sha256: 036e25356166b3b30e6be064e028a58996e796c85796e40061341a363004d5e6
+        size: 372809
+      - url: https://zenodo.org/records/17371665/files/Locus_Germplasm_Phenotype_20241001.txt.gz?download=1
+        path: Locus_Germplasm_Phenotype_20241001.txt.gz
+        sha256: 7eb1ee0c5a7ac233cfa31cdf67e990ea491bb8160d7b8f28282294ad473637ed
+        size: 758991
+      - url: https://zenodo.org/records/17371665/files/Locus_Published_20241001.txt.gz?download=1
+        path: Locus_Published_20241001.txt.gz
+        sha256: 968c2712e99636ac55f3ab008e4151f8d5e38baa133a08e373796c0a441324fd
+        size: 2240401
+      - url: https://zenodo.org/records/17371665/files/ATH_GO_GOSLIM.txt.gz?download=1
+        path: ATH_GO_GOSLIM.txt.gz
+        sha256: 28d3a539fb42372058c60bbfa6946f53b055b376d5bf664928bc75a1cf331cc5
+        size: 7334287
+  - id: go_basic
+    name: Gene Ontology (basic)
+    tier: core
+    version: go-basic.obo
+    rolling: true
+    license: CC-BY-4.0
+    homepage: https://geneontology.org/docs/download-ontology/
+    assemblies: [none]
+    parser: ontology
+    files:
+      - url: https://purl.obolibrary.org/obo/go/go-basic.obo
+        path: go-basic.obo
+        size: 32227785
+  - id: plant_trait_ontology
+    name: Plant Trait Ontology (TO)
+    tier: core
+    version: to.obo
+    rolling: true
+    license: CC-BY-4.0
+    homepage: https://github.com/Planteome/plant-trait-ontology
+    assemblies: [none]
+    parser: ontology
+    files:
+      - url: https://purl.obolibrary.org/obo/to.obo
+        path: to.obo
+        size: 946875
+  - id: plant_ontology
+    name: Plant Ontology (PO)
+    tier: core
+    version: po.obo
+    rolling: true
+    license: CC-BY-4.0
+    homepage: https://github.com/Planteome/plant-ontology
+    assemblies: [none]
+    parser: ontology
+    files:
+      - url: https://purl.obolibrary.org/obo/po.obo
+        path: po.obo
+        size: 1338438
+  - id: crop_ontology_maize
+    name: Crop Ontology maize traits (CO_322)
+    tier: core
+    version: CO_322
+    rolling: true
+    license: CC-BY-4.0 (Crop Ontology)
+    homepage: https://cropontology.org/term/CO_322:ROOT
+    assemblies: [none]
+    parser: ontology
+    files:
+      - url: https://cropontology.org/ontology/CO_322/Maize/owl
+        path: CO_322.owl
+        size: 953945
+  - id: pmn_corncyc
+    name: PMN16 CornCyc pathways
+    tier: extended
+    version: PMN16 (corncyc_pathways.20251021)
+    license: Free download (PMN FTP); see https://plantcyc.org for terms
+    homepage: https://plantcyc.org/
+    citation: Hawkins et al. 2025, Plant Physiol (Plant Metabolic Network 16)
+    assemblies: [Zm-B73-REFERENCE-NAM-5.0]
+    parser: pmn_pathways
+    params: {source_db: PMN CornCyc}
+    files:
+      - url: https://plantcyc-ftp.storage.googleapis.com/pmn/Pathways/Data_dumps/PMN16_July2024/pathways/corncyc_pathways.20251021
+        path: corncyc_pathways.20251021.tsv
+        sha256: 128655e75d73bcbd2fa61f8bc1692cb2df2ee31a36e1dbeeea9c1f25883dd9de
+        size: 1767611
+  - id: plant_reactome
+    name: Plant Reactome gene-to-pathway map (Zea mays v5 rows)
+    tier: extended
+    version: Plant Reactome current
+    rolling: true
+    license: CC-BY-4.0
+    homepage: https://plantreactome.gramene.org/
+    citation: Gupta et al. 2024, Nucleic Acids Res 52:D1538-D1547
+    assemblies: [Zm-B73-REFERENCE-NAM-5.0]
+    parser: plant_reactome
+    params:
+      species_names: [Zea mays ver5, Zea mays]
+    notes: The "Zea mays ver5" rows use Zm00001eb ids; the "Zea mays" rows use v4 ids and are the fallback.
+    files:
+      - url: https://plantreactome.gramene.org/download/current/gene_ids_by_pathway_and_species.tab
+        path: gene_ids_by_pathway_and_species.tab
+        size: 24388295
+  - id: walley_expression
+    name: Walley et al. 2016 maize expression atlas (v4 ids)
+    tier: extended
+    status: planned
+    version: walley_fpkm.txt
+    license: MaizeGDB data are freely available
+    homepage: https://download.maizegdb.org/
+    provides: [expression, samples]
+    notes: v4 gene ids need the v4 to v5 xref and a tissue sample sheet; not loaded yet.
+  - id: ensembl_vep_cache
+    name: Ensembl Plants 63 VEP cache for Zm-B73-REFERENCE-NAM-5.0
+    tier: heavy
+    version: zea_mays_vep_63_Zm-B73-REFERENCE-NAM-5.0
+    license: Ensembl data are available without restriction
+    homepage: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/variation/indexed_vep_cache/
+    citation: McLaren et al. 2016, Genome Biol 17:122
+    assemblies: [Zm-B73-REFERENCE-NAM-5.0]
+    parser: vep_cache
+    files:
+      - url: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/variation/indexed_vep_cache/zea_mays_vep_63_Zm-B73-REFERENCE-NAM-5.0.tar.gz
+        path: zea_mays_vep_63_Zm-B73-REFERENCE-NAM-5.0.tar.gz
+        size: 816540142

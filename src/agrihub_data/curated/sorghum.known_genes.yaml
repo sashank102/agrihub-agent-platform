@@ -1,0 +1,70 @@
+# Cloned sorghum Maturity (Ma) and Dwarf (Dw) genes, transcribed from Table 1
+# of Grant, Toy, Funnell-Harris and Sattler 2023 (Sci Rep 13:16638,
+# doi:10.1038/s41598-023-42306-8, CC BY 4.0). The table gives each gene's
+# Phytozome (Sobic) and Ensembl (SORBI_3) ids and its BTx623 v3 location;
+# `location` is that location, so the build checks the Sobic -> SORBI_3 id
+# rewrite against the SorghumBase NCBIv3 gene models.
+#
+# The paper states that the Ma loci control flowering time and the Dw loci
+# plant height; trait_terms are the Plant Trait Ontology terms for those
+# statements (checked against to.obo). Ma4 and Dw4 are not cloned and are left
+# out. This list stands in for the Sorghum QTL Atlas major genes until a manual
+# Atlas export is loaded (see the sorghum_qtl_atlas source).
+dois: [10.1038/s41598-023-42306-8]
+genes:
+  - gene_id: Sobic.006G057866
+    symbols: [Ma1, SbPRR37]
+    name: Maturity 1 (PSEUDO-RESPONSE REGULATOR 37)
+    synopsis: Ma1 encodes the pseudo-response regulator PRR37, a floral repressor; Ma loci control flowering time.
+    trait_terms: [TO:0002616]
+    trait_names: [flowering time]
+    location: {chrom: Chr06, start: 40304883, end: 40316799}
+  - gene_id: Sobic.002G302700
+    symbols: [Ma2]
+    name: Maturity 2 (SET and MYND domain protein)
+    synopsis: Ma2 encodes a SET and MYND domain protein; Ma loci control flowering time.
+    trait_terms: [TO:0002616]
+    trait_names: [flowering time]
+    location: {chrom: Chr02, start: 67882606, end: 67888127}
+  - gene_id: Sobic.001G394400
+    symbols: [Ma3, SbPHYB]
+    name: Maturity 3 (PHYTOCHROME B)
+    synopsis: Ma3 encodes phytochrome B; Ma loci control flowering time.
+    trait_terms: [TO:0002616]
+    trait_names: [flowering time]
+    location: {chrom: Chr01, start: 68034103, end: 68043358}
+  - gene_id: Sobic.001G087100
+    symbols: [Ma5, SbPHYC]
+    name: Maturity 5 (PHYTOCHROME C)
+    synopsis: Ma5 encodes phytochrome C; Ma loci control flowering time.
+    trait_terms: [TO:0002616]
+    trait_names: [flowering time]
+    location: {chrom: Chr01, start: 6748036, end: 6753421}
+  - gene_id: Sobic.006G004400
+    symbols: [Ma6, SbGHD7]
+    name: Maturity 6 (GHD7 ortholog)
+    synopsis: Ma6 encodes a Ghd7 ortholog; Ma loci control flowering time.
+    trait_terms: [TO:0002616]
+    trait_names: [flowering time]
+    location: {chrom: Chr06, start: 697459, end: 700101}
+  - gene_id: Sobic.009G229800
+    symbols: [Dw1]
+    name: Dwarf 1
+    synopsis: Dw1 controls internode length; Dw loci control plant height.
+    trait_terms: [TO:0000207]
+    trait_names: [plant height]
+    location: {chrom: Chr09, start: 57038653, end: 57041166}
+  - gene_id: Sobic.006G067700
+    symbols: [Dw2, SbKIPK]
+    name: Dwarf 2 (KIPK protein kinase)
+    synopsis: Dw2 encodes a protein kinase similar to Arabidopsis KIPK; Dw loci control plant height.
+    trait_terms: [TO:0000207]
+    trait_names: [plant height]
+    location: {chrom: Chr06, start: 42803037, end: 42807520}
+  - gene_id: Sobic.007G163800
+    symbols: [Dw3, SbPGP1, SbABCB1]
+    name: Dwarf 3 (ABCB1 auxin efflux transporter)
+    synopsis: Dw3 encodes an ABCB1 auxin efflux transporter; dw3 reduces stalk height through the lower internodes.
+    trait_terms: [TO:0000207]
+    trait_names: [plant height]
+    location: {chrom: Chr07, start: 59821905, end: 59829921}

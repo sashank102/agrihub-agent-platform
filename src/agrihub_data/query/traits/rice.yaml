@@ -1,0 +1,70 @@
+# Curator-editable trait profiles for rice. map_trait uses a profile when the
+# trait text equals one of its names (or contains one as a phrase). Every id
+# was checked against the fetched to.obo, PPTO.obo.gz (GWAS Atlas), CO_320
+# OWL and go-basic.obo in the rice bundle (2026-10-03).
+#
+# seed_families are textbook gene families only, named in standard reviews:
+# plant height - GA biosynthesis and signalling and brassinosteroid genes
+# (Hedden 2003, Trends Genet 19:5-9, "The genes of the Green Revolution");
+# heading date - the photoperiod pathway (Tsuji, Taoka and Shimamoto 2011,
+# Curr Opin Plant Biol 14:45-52); grain yield and weight - cytokinin oxidase
+# and SPL regulators (Xing and Zhang 2010, Annu Rev Plant Biol 61:421-442).
+# Several are also benchmark targets, so the benchmark reports a rubric run
+# without them (the "no seed families / keyword priors" ablation).
+profiles:
+  - key: plant_height
+    names: [plant height, height, PH, culm length, plant stature, semi-dwarf]
+    terms:
+      - TO:0000207      # plant height
+      - TO:0000576      # stem length
+      - TO:0000145      # shoot axis internode length
+      - PPTO:0000126    # plant height
+      - CO_320:0000076  # Plant height
+      - CO_320:0000030  # Culm length
+      - GO:0009686      # gibberellin biosynthetic process
+      - GO:0009740      # gibberellic acid mediated signaling pathway
+      - GO:0016132      # brassinosteroid biosynthetic process
+      - GO:0009742      # brassinosteroid mediated signaling pathway
+    keywords: [plant height, culm length, dwarf, semi-dwarf, semidwarf, internode, gibberellin, brassinosteroid, stature]
+    seed_families: [GA20ox, GA3ox, DELLA, GID1, DWF4, BRI1]
+  - key: flowering_time
+    names: [heading date, days to heading, flowering time, days to flowering, DTH, DTF, heading]
+    terms:
+      - TO:0000137      # days to heading
+      - TO:0002616      # flowering time trait
+      - TO:0000344      # days to flowering trait
+      - PPTO:0000232    # days to heading
+      - PPTO:0001204    # flowering time trait
+      - PPTO:0000155    # days to flowering trait
+      - CO_320:0000088  # Time to flowering (from sowing)
+      - CO_320:0000498  # Flowering date
+      - GO:0048573      # photoperiodism, flowering
+      - GO:0009909      # regulation of flower development
+      - GO:0010228      # vegetative to reproductive phase transition of meristem
+    keywords: [heading date, days to heading, heading, flowering time, flowering, photoperiod]
+    seed_families: [FT, CO, GI, PRR, PHY]
+  - key: grain_yield
+    names: [grain yield, yield, grain yield per plant, GY]
+    terms:
+      - TO:0000396      # grain yield trait
+      - TO:0000449      # grain yield per plant
+      - TO:0000371      # yield trait
+      - PPTO:0000355    # grain yield trait
+      - PPTO:0000115    # grain yield per plant
+      - CO_320:0000073  # Grain yield
+      - CO_320:0001054  # Grain yield per plant
+    keywords: [grain yield, yield, grain number, panicle number, spikelet number, tiller number]
+    seed_families: [CKX, SPL]
+  - key: grain_weight
+    names: [grain weight, 1000-grain weight, thousand grain weight, TGW, grain size, seed weight, grain length]
+    terms:
+      - TO:0000919      # grain weight
+      - TO:0000592      # 1000-dehulled grain weight
+      - TO:0000590      # dehulled grain weight
+      - TO:0000734      # grain length
+      - PPTO:0001033    # grain weight
+      - PPTO:0000228    # grain length
+      - CO_320:0000100  # Grain weight
+      - CO_320:0000004  # Grain length
+    keywords: [grain weight, grain size, grain length, grain width, seed weight, seed size]
+    seed_families: [CKX, SPL]

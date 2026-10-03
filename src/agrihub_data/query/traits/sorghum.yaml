@@ -1,0 +1,62 @@
+# Curator-editable trait profiles for sorghum. Every id was checked against
+# the fetched to.obo, PPTO.obo.gz (GWAS Atlas), CO_324 OWL and go-basic.obo
+# in the sorghum bundle (2026-10-03).
+#
+# seed_families are textbook gene families only: plant height - GA and
+# brassinosteroid genes and ABCB auxin transporters (Hedden 2003, Trends Genet
+# 19:5-9; Multani et al. 2003, Science 302:81-84); flowering time - the
+# photoperiod pathway (Andres and Coupland 2012, Nat Rev Genet 13:627-639);
+# grain yield and weight - cytokinin oxidase and SPL regulators (Xing and
+# Zhang 2010, Annu Rev Plant Biol 61:421-442). ABCB, PRR and PHY also name
+# curated Dw3, Ma1 and Ma3, so the benchmark reports the ablation without them.
+profiles:
+  - key: plant_height
+    names: [plant height, height, PH, plant stature]
+    terms:
+      - TO:0000207      # plant height
+      - TO:0000576      # stem length
+      - TO:0000145      # shoot axis internode length
+      - PPTO:0000126    # plant height
+      - CO_324:0000088  # Plant height
+      - GO:0009686      # gibberellin biosynthetic process
+      - GO:0009740      # gibberellic acid mediated signaling pathway
+      - GO:0016132      # brassinosteroid biosynthetic process
+      - GO:0009742      # brassinosteroid mediated signaling pathway
+    keywords: [plant height, dwarf, internode, gibberellin, brassinosteroid, stature]
+    seed_families: [GA20ox, GA3ox, DELLA, GID1, DWF4, BRI1, ABCB]
+  - key: flowering_time
+    names: [flowering time, days to flowering, days to anthesis, heading time, DTF, maturity]
+    terms:
+      - TO:0002616      # flowering time trait
+      - TO:0000344      # days to flowering trait
+      - TO:0000137      # days to heading
+      - PPTO:0001204    # flowering time trait
+      - PPTO:0000155    # days to flowering trait
+      - CO_324:0000027  # Flowering time
+      - CO_324:0000121  # Heading time
+      - GO:0048573      # photoperiodism, flowering
+      - GO:0009909      # regulation of flower development
+      - GO:0010228      # vegetative to reproductive phase transition of meristem
+    keywords: [flowering time, flowering, days to flowering, heading, photoperiod, maturity]
+    seed_families: [FT, CO, GI, PRR, PHY]
+  - key: grain_yield
+    names: [grain yield, yield, GY, grain weight per panicle]
+    terms:
+      - TO:0000396      # grain yield trait
+      - TO:0000371      # yield trait
+      - PPTO:0000355    # grain yield trait
+      - CO_324:0000199  # Grain yield
+      - CO_324:0000133  # Grain yield at harvest
+      - CO_324:0000073  # Grain weight per panicle
+    keywords: [grain yield, yield, grain number, panicle, seed number]
+    seed_families: [CKX, SPL]
+  - key: grain_weight
+    names: [grain weight, seed weight, 1000-grain weight, thousand grain weight, TGW, grain size]
+    terms:
+      - TO:0000919      # grain weight
+      - TO:0000181      # seed weight
+      - PPTO:0001033    # grain weight
+      - PPTO:0000175    # seed weight
+      - CO_324:0000079  # Grain weight
+    keywords: [grain weight, seed weight, grain size, seed size]
+    seed_families: [CKX, SPL]
