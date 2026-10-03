@@ -89,7 +89,15 @@ export function StudyStreamProvider({ children }: { children: ReactNode }) {
 
   const onCreated = useCallback(
     (run: RunCreated) => {
-      useRunStore.getState().attach(run.thread_id, run.run_id);
+      const store = useRunStore.getState();
+      if (
+        store.threadId === run.thread_id &&
+        store.artifacts.report !== undefined
+      ) {
+        // A follow-up question on a finished study keeps the study's run on screen.
+        return;
+      }
+      store.attach(run.thread_id, run.run_id);
       router.push(`/studies/${run.thread_id}`);
     },
     [router],

@@ -16,6 +16,7 @@ import type { StudyReport } from "@/lib/study-api";
 import { ArtifactProvider } from "@/components/thread/artifact";
 import { AssistantMessage } from "@/components/thread/messages/ai";
 import { HumanMessage } from "@/components/thread/messages/human";
+import { followupMessages } from "@/lib/followup";
 import { useStreamContext } from "@/providers/Stream";
 
 function suggestions(report: StudyReport | null | undefined): string[] {
@@ -59,12 +60,12 @@ export function QAPanel({
     void stream.submit(
       { followup: trimmed },
       {
-        streamMode: ["values", "messages", "custom"],
+        streamMode: ["values", "custom"],
         streamSubgraphs: false,
       },
     );
   };
-  const messages = stream.messages ?? [];
+  const messages = followupMessages(stream.messages ?? [], report);
   return (
     <Sheet>
       <SheetTrigger asChild>
