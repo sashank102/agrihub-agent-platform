@@ -61,7 +61,7 @@ def _study(study: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any],
 
 def test_poster_study_ranks_real_loci_with_explanations_in_under_30_seconds():
     received, values, store, elapsed = _study(POSTER)
-    assert elapsed < 60, elapsed
+    assert elapsed < 30, elapsed
     report = values["report"]
     loci = {locus["lead_snp"]: locus for locus in report["loci"]}
     assert {snp: locus["n_genes"] for snp, locus in loci.items()} == {
