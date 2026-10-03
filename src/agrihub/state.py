@@ -338,6 +338,10 @@ class StudyState(TypedDict, total=False):
     scoring: dict[str, Any]
     report: dict[str, Any] | None
     evidence_snapshot: dict[str, Any]
+    study_run_id: str
+    """The run that wrote the report; follow-up runs open its evidence store."""
+    evidence_snapshot_id: str | None
+    """The ``evidence_snapshot`` artifact of that run, used when its directory is gone."""
     followup: str
     run_status: str
 

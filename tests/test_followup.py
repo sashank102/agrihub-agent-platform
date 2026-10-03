@@ -1,6 +1,9 @@
 """Follow-up Q&A reads the finished study and does not change it."""
 
 import asyncio
+import json
+import os
+import shutil
 from pathlib import Path
 
 import pytest
@@ -90,9 +93,67 @@ def test_followup_rehydrates_a_missing_store(tmp_path: Path, monkeypatch: pytest
     snapshot = origin.snapshot()
     origin.close()
     state = _state(snapshot["evidence"][0]["evidence_id"], snapshot)
-    restored = open_store({"configurable": {"run_id": "restored-run"}}, state)
+    restored = asyncio.run(open_store({"configurable": {"run_id": "restored-run"}}, state))
     try:
         assert restored.count() == 1
         assert restored.get(["E1"])[0].gene_id == "Glyma.18G092200"
     finally:
         restored.close()
+
+
+def _study_store(run_id: str) -> tuple[str, dict]:
+    store = EvidenceStore.for_run(run_id)
+    saved = store.put_items([_item()])[0]
+    snapshot = store.snapshot()
+    store.export()
+    store.close()
+    return str(saved.evidence_id), snapshot
+
+
+def test_a_followup_run_opens_the_study_runs_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("AGRIHUB_RUN_DIR", str(tmp_path))
+    evidence_id, _ = _study_store("study-run")
+    state = {**_state(evidence_id), "study_run_id": "study-run", "evidence_snapshot_id": "a1"}
+
+    async def never(*args, **kwargs):
+        raise AssertionError("the study run's database exists; the artifact must not be read")
+
+    opened = asyncio.run(open_store({"configurable": {"run_id": "followup-run"}}, state, never))
+    try:
+        assert opened.directory == tmp_path / "study-run"
+        assert opened.get(["E1"])[0].evidence_id == evidence_id
+    finally:
+        opened.close()
+    assert not (tmp_path / "followup-run").exists()
+
+
+def test_a_deleted_study_run_dir_is_restored_from_the_artifact_then_the_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("AGRIHUB_RUN_DIR", str(tmp_path))
+    evidence_id, snapshot = _study_store("study-run")
+    shutil.rmtree(tmp_path / "study-run")
+    state = {**_state(evidence_id), "study_run_id": "study-run", "evidence_snapshot_id": "a1"}
+    calls: list[dict] = []
+
+    async def reader(config, *, kind, artifact_id=None):
+        calls.append({"kind": kind, "artifact_id": artifact_id})
+        return snapshot
+
+    restored = asyncio.run(open_store({"configurable": {"run_id": "followup-run"}}, state, reader))
+    try:
+        assert calls == [{"kind": "evidence_snapshot", "artifact_id": "a1"}]
+        assert restored.directory == tmp_path / "study-run"
+        assert restored.get(["E1"])[0].evidence_id == evidence_id
+    finally:
+        restored.close()
+
+    os.remove(tmp_path / "study-run" / "evidence.duckdb")
+    (tmp_path / "study-run" / "evidence_snapshot.json").write_text(json.dumps(snapshot), encoding="utf-8")
+
+    async def empty(*args, **kwargs):
+        return None
+
+    from_file = asyncio.run(open_store({"configurable": {"run_id": "followup-run"}}, state, empty))
+    try:
+        assert from_file.get(["E1"])[0].evidence_id == evidence_id
+    finally:
+        from_file.close()

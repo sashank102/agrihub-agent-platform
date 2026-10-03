@@ -44,7 +44,8 @@ def make_writer(artifact_sink: ArtifactSink | None = None) -> Callable[..., Any]
 
     async def writer(state: StudyState, config: RunnableConfig) -> dict[str, Any]:
         events.phase("reporting")
-        store = EvidenceStore.for_run(run_id_from_config(config))
+        run_id = run_id_from_config(config)
+        store = EvidenceStore.for_run(run_id)
         report, snapshot, snapshot_path = await asyncio.to_thread(_prepare, state, store)
         trace = _run_trace(state, report)
         report_id = None
@@ -85,6 +86,8 @@ def make_writer(artifact_sink: ArtifactSink | None = None) -> Callable[..., Any]
             "report": report.model_dump(mode="json"),
             "messages": [AIMessage(content=report.markdown)],
             "run_status": "completed",
+            "study_run_id": run_id,
+            "evidence_snapshot_id": snapshot_id,
         }
 
     return writer

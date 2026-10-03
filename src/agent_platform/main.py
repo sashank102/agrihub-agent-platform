@@ -30,6 +30,7 @@ from agent_platform.services.graph_registry import GraphRegistry
 from agent_platform.services.run_manager import RunManager
 from agent_platform.services.study_artifacts import (
     close_study_store,
+    study_artifact_reader,
     study_artifact_sink,
 )
 from agent_platform.services.tenant_store import TenantStore
@@ -183,6 +184,9 @@ def create_app(
                     checkpointer=persistence.checkpointer,
                     store=TenantStore(persistence.store),
                     artifact_sink=study_artifact_sink(
+                        application.state.session_factory
+                    ),
+                    artifact_reader=study_artifact_reader(
                         application.state.session_factory
                     ),
                 )

@@ -12,7 +12,7 @@ from typing import Any
 from langgraph.graph import END, START, StateGraph
 
 from agrihub.nodes.collect import collect
-from agrihub.nodes.followup import followup_qa
+from agrihub.nodes.followup import ArtifactReader, make_followup
 from agrihub.nodes.harvest import harvest
 from agrihub.nodes.intake import intake, route_after_intake
 from agrihub.nodes.locus_builder import locus_builder
@@ -38,8 +38,13 @@ def build_study_graph(
     checkpointer: Any = None,
     store: Any = None,
     artifact_sink: ArtifactSink | None = None,
+    artifact_reader: ArtifactReader | None = None,
 ) -> Any:
-    """Compile the study graph with the caller's persistence."""
+    """Compile the study graph with the caller's persistence.
+
+    ``artifact_sink`` stores the writer's artifacts; ``artifact_reader``
+    lets follow-up runs restore the evidence store from them.
+    """
     builder = StateGraph(StudyState)
     builder.add_node("intake", intake)
     builder.add_node("model_agent", model_agent)
@@ -50,7 +55,7 @@ def build_study_graph(
     builder.add_node("collect", collect, destinations=("orchestrator", "rank_verify"))
     builder.add_node("rank_verify", rank_verify)
     builder.add_node("writer", make_writer(artifact_sink))
-    builder.add_node("followup_qa", followup_qa)
+    builder.add_node("followup_qa", make_followup(artifact_reader))
 
     builder.add_conditional_edges(START, route_entry, ["followup_qa", "intake"])
     builder.add_edge("followup_qa", END)

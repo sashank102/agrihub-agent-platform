@@ -3,6 +3,8 @@
 import asyncio
 import json
 import os
+import re
+import shutil
 import uuid
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
@@ -26,7 +28,7 @@ from agent_platform.db.session import session_scope
 from agent_platform.main import create_app
 from agent_platform.services.retention import apply_retention
 from agrihub import events, evidence_store
-from agrihub.nodes import harvest
+from agrihub.nodes import followup, harvest
 from alembic import command
 from alembic.config import Config
 
@@ -269,6 +271,60 @@ def test_study_run_streams_custom_events_and_stores_artifacts(postgres_database_
             assert not _store_is_open(run_dir, run_id)
 
     asyncio.run(scenario())
+
+
+async def _ask(client: AsyncClient, thread_id: str, question: str) -> tuple[list[dict[str, Any]], str]:
+    response = await client.post(
+        f"/threads/{thread_id}/runs/stream",
+        json={"assistant_id": "agrihub_study", "input": {"followup": question}, "stream_mode": ["values"]},
+    )
+    assert response.status_code == 200, response.text
+    return _parse_sse(response.text), response.headers["x-run-id"]
+
+
+def test_a_followup_run_reads_the_study_runs_evidence_even_after_its_directory_is_deleted(
+    postgres_database_uri: str,
+    run_dir: Path,
+):
+    captured: list[str] = []
+    real_get_evidence = followup._get_evidence
+
+    def recording_get_evidence(store: evidence_store.EvidenceStore) -> Any:
+        tool = real_get_evidence(store)
+        aliases = [item.alias for item in store.query(limit=3)]
+        captured.append(tool.invoke({"ids": aliases}) if aliases else "No evidence found.")
+        return tool
+
+    async def scenario() -> None:
+        app = _app(postgres_database_uri)
+        async with app.router.lifespan_context(app):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                thread, streamed, study_run = await _run_study(client, STUDY)
+                assert streamed[-1]["event"] == "end"
+                thread_id = thread["thread_id"]
+                state = (await client.get(f"/threads/{thread_id}/state")).json()["values"]
+                assert state["study_run_id"] == study_run
+                assert state["evidence_snapshot_id"]
+                known = {item.alias for item in evidence_store.EvidenceStore.for_run(study_run).query()}
+                evidence_store.close_run(study_run)
+
+                for deleted in (False, True):
+                    if deleted:
+                        shutil.rmtree(run_dir / study_run)
+                    answered, followup_run = await _ask(client, thread_id, "why is Glyma.18G092200 a candidate?")
+                    assert answered[-1]["event"] == "end", answered[-1]
+                    assert not (run_dir / followup_run).exists()
+                    assert captured[-1] != "No evidence found." and "Glyma." in captured[-1]
+                    values = (await client.get(f"/threads/{thread_id}/state")).json()["values"]
+                    answer = values["messages"][-1]["content"]
+                    cited = set(re.findall(r"\[(E\d+)\]", answer))
+                    assert cited and cited <= known, answer
+                    assert "no stored alias" not in answer
+                    assert values["report"]["candidates"] == state["report"]["candidates"]
+                assert (run_dir / study_run / "evidence.duckdb").exists()
+
+    with patch.object(followup, "_get_evidence", recording_get_evidence):
+        asyncio.run(scenario())
 
 
 def test_invalid_snps_and_mixed_chromosome_aliases_become_warnings(postgres_database_uri: str, run_dir: Path):

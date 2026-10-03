@@ -158,6 +158,8 @@ async def intake(state: StudyState, config: RunnableConfig) -> dict[str, Any]:
         "ranking": [],
         "scoring": {},
         "report": None,
+        "study_run_id": "",
+        "evidence_snapshot_id": None,
         "run_status": "running",
     }
 

@@ -1,14 +1,17 @@
 """Answer a follow-up question from the finished study without changing it.
 
 The node runs only when the input carries ``followup`` and the thread already
-has a report. Its tools read the report and the evidence store. If the
-per-run database is gone, the store is rebuilt from the snapshot kept on the
-state. A question that needs a new window or trait is refused.
+has a report. A follow-up is a new run on the study's thread, so its tools
+read the report and the evidence store of the run that wrote the report
+(``study_run_id``). When that run's database is gone, the store is restored
+from the run's ``evidence_snapshot`` artifact, and only then from a snapshot
+file. A question that needs a new window or trait is refused.
 """
 
 import asyncio
 import json
 import re
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
@@ -16,43 +19,101 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
 from agrihub import models
-from agrihub.configuration import StudyConfiguration, run_id_from_config
-from agrihub.evidence_store import SNAPSHOT_NAME, EvidenceStore
+from agrihub.configuration import StudyConfiguration, run_id_from_config, run_root
+from agrihub.evidence_store import (
+    DATABASE_NAME,
+    SNAPSHOT_NAME,
+    SNAPSHOT_SCHEMA,
+    EvidenceStore,
+)
 from agrihub.state import RankedCandidate, StudyState
+
+ArtifactReader = Callable[..., Awaitable[dict[str, Any] | None]]
+"""Read one artifact of the caller's thread.
+
+Called as ``reader(config, kind=..., artifact_id=...)``; returns its content or ``None``.
+"""
 
 _GENE = re.compile(r"Glyma\.\d+G\d+")
 _RERUN = re.compile(r"new window|another trait|re-?run|different trait|new snp", re.IGNORECASE)
 MAX_STEPS = 4
 
 
-def open_store(config: RunnableConfig, state: StudyState) -> EvidenceStore:
-    """Open the run store, rebuilding it from the snapshot when the database is empty."""
-    run_id = run_id_from_config(config)
+async def open_store(
+    config: RunnableConfig,
+    state: StudyState,
+    artifact_reader: ArtifactReader | None = None,
+) -> EvidenceStore:
+    """Open the finished study's evidence store.
+
+    Tries the study run's database, then the run's ``evidence_snapshot``
+    artifact, then the snapshot file in the study run directory, then a
+    snapshot carried on the state. A restored store is written to the study
+    run's directory, so retention removes it together with the study run.
+    """
+    study_run = str(state.get("study_run_id") or "")
+    if study_run:
+        existing = await asyncio.to_thread(_existing_store, study_run)
+        if existing is not None:
+            return existing
+    snapshot: Any = None
+    if artifact_reader is not None:
+        snapshot = await artifact_reader(
+            config,
+            kind="evidence_snapshot",
+            artifact_id=state.get("evidence_snapshot_id"),
+        )
+    if not _is_snapshot(snapshot) and study_run:
+        snapshot = await asyncio.to_thread(_snapshot_file, study_run)
+    if not _is_snapshot(snapshot):
+        snapshot = state.get("evidence_snapshot")
+    target = study_run or run_id_from_config(config)
+    if _is_snapshot(snapshot):
+        return await asyncio.to_thread(EvidenceStore.restore, snapshot, run_id=target)
+    return await asyncio.to_thread(EvidenceStore.for_run, target)
+
+
+def _existing_store(run_id: str) -> EvidenceStore | None:
+    if not (run_root() / run_id / DATABASE_NAME).exists():
+        return None
     store = EvidenceStore.for_run(run_id)
     if store.count() > 0:
         return store
-    snapshot = state.get("evidence_snapshot")
-    if not isinstance(snapshot, dict):
-        path = store.directory / SNAPSHOT_NAME
-        if path.exists():
-            snapshot = json.loads(path.read_text(encoding="utf-8"))
-    if isinstance(snapshot, dict) and snapshot.get("schema"):
-        store.close()
-        return EvidenceStore.restore(snapshot, run_id=run_id)
-    return store
+    store.close()
+    return None
 
 
-async def followup_qa(state: StudyState, config: RunnableConfig) -> dict[str, Any]:
-    """Answer ``followup`` from the report and the evidence store, then clear the question."""
-    question = str(state.get("followup") or "").strip()
-    if not question or not state.get("report"):
-        return {"messages": [AIMessage(content="There is no finished report to ask about.")], "followup": ""}
-    store = await asyncio.to_thread(open_store, config, state)
-    try:
-        answer, transcript = await _converse(question, state, store, config)
-    finally:
-        store.close()
-    return {"messages": transcript or [HumanMessage(content=question), AIMessage(content=answer)], "followup": ""}
+def _snapshot_file(run_id: str) -> dict[str, Any] | None:
+    path = run_root() / run_id / SNAPSHOT_NAME
+    if not path.exists():
+        return None
+    loaded = json.loads(path.read_text(encoding="utf-8"))
+    return loaded if isinstance(loaded, dict) else None
+
+
+def _is_snapshot(value: Any) -> bool:
+    return isinstance(value, dict) and value.get("schema") == SNAPSHOT_SCHEMA
+
+
+def make_followup(artifact_reader: ArtifactReader | None = None) -> Callable[..., Any]:
+    """Return the follow-up node bound to an optional artifact reader."""
+
+    async def followup_qa(state: StudyState, config: RunnableConfig) -> dict[str, Any]:
+        """Answer ``followup`` from the report and the evidence store, then clear the question."""
+        question = str(state.get("followup") or "").strip()
+        if not question or not state.get("report"):
+            return {"messages": [AIMessage(content="There is no finished report to ask about.")], "followup": ""}
+        store = await open_store(config, state, artifact_reader)
+        try:
+            answer, transcript = await _converse(question, state, store, config)
+        finally:
+            store.close()
+        return {"messages": transcript or [HumanMessage(content=question), AIMessage(content=answer)], "followup": ""}
+
+    return followup_qa
+
+
+followup_qa = make_followup()
 
 
 async def _converse(

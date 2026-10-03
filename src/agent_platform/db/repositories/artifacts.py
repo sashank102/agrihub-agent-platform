@@ -98,6 +98,26 @@ class ArtifactRepository:
         )
         return list((await self.session.scalars(statement)).all())
 
+    async def latest_for_thread(
+        self,
+        thread_id: uuid.UUID,
+        owner_user_id: uuid.UUID,
+        kind: str,
+    ) -> Artifact | None:
+        """Return the newest artifact of one kind on an owned thread."""
+        return await self.session.scalar(
+            select(Artifact)
+            .join(Thread, Thread.id == Artifact.thread_id)
+            .where(
+                Artifact.thread_id == thread_id,
+                Artifact.owner_user_id == owner_user_id,
+                Thread.owner_user_id == owner_user_id,
+                Artifact.kind == kind,
+            )
+            .order_by(Artifact.created_at.desc(), Artifact.id.desc())
+            .limit(1)
+        )
+
     async def update_for_owner(
         self,
         artifact_id: uuid.UUID,
