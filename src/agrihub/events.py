@@ -25,11 +25,13 @@ Event types and their ``data``:
   ``{code, message, snp}`` and, on a failed intake, optional ``errors[]`` of
   ``{loc, message}``.
 - ``orchestrator.plan``: ``summary`` and ``steps[]``.
-- ``orchestrator.decision``: ``kind`` (dispatch, reflect, followup, finish),
-  ``round`` (1 for the first dispatch, 2 for a follow-up), ``rationale`` (a
-  stated summary, never raw reasoning), ``dispatched[]`` of ``{agent_id,
-  specialist, focus_gene_ids, focus_loci, instructions, rationale}`` and
-  ``rejected[]`` of ``{specialist, reason}``.
+- ``orchestrator.decision``: ``kind`` (dispatch, reflect, followup, finish,
+  or select_model from the model step), ``round`` (1 for the first dispatch,
+  2 for a follow-up), ``rationale`` (a stated summary, never raw reasoning),
+  ``dispatched[]`` of ``{agent_id, specialist, focus_gene_ids, focus_loci,
+  instructions, rationale}``, ``rejected[]`` of ``{specialist, reason}`` (for
+  select_model, the models that do not apply) and, for select_model,
+  ``selected[]`` of ``{model_id, name, label, score_type, dataset, assembly}``.
 - ``agent.started``: ``focus`` (``gene_ids``, ``loci``, ``instructions``,
   ``rationale``, ``round``) and ``max_steps``. ``agent.id`` is the lane key.
 - ``agent.step``: ``step``, ``max_steps`` and ``title``.
@@ -88,7 +90,7 @@ Phase = Literal[
 ]
 PhaseStatus = Literal["started", "completed", "skipped", "failed"]
 AgentKind = Literal["pipeline", "orchestrator", "specialist", "verifier", "writer", "model"]
-DecisionKind = Literal["dispatch", "reflect", "followup", "finish"]
+DecisionKind = Literal["dispatch", "reflect", "followup", "finish", "select_model"]
 CauseType = Literal["toolCall", "send", "edge"]
 
 
@@ -132,6 +134,7 @@ PIPELINE = AgentRef(id="pipeline", name="Study pipeline", kind="pipeline")
 ORCHESTRATOR = AgentRef(id="orchestrator", name="Orchestrator", kind="orchestrator")
 VERIFIER = AgentRef(id="verifier", name="Verifier", kind="verifier", parent_id="pipeline")
 WRITER = AgentRef(id="writer", name="Report writer", kind="writer", parent_id="pipeline")
+MODEL = AgentRef(id="model", name="Model agent", kind="model", parent_id="pipeline")
 
 
 def emit(
@@ -198,19 +201,20 @@ def decision(
     round: int = 1,
     dispatched: list[dict[str, Any]] | None = None,
     rejected: list[dict[str, Any]] | None = None,
+    selected: list[dict[str, Any]] | None = None,
+    agent: AgentRef | None = None,
 ) -> RunEvent:
-    """Publish an orchestrator decision with its stated rationale."""
-    return emit(
-        "orchestrator.decision",
-        {
-            "kind": kind,
-            "round": round,
-            "rationale": _summary(rationale),
-            "dispatched": list(dispatched or []),
-            "rejected": list(rejected or []),
-        },
-        agent=ORCHESTRATOR,
-    )
+    """Publish an orchestrator or model-step decision with its stated rationale."""
+    data: dict[str, Any] = {
+        "kind": kind,
+        "round": round,
+        "rationale": _summary(rationale),
+        "dispatched": list(dispatched or []),
+        "rejected": list(rejected or []),
+    }
+    if selected is not None:
+        data["selected"] = list(selected)
+    return emit("orchestrator.decision", data, agent=agent or ORCHESTRATOR)
 
 
 def agent_started(

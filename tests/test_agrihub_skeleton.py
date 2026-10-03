@@ -154,8 +154,10 @@ def test_dispatched_specialists_get_distinct_lanes_that_all_complete():
 def test_trait_study_routes_through_the_model_agent():
     received, values, _ = _run(TRAIT_STUDY)
     assert _started_phases(received) == ["intake", "model", *SNP_PHASES[1:]]
-    assert values["model_result"]["adapter"] == "stub"
-    assert len(values["snps"]) == values["model_result"]["snp_count"]
+    [run] = values["model_result"]["runs"]
+    assert (run["model_id"], run["score_type"]) == ("gwas_atlas_top_hits", "p_value")
+    assert run["label"] == "previously published associations — not a new analysis"
+    assert len(values["snps"]) == values["model_result"]["snp_count"] == run["placed"] > 0
     assert values["report"]["mode"] == "trait"
 
 

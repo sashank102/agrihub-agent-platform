@@ -151,7 +151,7 @@ def _report(state: StudyState, store: EvidenceStore, sources: list[SourceRef]) -
     alias_of = {str(item.evidence_id): item.alias for item in stored if item.evidence_id and item.alias}
     known = {item.alias for item in stored if item.alias}
     known |= {source.source_id for source in report.sources}
-    markdown = _markdown(title, study, loci, shortlist, warnings, limitations, verification)
+    markdown = _markdown(title, study, loci, shortlist, warnings, limitations, verification, state.get("model_result") or {})
     cited_lines = []
     for candidate in shortlist[:5]:
         aliases = [alias_of[key] for key in candidate.evidence_ids if key in alias_of][:2]
@@ -163,7 +163,7 @@ def _report(state: StudyState, store: EvidenceStore, sources: list[SourceRef]) -
     if orphans:
         note = "Citations removed because they do not resolve: " + ", ".join(orphans) + "."
         limitations = [*limitations, note]
-        markdown = _markdown(title, study, loci, shortlist, warnings, limitations, verification)
+        markdown = _markdown(title, study, loci, shortlist, warnings, limitations, verification, state.get("model_result") or {})
         markdown, _ = citations.validate_citations(markdown, known)
     return report.model_copy(
         update={
@@ -257,6 +257,7 @@ def _markdown(
     warnings: list[StudyWarning],
     limitations: list[str],
     verification: list[ClaimVerdict] | None = None,
+    model_result: dict[str, Any] | None = None,
 ) -> str:
     lines = [
         f"# {title}",
@@ -268,6 +269,7 @@ def _markdown(
         "",
         f"Species {study.get('species')}, assembly {study.get('assembly')}, trait {study.get('trait_text')}.",
         "",
+        *_model_lines(model_result or {}),
         "## Loci",
         "",
         "| Locus | Region | Lead SNP | SNPs | Genes |",
@@ -306,6 +308,22 @@ def _markdown(
     lines.extend(["", "## Limitations", ""])
     lines.extend(f"- {item}" for item in limitations)
     return "\n".join(lines)
+
+
+def _model_lines(model_result: dict[str, Any]) -> list[str]:
+    """Describe the model step of a trait study: which models proposed the SNPs and what their scores mean."""
+    runs = model_result.get("runs") or []
+    if not runs:
+        return []
+    lines = ["## Model step", "", str(model_result.get("rationale") or ""), "", "| Model | Dataset | Score type | SNPs placed | Note |", "| --- | --- | --- | --- | --- |"]
+    for run in runs:
+        lifted = f"; lifted from {run['assembly']} to {run['lifted_to']}" if run.get("lifted_to") else ""
+        lines.append(
+            f"| {run.get('name')} | {run.get('dataset') or ''} | {run.get('score_type')} | "
+            f"{run.get('placed')} of {run.get('proposed')} | {run.get('label')}{lifted} |"
+        )
+    lines.extend(["", "Scores of different types are not compared or combined.", ""])
+    return lines
 
 
 def _position(item: RankedCandidate) -> str:

@@ -90,6 +90,7 @@ def heavy_env(
     register_species(heavy_bundle.registry)
     monkeypatch.setenv("AGRIHUB_DATA_DIR", str(heavy_bundle.data_dir))
     monkeypatch.setenv("AGRIHUB_RUN_DIR", str(tmp_path / "runs"))
+    monkeypatch.setenv("AGRIHUB_MODEL_RESULTS_DIR", str(tmp_path / "model-results"))
     clear_availability()
     try:
         yield heavy_bundle
@@ -105,10 +106,11 @@ def fixture_env(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[FixtureBundle]:
-    """Point tools at the fixture bundle and a fresh run directory."""
+    """Point tools at the fixture bundle, a fresh run directory and no precomputed model results."""
     register_species(fixture_bundle.registry)
     monkeypatch.setenv("AGRIHUB_DATA_DIR", str(fixture_bundle.data_dir))
     monkeypatch.setenv("AGRIHUB_RUN_DIR", str(tmp_path / "runs"))
+    monkeypatch.setenv("AGRIHUB_MODEL_RESULTS_DIR", str(tmp_path / "model-results"))
     clear_availability()
     try:
         yield fixture_bundle

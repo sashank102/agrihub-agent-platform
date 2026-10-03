@@ -9,6 +9,7 @@ demo run stays on screen long enough to watch.
 
 The ``poster`` script plays every role:
 
+- model agent: picks precomputed results run on the trait, else catalog hits;
 - orchestrator: inspects the first locus, then dispatches the deterministic
   plan of :mod:`agrihub.planning`; in a follow-up round it dispatches a
   literature check on genes that gained support, or finishes;
@@ -171,6 +172,8 @@ def _expand(ranges: str) -> list[str]:
 
 def poster_script(messages: list[BaseMessage], tools: tuple[str, ...]) -> AIMessage:
     """Play the orchestrator, a specialist, the verifier or follow-up Q&A."""
+    if "select_models" in tools:
+        return _model_choice(messages)
     if "dispatch_specialists" in tools:
         return _orchestrator(messages)
     if "specialist_done" in tools:
@@ -180,6 +183,33 @@ def poster_script(messages: list[BaseMessage], tools: tuple[str, ...]) -> AIMess
     if "get_evidence" in tools and "record_finding" not in tools:
         return AIMessage(content="Verifier notes are already decided. No new claims.")
     return AIMessage(content="No tools are bound.")
+
+
+def _model_choice(messages: list[BaseMessage]) -> AIMessage:
+    """Pick precomputed results for the trait when there are any, else catalog hits, honouring preferences."""
+    text = human_text(messages)
+    line = next((item for item in text.splitlines() if item.startswith("Candidates JSON: ")), "Candidates JSON: []")
+    candidates = list(json.loads(line.removeprefix("Candidates JSON: ")))
+    if not candidates:
+        return AIMessage(content="No applicable candidates.")
+    preferences_match = re.search(r"Preferences: ([^\n]*)\.", text)
+    preferences = [item.strip() for item in (preferences_match.group(1) if preferences_match else "").split(",") if item.strip() and item.strip() != "none"]
+    ranked = sorted(candidates, key=lambda item: (not item.get("datasets"), item["model_id"]))
+    chosen = ranked[0]
+    datasets = list(chosen.get("datasets") or [])
+    wanted = next((pref.partition(":")[2] or pref for pref in preferences if (pref.partition(":")[2] or pref) in datasets), None)
+    dataset = wanted or (datasets[-1] if datasets else None)
+    rationale = (
+        f"{chosen['name']} was run on this trait"
+        + (f" ({dataset})" if dataset else "")
+        + f"; its {chosen['score_type']} scores are kept as they are."
+        if datasets
+        else f"No model was run on this trait, so {chosen['name']} supplies {chosen['label']}."
+    )
+    args: dict[str, Any] = {"model_ids": [chosen["model_id"]], "rationale": rationale}
+    if dataset:
+        args["datasets"] = [dataset]
+    return reply(call("select_models", args, "call_model_select"))
 
 
 def _orchestrator(messages: list[BaseMessage]) -> AIMessage:
