@@ -15,11 +15,12 @@ import duckdb
 from agrihub_data.paths import species_paths
 from agrihub_data.registry import TIERS, Tier
 
-SCHEMA_VERSION = "3"
+SCHEMA_VERSION = "4"
 DATA_TABLES: tuple[str, ...] = (
     "genes",
     "gene_parts",
     "id_map",
+    "lift_anchors",
     "annotation",
     "go_annot",
     "orthologs",
@@ -55,6 +56,7 @@ NON_GENOMIC_TABLES = frozenset({"ontology_terms", "trait_map", "sources"})
 """Tables whose rows must carry ``assembly = 'none'``."""
 EXTRA_ASSEMBLY_COLUMNS: dict[str, tuple[str, ...]] = {
     "id_map": ("to_assembly",),
+    "lift_anchors": ("from_assembly",),
     "orthologs": ("target_assembly",),
     "known_genes": ("source_assembly",),
     "expression": ("source_assembly",),
@@ -62,6 +64,7 @@ EXTRA_ASSEMBLY_COLUMNS: dict[str, tuple[str, ...]] = {
 POSITIONAL_TABLES: dict[str, tuple[str, str]] = {
     "genes": ("start", "end"),
     "gene_parts": ("start", "end"),
+    "lift_anchors": ("start", "end"),
     "markers": ("start", "end"),
     "qtl": ("start", "end"),
     "gwas_hits": ("pos", "pos"),

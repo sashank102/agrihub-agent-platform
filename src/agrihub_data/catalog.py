@@ -53,6 +53,7 @@ def species_summary(registry: SpeciesRegistry, data_dir: Path | str | None = Non
                 "aliases": assembly.aliases,
                 "description": assembly.description,
                 "canonical": assembly.id == registry.canonical_assembly,
+                "lift_to": assembly.lift_to,
                 "chromosomes": [
                     {"name": chromosome.name, "length": chromosome.length, "aliases": chromosome.aliases}
                     for chromosome in assembly.chromosomes

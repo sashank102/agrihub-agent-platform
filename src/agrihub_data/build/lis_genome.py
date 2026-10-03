@@ -26,9 +26,9 @@ _INFO_COLUMNS = {
 }
 
 
-def lis_assembly(ctx: BuildContext, number: str) -> str:
-    """Return the assembly whose LIS namespace is ``glyma.Wm82.gnm<number>.``."""
-    namespace = f"{ctx.registry.abbrev}.Wm82.gnm{number}."
+def lis_assembly(ctx: BuildContext, number: str, genotype: str = "Wm82") -> str:
+    """Return the assembly whose LIS namespace is ``glyma.<genotype>.gnm<number>.``."""
+    namespace = f"{ctx.registry.abbrev}.{genotype}.gnm{number}."
     for assembly in ctx.registry.assemblies:
         if assembly.chrom_namespace == namespace:
             return assembly.id
@@ -89,21 +89,25 @@ def build_lis_annotation(ctx: BuildContext, source: Source) -> None:
 
 
 def build_lis_pangenes(ctx: BuildContext, source: Source) -> None:
-    """Load pangene membership for every registered Wm82 assembly column."""
+    """Load pangene membership for every assembly column the source names."""
     path = ctx.file(source, ".table_ref_lines.tsv.gz")
     with_header = tsv_rows(path, skip_comments=False)
     header = next(with_header)
     columns: dict[int, str] = {}
     for index, name in enumerate(header):
-        match = re.fullmatch(rf"{ctx.registry.abbrev}\.Wm82\.gnm(\d+)\.ann\d+", name.strip())
+        match = re.fullmatch(rf"{ctx.registry.abbrev}\.([A-Za-z0-9_]+)\.gnm(\d+)\.ann\d+", name.strip())
         if match is None:
             continue
         try:
-            columns[index] = lis_assembly(ctx, match.group(1))
+            assembly = lis_assembly(ctx, match.group(2), match.group(1))
         except UnknownAssemblyError:
+            assembly = None
+        if assembly is None or assembly not in source.assemblies:
             ctx.count(source.id, f"skipped_column:{name.strip()}")
-    if not columns:
-        raise BuildError(f"{path.name} has no registered Wm82 columns")
+            continue
+        columns[index] = assembly
+    if ctx.registry.canonical_assembly not in columns.values():
+        raise BuildError(f"{path.name} has no column for {ctx.registry.canonical_assembly}")
 
     def rows() -> Iterator[dict[str, Any]]:
         for fields in with_header:

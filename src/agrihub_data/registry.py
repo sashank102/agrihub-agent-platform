@@ -54,6 +54,12 @@ class Assembly(BaseModel):
     """Regex for unplaced scaffolds kept verbatim after the namespace."""
     embedded_in_marker_names: bool = False
     """Marker names such as ``BARC_1.01_Gm01_24939_A_G`` carry positions on this assembly."""
+    lift_to: str | None = None
+    """Positions given on this assembly are lifted to ``lift_to`` at intake.
+
+    The bundle keeps no genes on such an assembly, only the ``lift_anchors``
+    that convert its coordinates.
+    """
     chromosomes: list[Chromosome]
 
     def chromosome(self, name: str) -> Chromosome | None:
@@ -181,6 +187,9 @@ class SpeciesRegistry(BaseModel):
         source_ids = [source.id for source in self.sources]
         if len(source_ids) != len(set(source_ids)):
             raise ValueError("source ids must be unique")
+        for assembly in self.assemblies:
+            if assembly.lift_to is not None and assembly.lift_to not in assembly_ids:
+                raise ValueError(f"assembly {assembly.id} lifts to unregistered {assembly.lift_to}")
         known = assembly_ids | {ref.assembly for ref in self.reference_assemblies}
         for source in self.sources:
             unknown = set(source.assemblies) - known - {NON_GENOMIC_ASSEMBLY}

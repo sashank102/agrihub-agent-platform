@@ -46,8 +46,15 @@ def test_registry_covers_four_species_with_defaults_ld_and_linkouts():
         "Wm82.a2.v1",
         "Wm82.a4.v1",
         "Wm82.a6.v1",
+        "Lee.gnm1",
+        "Lee.gnm2",
     }
     assert soybean.assembly("Gmax_275_Wm82.a2.v1").id == "Wm82.a2.v1"
+    assert {assembly.id: assembly.lift_to for assembly in soybean.assemblies if assembly.lift_to} == {
+        "Lee.gnm1": "Wm82.a2.v1",
+        "Lee.gnm2": "Wm82.a2.v1",
+    }
+    assert soybean.assembly("Lee.gnm2.K7BV").id == "Lee.gnm2"
     assert soybean.assembly().chromosome("Gm18").length == 58_018_742
     assert soybean.source("gwas_atlas").academic_only
     assert not soybean.source("lis_wm82_a2").academic_only

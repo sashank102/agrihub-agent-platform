@@ -40,10 +40,19 @@ sources:
     tier: core
     version: Glycine.pan5.MKRS
     license: Open
-    assemblies: [Wm82.a1.v1, Wm82.a2.v1, Wm82.a4.v1, Wm82.a6.v1]
+    assemblies: [Wm82.a1.v1, Wm82.a2.v1, Wm82.a4.v1, Wm82.a6.v1, Lee.gnm2]
     parser: lis_pangenes
     files:
       - {url: "{base}/lis_pangenes/Glycine.pan5.MKRS.table_ref_lines.tsv.gz", path: Glycine.pan5.MKRS.table_ref_lines.tsv.gz}
+  - id: lis_lee_gnm2
+    name: LIS Lee.gnm2 gene model fixture (Wm82.a2 positions + 1 Mb on Gm18 and Gm05)
+    tier: core
+    version: Lee.gnm2.ann1.1FNT
+    license: Open
+    assemblies: [Lee.gnm2]
+    parser: lis_lift_anchors
+    files:
+      - {url: "{base}/lis_lee_gnm2/glyma.Lee.gnm2.ann1.1FNT.gene_models_main.bed.gz", path: glyma.Lee.gnm2.ann1.1FNT.gene_models_main.bed.gz}
   - id: lis_markers
     name: LIS marker fixture
     tier: core

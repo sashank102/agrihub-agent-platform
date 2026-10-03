@@ -1,7 +1,7 @@
-#pangene	glyma.FiskebyIII.gnm1.ann1	glyma.Wm82.gnm1.ann1	glyma.Wm82.gnm2.ann1	glyma.Wm82.gnm4.ann1	glyma.Wm82.gnm5.ann1	glyma.Wm82.gnm6.ann1
-Glycine.pan5.pan1	GlymaFiskIII.18G000100	Glyma18g11630	Glyma.18G092200	Glyma.18G092200	Gm_Wm82_00001	Glyma.18G092200
-Glycine.pan5.pan2	NONE	NONE	Glyma.18G092300	Glyma.18G092300	NONE	NONE
-Glycine.pan5.pan3	NONE	Glyma19g37890	Glyma.19G194300	Glyma.19G194300	NONE	NONE
-Glycine.pan5.pan4	NONE	NONE	Glyma.18G273600	Glyma.18G273600	NONE	NONE
-Glycine.pan5.pan5	NONE	NONE	Glyma.05G032200	Glyma.05G032300	NONE	NONE
-Glycine.pan5.pan6	NONE	NONE	Glyma.18G092000	Glyma.18G092000	NONE	NONE
+#pangene	glyma.FiskebyIII.gnm1.ann1	glyma.Wm82.gnm1.ann1	glyma.Wm82.gnm2.ann1	glyma.Wm82.gnm4.ann1	glyma.Wm82.gnm5.ann1	glyma.Wm82.gnm6.ann1	glyma.Lee.gnm2.ann1
+Glycine.pan5.pan1	GlymaFiskIII.18G000100	Glyma18g11630	Glyma.18G092200	Glyma.18G092200	Gm_Wm82_00001	Glyma.18G092200	Gm_18002
+Glycine.pan5.pan2	NONE	NONE	Glyma.18G092300	Glyma.18G092300	NONE	NONE	Gm_18003
+Glycine.pan5.pan3	NONE	Glyma19g37890	Glyma.19G194300	Glyma.19G194300	NONE	NONE	Gm_07001
+Glycine.pan5.pan4	NONE	NONE	Glyma.18G273600	Glyma.18G273600	NONE	NONE	Gm_18004
+Glycine.pan5.pan5	NONE	NONE	Glyma.05G032200	Glyma.05G032300	NONE	NONE	Gm_05001
+Glycine.pan5.pan6	NONE	NONE	Glyma.18G092000	Glyma.18G092000	NONE	NONE	Gm_18001

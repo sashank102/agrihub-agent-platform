@@ -78,6 +78,16 @@ def verify(
             _check_provenance(connection, table, registered, report)
         for table, (start, end) in POSITIONAL_TABLES.items():
             _check_positions(connection, registry, table, start, end, report)
+        _check_positions(
+            connection,
+            registry,
+            "lift_anchors",
+            "from_start",
+            "from_end",
+            report,
+            assembly_column="from_assembly",
+            chrom_column="from_chrom",
+        )
         for resource_id, relative in connection.execute("SELECT resource_id, path FROM resources").fetchall():
             if not (paths.root / str(relative)).exists():
                 report.problems.append(f"resource {resource_id} is missing at {relative}; rebuild the heavy tier")
@@ -123,10 +133,13 @@ def _check_positions(
     start: str,
     end: str,
     report: VerifyReport,
+    *,
+    assembly_column: str = "assembly",
+    chrom_column: str = "chrom",
 ) -> None:
     rows = connection.execute(
-        f'SELECT assembly, chrom, min("{start}"), max("{end}"), count(*) FROM {table} '
-        "WHERE chrom IS NOT NULL GROUP BY 1, 2"
+        f'SELECT {assembly_column}, {chrom_column}, min("{start}"), max("{end}"), count(*) FROM {table} '
+        f"WHERE {chrom_column} IS NOT NULL GROUP BY 1, 2"
     ).fetchall()
     for assembly_id, chrom, lowest, highest, count in rows:
         if assembly_id not in {assembly.id for assembly in registry.assemblies}:

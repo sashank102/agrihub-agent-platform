@@ -24,6 +24,7 @@ import duckdb
 from agrihub_data.build.context import BuildContext, BuildError
 from agrihub_data.build.expression import build_lis_expression
 from agrihub_data.build.gwas import build_gwas_atlas, build_soybase_gwas
+from agrihub_data.build.liftover import build_lis_lift_anchors
 from agrihub_data.build.lis_evidence import (
     build_lis_gene_functions,
     build_lis_gwas,
@@ -75,6 +76,7 @@ PARSERS: tuple[Parser, ...] = (
     Parser("lis_annotation", build_lis_annotation),
     Parser("lis_pangenes", build_lis_pangenes),
     Parser("lis_markers", build_lis_markers),
+    Parser("lis_lift_anchors", build_lis_lift_anchors, after=("lis_annotation", "lis_pangenes")),
     Parser("lis_qtl", build_lis_qtl, after=("lis_annotation", "lis_markers")),
     Parser("lis_gwas", build_lis_gwas, after=("lis_markers",)),
     Parser("soybase_gwas", build_soybase_gwas),

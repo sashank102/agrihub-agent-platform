@@ -155,6 +155,68 @@ assemblies:
       - {name: Gm18, number: 18, length: 62308140}
       - {name: Gm19, number: 19, length: 50589441}
       - {name: Gm20, number: 20, length: 46773167}
+  - id: Lee.gnm2
+    aliases: [Lee.gnm2.K7BV, Lee_v2.0, "Lee v2.0"]
+    description: >-
+      Cultivar Lee assembly 2 (Garg et al. 2021, ICRISAT). Positions on it are
+      lifted to Wm82.a2.v1 through one-to-one pangene gene anchors before loci
+      are built. Lengths from the LIS genome_main FASTA.
+    annotation: Lee.gnm2.ann1.1FNT
+    chrom_namespace: glyma.Lee.gnm2.
+    scaffold_pattern: 'scaffold_\d+'
+    lift_to: Wm82.a2.v1
+    chromosomes:
+      - {name: Gm01, number: 1, length: 59188048}
+      - {name: Gm02, number: 2, length: 54574089}
+      - {name: Gm03, number: 3, length: 49399840}
+      - {name: Gm04, number: 4, length: 54962134}
+      - {name: Gm05, number: 5, length: 44917289}
+      - {name: Gm06, number: 6, length: 52842820}
+      - {name: Gm07, number: 7, length: 48538069}
+      - {name: Gm08, number: 8, length: 50495932}
+      - {name: Gm09, number: 9, length: 51531123}
+      - {name: Gm10, number: 10, length: 55084560}
+      - {name: Gm11, number: 11, length: 40872309}
+      - {name: Gm12, number: 12, length: 43649404}
+      - {name: Gm13, number: 13, length: 47408777}
+      - {name: Gm14, number: 14, length: 53143324}
+      - {name: Gm15, number: 15, length: 54862980}
+      - {name: Gm16, number: 16, length: 39085136}
+      - {name: Gm17, number: 17, length: 43090730}
+      - {name: Gm18, number: 18, length: 61352712}
+      - {name: Gm19, number: 19, length: 53311394}
+      - {name: Gm20, number: 20, length: 50292855}
+  - id: Lee.gnm1
+    aliases: [Lee.gnm1.BXNC, Lee_v1.1, "Lee v1.1"]
+    description: >-
+      Cultivar Lee assembly 1 (Valliyodan et al. 2019, JGI Lee v1.1). Positions
+      on it are lifted to Wm82.a2.v1 through one-to-one pangene gene anchors
+      before loci are built. Lengths from the LIS genome_main FASTA.
+    annotation: Lee.gnm1.ann1.6NZV
+    chrom_namespace: glyma.Lee.gnm1.
+    scaffold_pattern: 'sc\d+'
+    lift_to: Wm82.a2.v1
+    chromosomes:
+      - {name: Gm01, number: 1, length: 58711475}
+      - {name: Gm02, number: 2, length: 52519505}
+      - {name: Gm03, number: 3, length: 48043251}
+      - {name: Gm04, number: 4, length: 53766019}
+      - {name: Gm05, number: 5, length: 43551193}
+      - {name: Gm06, number: 6, length: 52961589}
+      - {name: Gm07, number: 7, length: 46256005}
+      - {name: Gm08, number: 8, length: 49267165}
+      - {name: Gm09, number: 9, length: 50397291}
+      - {name: Gm10, number: 10, length: 53727962}
+      - {name: Gm11, number: 11, length: 39810552}
+      - {name: Gm12, number: 12, length: 43006439}
+      - {name: Gm13, number: 13, length: 46215649}
+      - {name: Gm14, number: 14, length: 51385242}
+      - {name: Gm15, number: 15, length: 55555991}
+      - {name: Gm16, number: 16, length: 39184905}
+      - {name: Gm17, number: 17, length: 43086464}
+      - {name: Gm18, number: 18, length: 60485747}
+      - {name: Gm19, number: 19, length: 52627896}
+      - {name: Gm20, number: 20, length: 50153686}
 id_namespaces:
   - id: glyma
     pattern: '^Glyma\.\d{2}G\d{6}$'
@@ -285,13 +347,44 @@ sources:
     version: Glycine.pan5.MKRS
     license: Open (LIS datastore)
     homepage: https://data.legumeinfo.org/Glycine/GENUS/pangenes/Glycine.pan5.MKRS/
-    assemblies: [Wm82.a1.v1, Wm82.a2.v1, Wm82.a4.v1, Wm82.a6.v1]
+    assemblies: [Wm82.a1.v1, Wm82.a2.v1, Wm82.a4.v1, Wm82.a6.v1, Lee.gnm1, Lee.gnm2]
     parser: lis_pangenes
     files:
       - url: https://data.legumeinfo.org/Glycine/GENUS/pangenes/Glycine.pan5.MKRS/Glycine.pan5.MKRS.table_ref_lines.tsv.gz
         path: Glycine.pan5.MKRS.table_ref_lines.tsv.gz
         sha256: 2b814167d7fa69729c1b3caad46a9660531fb13c7c430d7c0e0f32191de88284
         size: 2684351
+  - id: lis_lee_gnm2
+    name: LIS Lee.gnm2 gene models, as lift anchors to Wm82.a2.v1
+    tier: core
+    version: Lee.gnm2.ann1.1FNT
+    license: Open (LIS datastore); ICRISAT Legumepedia original
+    homepage: https://data.legumeinfo.org/Glycine/max/annotations/Lee.gnm2.ann1.1FNT/
+    citation: Garg et al. 2021, J Adv Res, doi:10.1016/j.jare.2021.10.009
+    assemblies: [Lee.gnm2]
+    parser: lis_lift_anchors
+    notes: >-
+      Genes are kept only as anchors: a Lee gene and a Wm82.a2 gene that one
+      pan5 pangene links one-to-one on the same chromosome.
+    files:
+      - url: https://data.legumeinfo.org/Glycine/max/annotations/Lee.gnm2.ann1.1FNT/glyma.Lee.gnm2.ann1.1FNT.gene_models_main.bed.gz
+        path: glyma.Lee.gnm2.ann1.1FNT.gene_models_main.bed.gz
+        sha256: 7516805912d3a73bfdc21e560a622f020677133275a70781689f66f5cfe0bf49
+        size: 703290
+  - id: lis_lee_gnm1
+    name: LIS Lee.gnm1 gene models, as lift anchors to Wm82.a2.v1
+    tier: core
+    version: Lee.gnm1.ann1.6NZV
+    license: Open (LIS datastore); PGC reserved-analyses policy, see usage_policy.txt
+    homepage: https://data.legumeinfo.org/Glycine/max/annotations/Lee.gnm1.ann1.6NZV/
+    citation: Valliyodan et al. 2019, Plant J 100:1066-1082
+    assemblies: [Lee.gnm1]
+    parser: lis_lift_anchors
+    files:
+      - url: https://data.legumeinfo.org/Glycine/max/annotations/Lee.gnm1.ann1.6NZV/glyma.Lee.gnm1.ann1.6NZV.gene_models_main.bed.gz
+        path: glyma.Lee.gnm1.ann1.6NZV.gene_models_main.bed.gz
+        sha256: 749b8425065dd277fefc2f9f7f67c7257401f9e20071812b00b746c6e76861fb
+        size: 747368
   - id: lis_markers
     name: LIS marker sets (SoySNP50K on a1/a2/a4/a6; gnm2 SNP, SSR and study sets)
     tier: core

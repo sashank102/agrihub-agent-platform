@@ -62,6 +62,29 @@ CREATE TABLE gene_parts (
     source_db VARCHAR NOT NULL
 );
 
+-- Gene pairs that one pangene links one-to-one across two assemblies on the
+-- same chromosome. from_* is on from_assembly (an assembly with lift_to in
+-- the registry, such as Lee.gnm2); gene_id, chrom, start and end are on
+-- assembly. Positions on from_assembly are lifted through these anchors.
+CREATE TABLE lift_anchors (
+    species VARCHAR NOT NULL,
+    assembly VARCHAR NOT NULL,
+    source_version VARCHAR NOT NULL,
+    from_assembly VARCHAR NOT NULL,
+    from_gene_id VARCHAR NOT NULL,
+    from_chrom VARCHAR NOT NULL,
+    from_start BIGINT NOT NULL,
+    from_end BIGINT NOT NULL,
+    from_strand VARCHAR NOT NULL,
+    gene_id VARCHAR NOT NULL,
+    chrom VARCHAR NOT NULL,
+    start BIGINT NOT NULL,
+    "end" BIGINT NOT NULL,
+    strand VARCHAR NOT NULL,
+    pangene VARCHAR NOT NULL,
+    source_db VARCHAR NOT NULL
+);
+
 -- Cross-namespace and cross-assembly identifiers. relation is one of
 -- pangene_member (to_id is a pangene id, to_assembly 'none'), ancestor
 -- (GFF ancestorIdentifier), synonym (older gene id) or transcript.

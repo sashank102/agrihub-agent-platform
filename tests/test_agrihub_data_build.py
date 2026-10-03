@@ -117,7 +117,7 @@ def test_fetch_fails_a_required_file_that_is_missing(tiny):
 
 def test_fixture_fetch_resolves_collections_and_optional_files(fixture_bundle: FixtureBundle):
     report = fixture_bundle.fetch_report
-    assert len(report.downloaded) == 43 and not report.failed
+    assert len(report.downloaded) == 44 and not report.failed
     assert sorted(report.absent) == [
         "lis_qtl/Gamma_x_Delta.qtl.Test_2021/README.Gamma_x_Delta.qtl.Test_2021.yml",
         "lis_qtl/Gamma_x_Delta.qtl.Test_2021/glyma.Gamma_x_Delta.qtl.Test_2021.obo.tsv.gz",
