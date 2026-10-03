@@ -1,31 +1,38 @@
 """Known-gene retrospective benchmark for one species bundle.
 
 Pseudo-studies: for each benchmark trait, the curated trait genes of the
-bundle (LIS ``glyma.traits.yml`` for soybean) that have a trait-matched GWAS
-Atlas hit within the species' typical LD distance of the gene. The most
-significant such hit becomes the study SNP and the curated gene is the target
-of its locus.
+bundle (``SPECIES_BENCHMARKS`` names the curated sources per species: LIS
+``glyma.traits.yml`` for soybean, RAP-DB curated genes and funRiceGenes for
+rice, MaizeGDB classical genes for maize, the Grant et al. 2023 Ma/Dw genes
+for sorghum) that have a trait-matched GWAS Atlas hit within the species'
+typical LD distance of the gene. The most significant such hit becomes the
+study SNP and the curated gene is the target of its locus.
 
 The target's own curated record, every catalog GWAS hit that reports it, and
 the input hit itself are held out while the study runs, so the rubric cannot
 find the answer it is graded on. Other evidence (annotation, orthology,
 expression, networks, literature links) stays.
 
-Three rankings are compared per locus: the full pipeline (agents), the
-deterministic rubric with no specialist rounds, and distance to the nearest
-SNP. The verifier's verdicts give the unsupported- and contradicted-claim
-rates; cited aliases are checked against the run's evidence store.
+Four rankings are compared per locus: the full pipeline (agents), the
+deterministic rubric with no specialist rounds, the same rubric with the trait
+profile's seed families and curated keywords removed (the ablation that shows
+how much the textbook priors carry), and distance to the nearest SNP. Recall
+comes with a percentile bootstrap 95% interval over targets. The verifier's
+verdicts give the unsupported- and contradicted-claim rates; cited aliases are
+checked against the run's evidence store.
 """
 
 import asyncio
 import csv
+import hashlib
 import io
+import random
 import re
 import statistics
 import time
 import uuid
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -37,7 +44,7 @@ from agrihub.graph import build_study_graph
 from agrihub_data.bundle import Bundle
 from agrihub_data.query import network, overlap
 from agrihub_data.query.common import Region
-from agrihub_data.query.traits import map_trait
+from agrihub_data.query.traits import map_trait, without_priors
 from agrihub_data.registry import load_species
 
 SOYBEAN_TRAITS = (
@@ -52,6 +59,24 @@ SOYBEAN_TRAITS = (
 )
 CATALOG = "GWAS Atlas"
 RUBRIC_ONLY = "agrihub-fake:rubric_only"
+BOOTSTRAP_SAMPLES = 2000
+METHODS: tuple[tuple[str, str | None, bool], ...] = (
+    ("rubric_only", RUBRIC_ONLY, True),
+    ("rubric_no_priors", RUBRIC_ONLY, False),
+    ("agents", None, True),
+)
+"""``(method, orchestrator model, trait priors on)`` of every ranking that runs a study."""
+
+
+@dataclass(frozen=True)
+class BenchmarkSpec:
+    """Which curated genes are targets and which traits are benchmarked for one species."""
+
+    traits: tuple[str, ...]
+    target_sources: tuple[str, ...]
+    target_note: str
+    order: str = "gene_id"
+    """``gene_id`` takes targets in id order; ``spread`` in a fixed hash order, so they span chromosomes."""
 POSTER_SNPS = (
     {"raw": "S5_2899164", "chrom": "5", "pos": 2_899_164},
     {"raw": "S18_9263941", "chrom": "18", "pos": 9_263_941},
@@ -94,9 +119,38 @@ class PseudoStudy:
     study: dict[str, Any]
 
 
+SPECIES_BENCHMARKS: dict[str, BenchmarkSpec] = {
+    "soybean": BenchmarkSpec(SOYBEAN_TRAITS, ("LIS gene_functions",), "curated trait genes (LIS glyma.traits.yml)"),
+    "rice": BenchmarkSpec(
+        ("plant height", "heading date", "grain yield", "grain weight"),
+        ("RAP-DB curated genes", "RAP-DB agronomic genes", "funRiceGenes"),
+        "RAP-DB curated and agronomic genes and funRiceGenes keyword genes",
+        order="spread",
+    ),
+    "maize": BenchmarkSpec(
+        ("plant height", "flowering time", "grain yield", "kernel weight"),
+        ("MaizeGDB classical genes",),
+        "MaizeGDB classical (named) genes whose names match the trait",
+        order="spread",
+    ),
+    "sorghum": BenchmarkSpec(
+        ("plant height", "flowering time", "grain yield", "grain weight"),
+        ("Grant et al. 2023 Ma/Dw genes", "Sorghum QTL Atlas"),
+        "cloned Ma/Dw genes (Grant et al. 2023) and Sorghum QTL Atlas major genes when an export is loaded",
+    ),
+}
+
+
+def spec_for(species: str) -> BenchmarkSpec:
+    """Return the benchmark definition of a species."""
+    if species not in SPECIES_BENCHMARKS:
+        raise KeyError(f"no benchmark is defined for {species}; known: {', '.join(sorted(SPECIES_BENCHMARKS))}")
+    return SPECIES_BENCHMARKS[species]
+
+
 def build_pseudo_studies(
     bundle: Bundle,
-    traits: tuple[str, ...] = SOYBEAN_TRAITS,
+    traits: tuple[str, ...] | None = None,
     *,
     max_loci: int = 8,
     max_distance_bp: int | None = None,
@@ -104,19 +158,25 @@ def build_pseudo_studies(
 ) -> list[PseudoStudy]:
     """Return one pseudo-study per trait with at least one target, targets on distinct loci.
 
-    ``max_distance_bp`` defaults to the species' typical LD distance.
+    ``traits`` default to the species' benchmark traits; ``max_distance_bp``
+    to its typical LD distance. Targets come from the species' curated sources.
     """
     species = bundle.species
+    spec = spec_for(species)
     registry = load_species(species)
     assembly = registry.canonical_assembly
     max_distance_bp = max_distance_bp or int(registry.typical_ld_kb * 1_000)
+    flank = flank_bp or registry.default_window.flank_bp
     studies = []
     used_genes: set[str] = set()
-    for trait in traits:
+    for trait in traits or spec.traits:
         profile = map_trait(trait, species, bundle)
-        known = {hit.gene_id: hit for hit in overlap.known_trait_genes(bundle, profile, assembly=assembly)}
+        known: dict[str, Any] = {}
+        for hit in overlap.known_trait_genes(bundle, profile, assembly=assembly):
+            if hit.source_db in spec.target_sources:
+                known.setdefault(hit.gene_id, hit)
         targets: list[Target] = []
-        for gene_id, record in sorted(known.items()):
+        for gene_id, record in sorted(known.items(), key=lambda item: _target_order(item[0], spec.order)):
             if gene_id in used_genes or record.chrom is None or record.start is None or record.end is None:
                 continue
             region = Region(
@@ -137,7 +197,7 @@ def build_pseudo_studies(
                 continue
             hits.sort(key=lambda hit: (hit.p_value if hit.p_value is not None else 1.0, hit.distance_to_core or 0, hit.hit_id))
             best = hits[0]
-            if any(item.chrom == best.chrom and abs(item.pos - best.pos) < 2 * (flank_bp or 250_000) for item in targets):
+            if any(item.chrom == best.chrom and abs(item.pos - best.pos) < 2 * flank for item in targets):
                 continue
             reporting = [
                 hit.hit_id
@@ -174,6 +234,10 @@ def build_pseudo_studies(
             study["window"] = {"mode": "fixed", "flank_bp": flank_bp}
         studies.append(PseudoStudy(trait=trait, targets=targets, study=study))
     return studies
+
+
+def _target_order(gene_id: str, order: str) -> str:
+    return hashlib.sha256(gene_id.encode()).hexdigest() if order == "spread" else gene_id
 
 
 @contextmanager
@@ -332,6 +396,16 @@ def recall(ranks: list[int | None], k: int) -> float | None:
     return sum(1 for rank in ranks if rank is not None and rank <= k) / len(ranks)
 
 
+def recall_interval(ranks: list[int | None], k: int, *, samples: int = BOOTSTRAP_SAMPLES, seed: int = 0) -> tuple[float, float] | None:
+    """Return the percentile bootstrap 95% interval of recall@k, resampling targets with replacement."""
+    if not ranks:
+        return None
+    hits = [1 if rank is not None and rank <= k else 0 for rank in ranks]
+    generator = random.Random(seed)
+    values = sorted(sum(generator.choices(hits, k=len(hits))) / len(hits) for _ in range(samples))
+    return values[int(0.025 * (samples - 1))], values[int(0.975 * (samples - 1))]
+
+
 @dataclass
 class Scorecard:
     """Per-target rows, per-study run metrics and the summary table."""
@@ -341,16 +415,25 @@ class Scorecard:
     smoke: list[dict[str, Any]]
     model: str
     notes: list[str] = field(default_factory=list)
+    species: str = "soybean"
+    skipped: list[str] = field(default_factory=list)
+    """Benchmark traits without a target, with the reason."""
+
+    @property
+    def scripted(self) -> bool:
+        """Return whether the agents ran on the scripted fake model."""
+        return self.model.startswith("agrihub-fake:")
 
     def summary(self) -> list[dict[str, Any]]:
-        """Return recall@1/3/5 and median rank for the distance, rubric-only and agent rankings."""
-        agents = [row for row in self.rows if row["method"] == "agents"]
-        rubric = [row for row in self.rows if row["method"] == "rubric_only"]
+        """Return recall@1/3/5 with bootstrap 95% intervals and the median rank for every ranking."""
+        by_method = {method: [row for row in self.rows if row["method"] == method] for method, _, _ in METHODS}
+        agents_label = "agents (full pipeline)" + (" - pending real model" if self.scripted else "")
         table = []
         for name, source, column in (
-            ("distance only", agents or rubric, "distance_rank"),
-            ("rubric only (no agents)", rubric, "rank"),
-            ("agents (full pipeline)", agents, "rank"),
+            ("distance only", by_method["agents"] or by_method["rubric_only"], "distance_rank"),
+            ("rubric only (no agents)", by_method["rubric_only"], "rank"),
+            ("rubric without seed families / keyword priors", by_method["rubric_no_priors"], "rank"),
+            (agents_label, by_method["agents"], "rank"),
         ):
             ranks = [row[column] for row in source]
             found = [rank for rank in ranks if rank is not None]
@@ -358,9 +441,8 @@ class Scorecard:
                 {
                     "method": name,
                     "targets": len(ranks),
-                    "recall@1": recall(ranks, 1),
-                    "recall@3": recall(ranks, 3),
-                    "recall@5": recall(ranks, 5),
+                    **{f"recall@{k}": recall(ranks, k) for k in (1, 3, 5)},
+                    **{f"ci@{k}": recall_interval(ranks, k) for k in (1, 3, 5)},
                     "median_rank": statistics.median(found) if found else None,
                 }
             )
@@ -378,20 +460,24 @@ class Scorecard:
     def markdown(self) -> str:
         """Return the scorecard as Markdown."""
         lines = [
-            "# Soybean known-gene benchmark",
+            f"# {self.species.capitalize()} known-gene benchmark",
             "",
-            f"Model: `{self.model}`. "
-            + f"{len({row['trait'] for row in self.rows})} pseudo-studies, {len({row['gene_id'] for row in self.rows})} target genes.",
+            f"Model: `{self.model}`"
+            + (" (scripted; agent results are pending a real model)" if self.scripted else "")
+            + f". {len({row['trait'] for row in self.rows})} pseudo-studies, {len({row['gene_id'] for row in self.rows})} target genes.",
             "",
             "## Recall of the curated gene within its locus",
+            "",
+            "Brackets are percentile bootstrap 95% intervals over targets "
+            f"({BOOTSTRAP_SAMPLES} resamples).",
             "",
             "| Ranking | Targets | recall@1 | recall@3 | recall@5 | Median rank |",
             "| --- | --- | --- | --- | --- | --- |",
         ]
         for row in self.summary():
+            cells = " | ".join(_with_ci(row[f"recall@{k}"], row[f"ci@{k}"]) for k in (1, 3, 5))
             lines.append(
-                f"| {row['method']} | {row['targets']} | {_pct(row['recall@1'])} | {_pct(row['recall@3'])} | "
-                f"{_pct(row['recall@5'])} | {row['median_rank'] if row['median_rank'] is not None else '-'} |"
+                f"| {row['method']} | {row['targets']} | {cells} | {row['median_rank'] if row['median_rank'] is not None else '-'} |"
             )
         lines.extend(
             [
@@ -414,7 +500,8 @@ class Scorecard:
             lines.extend(
                 [
                     "",
-                    f"Agent runs: {claims} verifier-checked claims, "
+                    ("Agent runs (scripted model, pending real model): " if self.scripted else "Agent runs: ")
+                    + f"{claims} verifier-checked claims, "
                     f"{_pct(sum(run['unverified'] for run in agents) / claims if claims else None)} unsupported, "
                     f"{_pct(sum(run['contradicted'] for run in agents) / claims if claims else None)} contradicted; "
                     f"{sum(run['resolvable'] for run in agents)}/{sum(run['cited'] for run in agents)} cited aliases resolve; "
@@ -426,14 +513,26 @@ class Scorecard:
             lines.extend(["", "## Smoke case: poster SNPs (plant height)", "", "| Method | Target | Locus | Rank | Distance rank | Tier | Seconds |", "| --- | --- | --- | --- | --- | --- | --- |"])
             for row in self.smoke:
                 lines.append(f"| {row['method']} | {row['gene_id']} | {row['locus_id']} | {row['rank']} | {row['distance_rank']} | {row['tier']} | {row['seconds']:.1f} |")
-        lines.extend(["", "## Targets", "", "| Trait | Gene | Symbol | Hit distance | Genes in locus | Distance rank | Rubric rank | Agent rank |", "| --- | --- | --- | --- | --- | --- | --- | --- |"])
-        rubric = {(row["trait"], row["gene_id"]): row for row in self.rows if row["method"] == "rubric_only"}
+        lines.extend(
+            [
+                "",
+                "## Targets",
+                "",
+                "| Trait | Gene | Symbol | Hit distance | Genes in locus | Distance rank | Rubric rank | No-priors rank | Agent rank |",
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+            ]
+        )
+        ranks = {(row["method"], row["trait"], row["gene_id"]): row for row in self.rows}
         for row in (item for item in self.rows if item["method"] == "agents"):
-            other = rubric.get((row["trait"], row["gene_id"]), {})
+            rubric = ranks.get(("rubric_only", row["trait"], row["gene_id"]), {})
+            ablated = ranks.get(("rubric_no_priors", row["trait"], row["gene_id"]), {})
             lines.append(
                 f"| {row['trait']} | {row['gene_id']} | {row['symbol']} | {row['hit_distance_bp'] / 1000:.1f} kb | {row['n_genes']} | "
-                f"{row['distance_rank']} | {other.get('rank')} | {row['rank']} |"
+                f"{row['distance_rank']} | {rubric.get('rank')} | {ablated.get('rank')} | {row['rank']} |"
             )
+        if self.skipped:
+            lines.extend(["", "## Traits without targets", ""])
+            lines.extend(f"- {item}" for item in self.skipped)
         if self.notes:
             lines.extend(["", "## Notes", ""])
             lines.extend(f"- {note}" for note in self.notes)
@@ -444,27 +543,43 @@ def _pct(value: float | None) -> str:
     return "-" if value is None else f"{value:.0%}"
 
 
+def _with_ci(value: float | None, interval: tuple[float, float] | None) -> str:
+    if value is None:
+        return "-"
+    return f"{value:.0%} [{interval[0]:.0%}-{interval[1]:.0%}]" if interval else f"{value:.0%}"
+
+
 def run_benchmark(
     bundle: Bundle,
     *,
-    traits: tuple[str, ...] = SOYBEAN_TRAITS,
+    traits: tuple[str, ...] | None = None,
     max_loci: int = 8,
     flank_bp: int | None = None,
     model: str,
     smoke: bool = True,
     progress: Callable[[str], None] | None = None,
 ) -> Scorecard:
-    """Run every pseudo-study with the agents and rubric-only, plus the poster smoke case."""
+    """Run every pseudo-study with each ranking method, plus the poster smoke case for soybean."""
     say = progress or (lambda message: None)
-    studies = build_pseudo_studies(bundle, traits, max_loci=max_loci, flank_bp=flank_bp)
+    species = bundle.species
+    spec = spec_for(species)
+    registry = load_species(species)
+    wanted = traits or spec.traits
+    studies = build_pseudo_studies(bundle, wanted, max_loci=max_loci, flank_bp=flank_bp)
+    covered = {study.trait for study in studies}
+    skipped = [
+        f"{trait}: no {spec.target_note} with a trait-matched GWAS Atlas hit within {registry.typical_ld_kb:g} kb"
+        for trait in wanted
+        if trait not in covered
+    ]
     rows: list[dict[str, Any]] = []
     runs: list[dict[str, Any]] = []
     for pseudo in studies:
         genes = {target.gene_id for target in pseudo.targets}
         hits = {hit for target in pseudo.targets for hit in target.held_out_hits}
-        for method, orchestrator in (("rubric_only", RUBRIC_ONLY), ("agents", None)):
-            say(f"{pseudo.trait}: {method} ({len(pseudo.targets)} loci)")
-            with holdout(genes, hits):
+        for method, orchestrator, priors in METHODS:
+            say(f"{species} {pseudo.trait}: {method} ({len(pseudo.targets)} loci)")
+            with holdout(genes, hits), (nullcontext() if priors else without_priors()):
                 outcome = run_study(pseudo.study, orchestrator_model=orchestrator)
             report = outcome.values.get("report") or {}
             rows.extend(score_study(pseudo, outcome, method))
@@ -482,8 +597,8 @@ def run_benchmark(
                 }
             )
     smoke_rows: list[dict[str, Any]] = []
-    if smoke:
-        study = {"mode": "snps", "species": bundle.species, "assembly": "Wm82.a2.v1", "trait_text": "plant height", "snps": list(POSTER_SNPS)}
+    if smoke and species == "soybean":
+        study = {"mode": "snps", "species": species, "assembly": registry.canonical_assembly, "trait_text": "plant height", "snps": list(POSTER_SNPS)}
         target = Target("plant height", POSTER_TARGET, "", "", "S18_9263941", "Gm18", 9_263_941, None, 0)
         poster = PseudoStudy("plant height (poster)", [target], study)
         for method, orchestrator in (("rubric_only", RUBRIC_ONLY), ("agents", None)):
@@ -492,19 +607,23 @@ def run_benchmark(
             [row] = score_study(poster, outcome, method)
             smoke_rows.append({**row, "seconds": outcome.seconds})
     notes = [
-        "Targets are curated trait genes (LIS glyma.traits.yml) with a trait-matched GWAS Atlas hit within the typical soybean LD distance (150 kb); the most significant hit is the study SNP.",
-        "Held out while each study runs: the target's curated record, catalog GWAS hits that report it, and the input hit.",
+        f"Targets are {spec.target_note} with a trait-matched GWAS Atlas hit within the typical {species} LD distance "
+        f"({registry.typical_ld_kb:g} kb); the most significant hit is the study SNP.",
+        "Held out while each study runs: every curated record of the target, catalog GWAS hits that report it, and the input hit.",
         "Ranks are within the target's locus (all genes in its window); a target outside every locus counts as a miss.",
         "Distance-only ranks the same genes by distance to the nearest study SNP.",
+        "The no-priors ablation reruns the rubric with the trait profile's seed families and curated keywords removed; "
+        "ontology terms stay, and the only keyword left is the trait text itself.",
         "The verifier's verdicts are deterministic; the rates measure what it catches among the top candidates' claims. "
         "Unsupported means no independent source confirmed the claim; contradicted means another source or a passage check refuted it.",
     ]
     if model.startswith("agrihub-fake:"):
         notes.append(
-            "The scripted model reads no literature passages (gene2pubmed links only), so no claim can be independently "
-            "confirmed offline and the unsupported rate is expected to be near 100%."
+            "The agents ran on the scripted fake model, so the agents row equals the rubric up to the specialists' "
+            "scripted findings and is not a result: it is pending a real model. The scripted model reads no literature "
+            "passages (gene2pubmed links only), so the unsupported rate is expected to be near 100%."
         )
-    return Scorecard(rows=rows, runs=runs, smoke=smoke_rows, model=model, notes=notes)
+    return Scorecard(rows=rows, runs=runs, smoke=smoke_rows, model=model, notes=notes, species=species, skipped=skipped)
 
 
 def as_dicts(studies: list[PseudoStudy]) -> list[dict[str, Any]]:

@@ -15,6 +15,7 @@ from agrihub.benchmark import (
     holdout,
     rank_in_locus,
     recall,
+    recall_interval,
     run_benchmark,
 )
 from agrihub_data.bundle import open_bundle
@@ -56,16 +57,25 @@ def test_ranks_and_recall():
     assert rank_in_locus(rows, "L1", "a", by_distance) == 2
     assert rank_in_locus(rows, "L1", "z", by_distance) is None
     assert recall([1, 2, None, 4], 3) == 0.5 and recall([], 1) is None
+    low, high = recall_interval([1, 2, None, 4], 3) or (None, None)
+    assert low is not None and high is not None and 0.0 <= low <= 0.5 <= high <= 1.0
+    assert recall_interval([1, 1, 1], 1) == (1.0, 1.0) and recall_interval([], 1) is None
 
 
 def test_the_benchmark_scores_rubric_agents_and_distance_and_measures_claims(fixture_env: FixtureBundle):
     scorecard = run_benchmark(open_bundle("soybean"), traits=("plant height",), model="agrihub-fake:poster", smoke=True)
     methods = {row["method"]: row for row in scorecard.rows}
-    assert set(methods) == {"rubric_only", "agents"}
+    assert set(methods) == {"rubric_only", "rubric_no_priors", "agents"}
     assert all(row["in_locus"] and row["rank"] is not None and row["distance_rank"] is not None for row in scorecard.rows)
     summary = {row["method"]: row for row in scorecard.summary()}
-    assert set(summary) == {"distance only", "rubric only (no agents)", "agents (full pipeline)"}
+    assert set(summary) == {
+        "distance only",
+        "rubric only (no agents)",
+        "rubric without seed families / keyword priors",
+        "agents (full pipeline) - pending real model",
+    }
     assert all(row["targets"] == 1 for row in summary.values())
+    assert all(row["ci@3"] is not None for row in summary.values())
     agents = next(run for run in scorecard.runs if run["method"] == "agents")
     assert agents["input_tokens"] > 0 and agents["seconds"] > 0
     assert agents["resolvable"] == agents["cited"] > 0
@@ -74,9 +84,10 @@ def test_the_benchmark_scores_rubric_agents_and_distance_and_measures_claims(fix
     assert {row["gene_id"] for row in scorecard.smoke} == {"Glyma.18G092200"}
     markdown = scorecard.markdown()
     assert "| distance only | 1 |" in markdown and "## Smoke case: poster SNPs" in markdown
+    assert "| agents (full pipeline) - pending real model | 1 |" in markdown and "bootstrap 95% intervals" in markdown
     assert "unsupported rate is expected to be near 100%" in markdown
     parsed = list(csv.DictReader(io.StringIO(scorecard.csv_text())))
-    assert {row["method"] for row in parsed} == {"rubric_only", "agents"}
+    assert {row["method"] for row in parsed} == {"rubric_only", "rubric_no_priors", "agents"}
 
 
 def test_the_runner_writes_a_scorecard(fixture_env: FixtureBundle, tmp_path: Path):
