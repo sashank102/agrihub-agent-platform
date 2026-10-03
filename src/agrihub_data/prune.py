@@ -4,6 +4,8 @@ A pruned file stays in ``manifest.json`` with status ``pruned`` and its URL,
 size and sha256. ``fetch`` downloads it again and refuses bytes that differ
 from the recorded sha256 unless forced. Tools never read ``raw/``; only
 ``build`` does, so a pruned species needs a fetch before it can be rebuilt.
+Manual downloads (login or interactive exports) are never pruned, because
+fetch cannot restore them.
 """
 
 import shutil
@@ -65,7 +67,7 @@ def prune_raw(
         if entry.get("status") != "present":
             continue
         size = int(entry.get("size") or 0)
-        if entry.get("source_id") in kept_sources:
+        if entry.get("source_id") in kept_sources or entry.get("manual"):
             report.kept.append(key)
             report.bytes_kept += size
             continue

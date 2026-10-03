@@ -8,7 +8,7 @@ which reads the aliases declared there.
 import re
 from functools import cache
 from importlib import resources
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, Field, model_validator
@@ -84,9 +84,23 @@ class IdNamespace(BaseModel):
 
     id: str
     pattern: str
+    kind: Literal["gene", "transcript", "marker", "qualified"] = "gene"
+    """``qualified`` ids embed their assembly (LIS ``glyma.Wm82.gnm4.ann1.``) and are parsed apart."""
     assembly: str | None = None
+    canonical: str | None = None
+    """``re.Match.expand`` template giving the canonical gene id on the same assembly.
+
+    ``Glyma.\\1`` turns Ensembl ``GLYMA_18G092200`` into ``Glyma.18G092200``.
+    Without it a match is already a canonical id. Only set this where the
+    rewrite was validated against coordinates (see the source notes).
+    """
     description: str = ""
     example: str | None = None
+
+    def match(self, value: str, *, ignore_case: bool = True) -> re.Match[str] | None:
+        """Match a whole id, ignoring case unless asked not to."""
+        flags = re.IGNORECASE if ignore_case else 0
+        return re.fullmatch(self.pattern.removeprefix("^").removesuffix("$"), value, flags=flags)
 
 
 class Window(BaseModel):
@@ -114,6 +128,9 @@ class SourceFile(BaseModel):
     """Pinned checksum; a fetch that downloads different bytes fails."""
     size: int | None = None
     optional: bool = False
+    manual: bool = False
+    """The file needs a login or an interactive export; fetch only records it once
+    someone has saved it at ``raw/<source_id>/<path>`` (``url`` says where from)."""
 
 
 class Collection(BaseModel):
@@ -145,8 +162,19 @@ class Source(BaseModel):
     parser: str | None = None
     status: Literal["active", "planned"] = "active"
     notes: str | None = None
+    provides: list[str] = Field(default_factory=list)
+    """Bundle tables a planned source would fill; availability names it when they are empty."""
+    assembly_aliases: dict[str, str] = Field(default_factory=dict)
+    """Assembly names this source uses (``AGPv4``, ``Sorbi3.0``) -> registered assembly ids."""
+    params: dict[str, Any] = Field(default_factory=dict)
+    """Parser options, documented by each parser."""
     files: list[SourceFile] = Field(default_factory=list)
     collection: Collection | None = None
+
+    @property
+    def manual_only(self) -> bool:
+        """Return whether every file of the source is a manual download."""
+        return bool(self.files) and all(file.manual for file in self.files)
 
 
 class ReferenceAssembly(BaseModel):
@@ -195,6 +223,13 @@ class SpeciesRegistry(BaseModel):
             unknown = set(source.assemblies) - known - {NON_GENOMIC_ASSEMBLY}
             if unknown:
                 raise ValueError(f"source {source.id} names unregistered assemblies {sorted(unknown)}")
+            aliased = set(source.assembly_aliases.values()) - assembly_ids
+            if aliased:
+                raise ValueError(f"source {source.id} aliases unregistered assemblies {sorted(aliased)}")
+        for namespace in self.id_namespaces:
+            re.compile(namespace.pattern)
+            if namespace.assembly is not None and namespace.assembly not in assembly_ids:
+                raise ValueError(f"id namespace {namespace.id} names unregistered assembly {namespace.assembly}")
         return self
 
     def assembly(self, assembly_id: str | None = None) -> Assembly:
@@ -239,6 +274,59 @@ class SpeciesRegistry(BaseModel):
             if name.casefold() == group.strip().casefold():
                 return self.naming.canonical.format(number=number)
         return None
+
+    def gene_namespaces(self, assembly: str | None = None) -> list[IdNamespace]:
+        """Return gene id namespaces whose ids sit on ``assembly`` (canonical by default).
+
+        Namespaces without an assembly (ids reused across assemblies) count for every one.
+        """
+        target = self.assembly(assembly).id
+        return [
+            namespace
+            for namespace in self.id_namespaces
+            if namespace.kind == "gene" and namespace.assembly in (None, target)
+        ]
+
+    def canonical_gene_id(self, value: str, assembly: str | None = None) -> str | None:
+        """Return the canonical-namespace spelling of a gene id on ``assembly``, or ``None``.
+
+        The result can differ in letter case from the bundle id; callers look it
+        up case-insensitively.
+        """
+        text = value.strip()
+        target = self.assembly(assembly).id
+        transcripts = [
+            namespace
+            for namespace in self.id_namespaces
+            if namespace.kind == "transcript" and namespace.canonical and namespace.assembly in (None, target)
+        ]
+        for namespace in [*self.gene_namespaces(assembly), *transcripts]:
+            found = namespace.match(text)
+            if found is not None:
+                return found.expand(namespace.canonical) if namespace.canonical else found.group(0)
+        return None
+
+    def gene_id_pattern(self) -> re.Pattern[str]:
+        """Return a regex that finds any registered gene id inside free text."""
+        parts = [
+            namespace.pattern.removeprefix("^").removesuffix("$")
+            for namespace in self.id_namespaces
+            if namespace.kind == "gene"
+        ]
+        return re.compile(rf"(?<![\w.])(?:{'|'.join(parts) or '(?!)'})(?![\w])")
+
+    def source_assembly(self, source: Source, reported: str) -> str | None:
+        """Return the registered assembly a source's own assembly name means, or ``None``."""
+        name = reported.strip()
+        if not name:
+            return None
+        for alias, assembly_id in source.assembly_aliases.items():
+            if alias.casefold() == name.casefold():
+                return assembly_id
+        try:
+            return self.assembly(name).id
+        except UnknownAssemblyError:
+            return None
 
 
 _registered: dict[str, SpeciesRegistry] = {}

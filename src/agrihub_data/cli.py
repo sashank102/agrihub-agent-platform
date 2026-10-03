@@ -9,7 +9,7 @@ from typing import Any
 
 from agrihub_data.build import BuildError, build
 from agrihub_data.catalog import bundle_status
-from agrihub_data.fetch import FetchError, Manifest, fetch
+from agrihub_data.fetch import FetchError, Manifest, disk_budget, fetch
 from agrihub_data.paths import species_paths
 from agrihub_data.prune import disk_usage, prune_raw
 from agrihub_data.registry import TIERS, load_species, species_names
@@ -60,6 +60,11 @@ def _parser() -> argparse.ArgumentParser:
     prune_parser.add_argument("--keep", choices=TIERS, help="keep the raw files of sources up to this tier")
     prune_parser.add_argument("--dry-run", action="store_true", help="list what would be deleted")
     prune_parser.set_defaults(handler=_prune)
+
+    budget_parser = commands.add_parser("budget", help="print the download size per tier from the registry")
+    budget_parser.add_argument("--species", required=True, choices=species_names())
+    budget_parser.add_argument("--probe", action="store_true", help="ask servers for sizes the registry does not pin")
+    budget_parser.set_defaults(handler=_budget)
 
     status_parser = commands.add_parser("status", help="show fetch and build state and per-tier disk usage")
     status_parser.add_argument("--species", choices=species_names())
@@ -122,6 +127,24 @@ def _prune(args: argparse.Namespace) -> int:
         + (f" of tiers up to {args.keep}" if args.keep else "")
         + "; the manifest keeps their urls and sha256"
     )
+    return 0
+
+
+def _budget(args: argparse.Namespace) -> int:
+    budgets = disk_budget(args.species, probe=args.probe)
+    print(f"disk budget for {args.species} (raw downloads, from registry sizes{' and server probes' if args.probe else ''}):")
+    cumulative = 0
+    for budget in budgets:
+        cumulative += budget.bytes
+        print(
+            f"  {budget.tier:9} {budget.bytes / 1e6:>9.1f} MB in {budget.files:>3} files of {budget.sources:>2} sources"
+            f" (cumulative {cumulative / 1e6:.1f} MB)"
+            + (f"; {budget.probed} sized by probe" if budget.probed else "")
+        )
+        for key in budget.unknown:
+            print(f"      size unknown: {key}")
+        for key in budget.manual:
+            print(f"      manual download, not counted: {key}")
     return 0
 
 

@@ -17,6 +17,7 @@ from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from importlib import resources
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlsplit
@@ -35,6 +36,7 @@ from agrihub_data.registry import (
 logger = logging.getLogger(__name__)
 
 MANIFEST_SCHEMA = "agrihub.data-manifest/v1"
+PACKAGE_SCHEME = "package:"
 USER_AGENT = "agrihub-data/0.1 (+https://github.com/sashank102/agrihub-agent-platform)"
 CHUNK_BYTES = 1 << 20
 _HREF = re.compile(r"""href\s*=\s*["']([^"'#?]+)["']""", re.IGNORECASE)
@@ -57,6 +59,7 @@ class PlannedFile:
     path: str
     sha256: str | None
     optional: bool
+    manual: bool = False
 
     @property
     def key(self) -> str:
@@ -287,6 +290,8 @@ def _fetch_one(
 ) -> tuple[str, int, str | None]:
     destination = paths.source_dir(item.source.id) / item.path
     existing = manifest.entry(item.key)
+    if item.manual:
+        return _record_manual(item, destination, manifest, existing)
     if (
         not force
         and existing is not None
@@ -302,7 +307,10 @@ def _fetch_one(
     if force:
         part.unlink(missing_ok=True)
     try:
-        headers = _download(client, item.url, part, attempts, backoff_seconds)
+        if item.url.startswith(PACKAGE_SCHEME):
+            headers = _copy_packaged(item.url, part)
+        else:
+            headers = _download(client, item.url, part, attempts, backoff_seconds)
     except _NotFoundError:
         part.unlink(missing_ok=True)
         if item.optional:
@@ -395,8 +403,40 @@ def _planned(source: Source, file: SourceFile) -> PlannedFile:
         url=file.url,
         path=file.path,
         sha256=file.sha256,
-        optional=file.optional,
+        optional=file.optional or file.manual,
+        manual=file.manual,
     )
+
+
+def _record_manual(
+    item: PlannedFile,
+    destination: Path,
+    manifest: Manifest,
+    existing: dict[str, Any] | None,
+) -> tuple[str, int, str | None]:
+    """Record a manual download someone saved in place; never fetch it."""
+    if not destination.exists():
+        manifest.record(item.key, _entry(item, status="absent", manual=True))
+        logger.warning("%s is a manual download (%s); save it as %s", item.key, item.url, destination)
+        return "absent", 0, None
+    size = destination.stat().st_size
+    if existing is not None and existing.get("status") == "present" and existing.get("size") == size:
+        return "skipped", 0, None
+    digest = sha256_file(destination)
+    if item.sha256 is not None and digest != item.sha256:
+        return "failed", 0, f"sha256 mismatch for manual file {destination}: expected {item.sha256}, got {digest}"
+    manifest.record(item.key, _entry(item, status="present", size=size, sha256=digest, manual=True))
+    return "downloaded", size, None
+
+
+def _copy_packaged(url: str, part: Path) -> dict[str, str]:
+    """Copy a file shipped inside the agrihub_data package (``package:agrihub_data/curated/x.yaml``)."""
+    package, _, relative = url.removeprefix(PACKAGE_SCHEME).partition("/")
+    resource = resources.files(package).joinpath(relative)
+    if not resource.is_file():
+        raise _NotFoundError(url)
+    part.write_bytes(resource.read_bytes())
+    return {}
 
 
 def _entry(item: PlannedFile, *, status: str, **extra: Any) -> dict[str, Any]:
@@ -415,3 +455,73 @@ def _entry(item: PlannedFile, *, status: str, **extra: Any) -> dict[str, Any]:
 
 def _now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat()
+
+
+@dataclass
+class TierBudget:
+    """Download size of one tier from the registry, with what is not sized."""
+
+    tier: Tier
+    sources: int = 0
+    files: int = 0
+    bytes: int = 0
+    probed: int = 0
+    unknown: list[str] = field(default_factory=list)
+    manual: list[str] = field(default_factory=list)
+
+
+def disk_budget(species: str, *, probe: bool = False, client: httpx.Client | None = None) -> list[TierBudget]:
+    """Return the raw download size per tier from registry ``size`` fields.
+
+    With ``probe`` the size of a file the registry does not pin is asked from
+    the server (HEAD, then a one-byte range request). Collections and manual
+    downloads stay unsized.
+    """
+    registry = load_species(species)
+    owns_client = client is None and probe
+    http = client or (new_client(timeout=30.0) if probe else None)
+    budgets = []
+    try:
+        for tier in ("core", "extended", "heavy"):
+            budget = TierBudget(tier=tier)  # type: ignore[arg-type]
+            for source in registry.sources:
+                if source.tier != tier or source.status != "active":
+                    continue
+                budget.sources += 1
+                if source.collection is not None:
+                    budget.unknown.append(f"{source.id} (collection listing)")
+                for file in source.files:
+                    key = f"{source.id}/{file.path}"
+                    if file.manual:
+                        budget.manual.append(key)
+                        continue
+                    budget.files += 1
+                    size = file.size
+                    if size is None and file.url.startswith(PACKAGE_SCHEME):
+                        package, _, relative = file.url.removeprefix(PACKAGE_SCHEME).partition("/")
+                        size = len(resources.files(package).joinpath(relative).read_bytes())
+                    if size is None and http is not None:
+                        size = _remote_size(http, file.url)
+                        budget.probed += size is not None
+                    if size is None:
+                        budget.unknown.append(key)
+                    else:
+                        budget.bytes += size
+            budgets.append(budget)
+    finally:
+        if owns_client and http is not None:
+            http.close()
+    return budgets
+
+
+def _remote_size(client: httpx.Client, url: str) -> int | None:
+    try:
+        response = client.head(url)
+        if response.status_code < 400 and response.headers.get("content-length"):
+            return int(response.headers["content-length"])
+        with client.stream("GET", url, headers={"Range": "bytes=0-0"}) as ranged:
+            total = ranged.headers.get("content-range", "").rpartition("/")[2]
+            return int(total) if total.isdigit() else None
+    except (httpx.HTTPError, ValueError):
+        return None
+

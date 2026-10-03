@@ -224,16 +224,25 @@ id_namespaces:
     example: Glyma.18G092200
   - id: glyma_transcript
     pattern: '^Glyma\.\d{2}G\d{6}\.\d+$'
+    kind: transcript
     example: Glyma.18G092200.1
   - id: lis_full
     pattern: '^glyma\.Wm82\.gnm\d\.ann\d\.Glyma\.\d{2}G\d{6}$'
+    kind: qualified
     description: LIS assembly-qualified gene id.
     example: glyma.Wm82.gnm4.ann1.Glyma.18G092200
   - id: ensembl
-    pattern: '^GLYMA_\d{2}G\d{6}$'
+    pattern: '^GLYMA_(\d{2}G\d{6})$'
     assembly: Wm82.a2.v1
-    description: Ensembl Plants gene ids on Glycine_max_v2.1.
+    canonical: 'Glyma.\1'
+    description: Ensembl Plants gene ids on Glycine_max_v2.1 (also PMN GLYMA.08G181200 and STRING ORF names).
     example: GLYMA_18G092200
+  - id: ensembl_dotted
+    pattern: '^GLYMA\.(\d{2}G\d{6})$'
+    assembly: Wm82.a2.v1
+    canonical: 'Glyma.\1'
+    description: Upper-case ids in PMN SoyCyc Gene-id columns.
+    example: GLYMA.08G181200
   - id: glyma1
     pattern: '^Glyma\d{2}g\d{5}$'
     assembly: Wm82.a1.v1
@@ -241,14 +250,17 @@ id_namespaces:
     example: Glyma18g15421
   - id: ss
     pattern: '^ss\d+$'
+    kind: marker
     description: dbSNP submitted ids of SoySNP50K/180K/6K markers.
     example: ss715631025
   - id: barc_snp
     pattern: '^BARC_\d\.\d{2}_Gm\d{2}_\d+_[ACGTN]_[ACGTN]$'
+    kind: marker
     assembly: Wm82.a1.v1
     description: BARC SNP names; chromosome and position are on Wm82.a1.
     example: BARC_1.01_Gm01_24939_A_G
   - id: positional_snp
+    kind: marker
     pattern: '^S\d+_\d+$'
     description: Chromosome-position SNP ids used by GmHapMap and the sister team.
     example: S18_9263941
@@ -502,6 +514,7 @@ sources:
     citation: Yates et al. 2022, Nucleic Acids Res 50:D996-D1003
     assemblies: [Wm82.a2.v1, TAIR10]
     parser: ensembl_compara
+    params: {ensembl_species: glycine_max}
     notes: Each genome file holds an arbitrary half of each pair, so both soybean and Arabidopsis files are needed.
     files:
       - url: https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/tsv/ensembl-compara/homologies/glycine_max/Compara.116.protein_default.homologies.tsv.gz
@@ -785,6 +798,7 @@ sources:
     citation: Hawkins et al. 2025, Plant Physiol (Plant Metabolic Network 16)
     assemblies: [Wm82.a2.v1]
     parser: pmn_pathways
+    params: {source_db: PMN SoyCyc}
     notes: The PMN FTP listing is a Google Cloud bucket; files are fetched from the bucket URL.
     files:
       - url: https://plantcyc-ftp.storage.googleapis.com/pmn/Pathways/Data_dumps/PMN16_July2024/pathways/soycyc_pathways.20251021

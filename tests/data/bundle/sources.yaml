@@ -133,6 +133,7 @@ sources:
     license: unrestricted
     assemblies: [Wm82.a2.v1, TAIR10]
     parser: ensembl_compara
+    params: {ensembl_species: glycine_max}
     files:
       - {url: "{base}/ensembl_compara/glycine_max.homologies.tsv.gz", path: glycine_max.homologies.tsv.gz}
       - {url: "{base}/ensembl_compara/arabidopsis_thaliana.homologies.tsv.gz", path: arabidopsis_thaliana.homologies.tsv.gz}
@@ -291,6 +292,7 @@ sources:
     license: Free download
     assemblies: [Wm82.a2.v1]
     parser: pmn_pathways
+    params: {source_db: PMN SoyCyc}
     files:
       - {url: "{base}/pmn_soycyc/soycyc_pathways.20251021.tsv", path: soycyc_pathways.20251021.tsv}
   - id: plant_reactome
