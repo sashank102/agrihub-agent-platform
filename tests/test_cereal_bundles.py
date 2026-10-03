@@ -1,12 +1,15 @@
 """Spot checks on the built rice, maize and sorghum bundles (skipped when a bundle is not built)."""
 
+import gc
+from collections.abc import Iterator
+
 import pytest
 import yaml
 
 from agent_platform.core.settings import get_data_paths
 from agrihub_data.availability import domain_status
-from agrihub_data.bundle import open_bundle
-from agrihub_data.query import overlap
+from agrihub_data.bundle import close_bundles, open_bundle
+from agrihub_data.query import overlap, traits
 from agrihub_data.query.common import Region
 from agrihub_data.query.ids import map_gene_ids
 from agrihub_data.query.traits import map_trait
@@ -15,6 +18,16 @@ from agrihub_data.verify import verify
 
 DATA = get_data_paths().data_dir
 pytestmark = pytest.mark.bundle
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _release_bundles() -> Iterator[None]:
+    """Drop the cereal bundles and their ontology indexes so later tests run on a small heap."""
+    yield
+    close_bundles()
+    for cache in (traits._indexes, traits._children, traits._names):
+        cache.clear()
+    gc.collect()
 
 
 def _built(species: str) -> pytest.MarkDecorator:
