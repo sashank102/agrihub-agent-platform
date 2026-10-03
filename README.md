@@ -83,6 +83,45 @@ scripts/setup_heavy_tools.sh   # PLINK2 binary and the ensembl-vep Docker image
 ./.tools/bin/uv run agrihub-data verify --species soybean
 ```
 
+Rice (IRGSP-1.0), maize (Zm-B73 NAM-5.0) and sorghum (BTx623 NCBIv3) use the
+same commands and the same tools; only their registry files
+(`src/agrihub_data/registry/<species>.yaml`) and source parsers differ.
+`budget` prints the download size per tier from the registry before fetching:
+
+```bash
+./.tools/bin/uv run agrihub-data budget --species rice
+# core: RAP-DB models, annotation and RAP-MSU map, RAP-DB curated genes, Oryzabase, funRiceGenes,
+#       Gramene QTL, GWAS Atlas, Ensembl Compara, PLAZA monocots, TAIR, GO/TO/PO/CO_320 (~322 MB raw)
+# extended: PMN OryzaCyc and Plant Reactome (~26 MB more)
+./.tools/bin/uv run agrihub-data fetch --species rice --tier extended
+./.tools/bin/uv run agrihub-data build --species rice --tier extended
+./.tools/bin/uv run agrihub-data verify --species rice
+```
+
+- Maize (~290 MB core): MaizeGDB v5 models, annotation, v4->v5 gene xref and
+  chain file (GWAS Atlas rows are on v4 and are lifted to v5 at build time),
+  classical genes, Wallace 2014 NAM GWAS on v5. Fetched from
+  `download.maizegdb.org`; the main MaizeGDB site blocks scripts.
+- Sorghum (~220 MB core): SorghumBase NCBIv3 models, GWAS Atlas (the Sbi1.4
+  rows are dropped), the cloned Ma/Dw genes of Grant et al. 2023 shipped in
+  `src/agrihub_data/curated/`, PLAZA, Compara.
+- Two sorghum sources are manual downloads that `fetch` never scripts. It
+  records them once they are saved in place, and `prune-raw` never deletes
+  them:
+  - Phytozome `Sbicolor_454_v3.1.1.annotation_info.txt` needs a JGI or ORCID
+    login: save it as `var/data/sorghum/raw/phytozome_annotation_info/Sbicolor_454_v3.1.1.annotation_info.txt`.
+  - The Sorghum QTL Atlas has no scriptable export: build `SorghumQtlAtlas.db`
+    with `github.com/jlboat/query_qtl_atlas` from the Atlas Excel exports and
+    save it as `var/data/sorghum/raw/sorghum_qtl_atlas/SorghumQtlAtlas.db`.
+
+  Then run `fetch` and `build` again.
+- Known gaps are explicit in the registry (`status: planned` sources with
+  `provides`) and reported per domain by `availability`: maize QTL (no
+  positioned maize QTL table), sorghum expression (MOROKOSHI is down), rice
+  and maize expression (sample sheets not curated yet), RiceNet and Q-TARO.
+- Licences are recorded per source; GWAS Atlas, PlantTFDB and PlantRegMap are
+  flagged academic-only and the report's Sources list says so.
+
 Tools never read the raw downloads, so they can be deleted once the bundle
 verifies. `prune-raw` refuses to delete anything otherwise, and keeps every
 file's URL and sha256 in `manifest.json`; `fetch` restores them and fails if
@@ -93,6 +132,10 @@ upstream bytes changed since pruning. `status` shows disk use per tier:
 ./.tools/bin/uv run agrihub-data prune-raw --species soybean   # all raw files
 ./.tools/bin/uv run agrihub-data status --species soybean
 ```
+
+After `prune-raw --keep core`, rebuilding the extended or heavy tier of any
+species needs `fetch --tier extended` (or `heavy`) first: `build` refuses to
+run while pruned files are missing and says which sources to re-fetch.
 
 Domains whose data or binaries are missing are reported to the agents and in
 the report as "not available in this build"; `/registry/species` lists them.
