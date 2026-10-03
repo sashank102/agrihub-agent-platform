@@ -1,8 +1,9 @@
 """Resumable downloader for registry sources.
 
 Each file downloads to ``<name>.part`` with HTTP ``Range`` resume, is hashed
-with sha256, checked against the registry pin when there is one, and renamed
-into place. ``manifest.json`` records the exact URL, size, sha256, version and
+with sha256, checked against the registry pin when there is one (or, for a
+file ``prune-raw`` deleted, against the sha256 recorded before pruning), and
+renamed into place. ``manifest.json`` records the exact URL, size, sha256, version and
 license of every file, and the resolved entries of every collection listing.
 """
 
@@ -110,6 +111,12 @@ class Manifest:
         """Store one file entry and persist the manifest."""
         with self._lock:
             self.files[key] = entry
+            self._write()
+
+    def record_many(self, entries: dict[str, dict[str, Any]]) -> None:
+        """Store several file entries and persist the manifest once."""
+        with self._lock:
+            self.files.update(entries)
             self._write()
 
     def record_collection(self, source_id: str, listing: dict[str, Any]) -> None:
@@ -309,6 +316,13 @@ def _fetch_one(
         part.unlink(missing_ok=True)
         return "failed", 0, (
             f"sha256 mismatch for {item.url}: expected {item.sha256}, got {digest}"
+        )
+    recorded = existing.get("sha256") if existing is not None and existing.get("status") == "pruned" else None
+    if not force and recorded and existing is not None and existing.get("url") == item.url and digest != recorded:
+        part.unlink(missing_ok=True)
+        return "failed", 0, (
+            f"{item.url} changed upstream since it was pruned: expected sha256 {recorded}, got {digest}; "
+            "fetch with --force to accept the new file and rebuild"
         )
     size = part.stat().st_size
     part.replace(destination)

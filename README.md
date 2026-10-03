@@ -83,6 +83,17 @@ scripts/setup_heavy_tools.sh   # PLINK2 binary and the ensembl-vep Docker image
 ./.tools/bin/uv run agrihub-data verify --species soybean
 ```
 
+Tools never read the raw downloads, so they can be deleted once the bundle
+verifies. `prune-raw` refuses to delete anything otherwise, and keeps every
+file's URL and sha256 in `manifest.json`; `fetch` restores them and fails if
+upstream bytes changed since pruning. `status` shows disk use per tier:
+
+```bash
+./.tools/bin/uv run agrihub-data prune-raw --species soybean --keep core --dry-run
+./.tools/bin/uv run agrihub-data prune-raw --species soybean   # all raw files
+./.tools/bin/uv run agrihub-data status --species soybean
+```
+
 Domains whose data or binaries are missing are reported to the agents and in
 the report as "not available in this build"; `/registry/species` lists them.
 

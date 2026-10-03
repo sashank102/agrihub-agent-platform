@@ -1,4 +1,4 @@
-"""``agrihub-data``: fetch, build, verify and inspect species bundles."""
+"""``agrihub-data``: fetch, build, verify, prune and inspect species bundles."""
 
 import argparse
 import json
@@ -11,6 +11,7 @@ from agrihub_data.build import BuildError, build
 from agrihub_data.catalog import bundle_status
 from agrihub_data.fetch import FetchError, Manifest, fetch
 from agrihub_data.paths import species_paths
+from agrihub_data.prune import disk_usage, prune_raw
 from agrihub_data.registry import TIERS, load_species, species_names
 from agrihub_data.verify import verify
 
@@ -51,7 +52,16 @@ def _parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--no-checksums", action="store_true", help="skip re-hashing downloads")
     verify_parser.set_defaults(handler=_verify)
 
-    status_parser = commands.add_parser("status", help="show fetch and build state")
+    prune_parser = commands.add_parser(
+        "prune-raw",
+        help="delete raw downloads once the bundle verifies; the manifest keeps urls and sha256 for re-fetching",
+    )
+    prune_parser.add_argument("--species", required=True, choices=species_names())
+    prune_parser.add_argument("--keep", choices=TIERS, help="keep the raw files of sources up to this tier")
+    prune_parser.add_argument("--dry-run", action="store_true", help="list what would be deleted")
+    prune_parser.set_defaults(handler=_prune)
+
+    status_parser = commands.add_parser("status", help="show fetch and build state and per-tier disk usage")
     status_parser.add_argument("--species", choices=species_names())
     status_parser.add_argument("--json", action="store_true")
     status_parser.set_defaults(handler=_status)
@@ -98,6 +108,23 @@ def _verify(args: argparse.Namespace) -> int:
     return 0 if report.ok else 1
 
 
+def _prune(args: argparse.Namespace) -> int:
+    report = prune_raw(args.species, keep=args.keep, data_dir=args.data_dir, dry_run=args.dry_run)
+    if not report.ok:
+        for problem in report.problems:
+            print(f"  PROBLEM {problem}", file=sys.stderr)
+        print(f"prune-raw: the {args.species} bundle does not verify; nothing was deleted", file=sys.stderr)
+        return 1
+    verb = "would delete" if report.dry_run else "deleted"
+    print(
+        f"prune-raw: {verb} {len(report.deleted)} raw files ({report.bytes_freed / 1e6:.1f} MB); "
+        f"kept {len(report.kept)} ({report.bytes_kept / 1e6:.1f} MB)"
+        + (f" of tiers up to {args.keep}" if args.keep else "")
+        + "; the manifest keeps their urls and sha256"
+    )
+    return 0
+
+
 def _status(args: argparse.Namespace) -> int:
     rows = [_species_status(name, args.data_dir) for name in ([args.species] if args.species else species_names())]
     if args.json:
@@ -110,6 +137,16 @@ def _status(args: argparse.Namespace) -> int:
             f"{row['species']:8} {row['canonical_assembly']:26} sources {row['fetched_sources']}/"
             f"{row['core_sources']} core fetched, {row['files']} files ({row['megabytes']} MB); {built}"
         )
+        usage = row["disk"]
+        for tier, counts in usage["tiers"].items():
+            if not (counts["files"] or counts["pruned_files"]):
+                continue
+            print(
+                f"  {tier:12} raw {counts['raw_bytes'] / 1e6:>9.1f} MB in {counts['files']:>5} files"
+                + (f"; pruned {counts['pruned_bytes'] / 1e6:.1f} MB in {counts['pruned_files']} files" if counts["pruned_files"] else "")
+            )
+        resources = ", ".join(f"{name}/ {size / 1e6:.1f} MB" for name, size in usage["resources_bytes"].items())
+        print(f"  {'bundle':12} {usage['bundle_bytes'] / 1e6:>13.1f} MB" + (f"; {resources}" if resources else ""))
     return 0
 
 
@@ -131,6 +168,7 @@ def _species_status(species: str, data_dir: Path | None) -> dict[str, Any]:
         "files": len(present),
         "megabytes": round(sum(int(entry.get("size") or 0) for entry in present) / 1e6, 1),
         "bundle": bundle,
+        "disk": disk_usage(species, data_dir),
     }
 
 

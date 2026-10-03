@@ -129,6 +129,12 @@ def build(
     if unknown:
         raise BuildError(f"sources name unknown parsers: {', '.join(unknown)}")
     missing = [source.id for source in sources if not manifest.source_files(source.id)]
+    pruned = sorted({str(entry.get("source_id")) for entry in manifest.files.values() if entry.get("status") == "pruned"})
+    if missing and pruned:
+        raise BuildError(
+            f"not fetched: {', '.join(missing)}; raw files of {', '.join(pruned)} were pruned, "
+            "run agrihub-data fetch to restore them (their checksums are kept in the manifest)"
+        )
     if missing:
         raise BuildError(f"not fetched: {', '.join(missing)}; run agrihub-data fetch first")
     present = {str(source.parser) for source in sources}
