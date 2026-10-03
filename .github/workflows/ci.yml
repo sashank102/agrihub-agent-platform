@@ -25,7 +25,7 @@ jobs:
       TEST_DATABASE_URI: postgresql://agent_platform:agent_platform@localhost:5432/agent_platform
       DATABASE_URI: postgresql://agent_platform:agent_platform@localhost:5432/agent_platform
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
@@ -50,7 +50,7 @@ jobs:
   frontend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
         with:
           version: 10.5.1
@@ -95,7 +95,7 @@ jobs:
       DATABASE_URI: postgresql://agent_platform:agent_platform@localhost:5432/agent_platform
       TEST_DATABASE_URI: postgresql://agent_platform:agent_platform@localhost:5432/agent_platform
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v6
       - uses: pnpm/action-setup@v4
         with:
@@ -131,7 +131,7 @@ jobs:
       GRAPH_FIXTURE: "true"
       NEXT_PUBLIC_API_URL: http://127.0.0.1:8000
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build images from the checkout
         run: docker compose build
       - name: Scan image metadata
@@ -165,7 +165,7 @@ jobs:
   secrets:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Scan tracked files
