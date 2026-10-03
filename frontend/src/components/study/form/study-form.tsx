@@ -2,7 +2,14 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertTriangle, Info, Loader2, Play } from "lucide-react";
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import {
@@ -44,6 +51,7 @@ import { cn } from "@/lib/utils";
 import { useStreamContext } from "@/providers/Stream";
 import { useStudySession } from "@/providers/StudyStream";
 import { SnpInput } from "./snp-input";
+import { SisterTeamAssembly } from "./sister-team-assembly";
 import { ServerPreview, SnpPreview } from "./snp-preview";
 import {
   SPECIALIST_LABELS,
@@ -68,8 +76,14 @@ const DEFAULTS: StudyFormValues = {
   ld_r2: 0.2,
   top_k_per_locus: 5,
   specialists_enabled: [...SPECIALISTS],
+  assembly_confirmed: true,
   snps: [],
 };
+
+function parsedKey(result: ParseResult): string {
+  const rows = result.rows;
+  return `${rows.length}:${rows[0]?.raw ?? ""}:${rows.at(-1)?.raw ?? ""}`;
+}
 
 function FieldError({ id, message }: { id: string; message?: string }) {
   if (!message) {
@@ -98,6 +112,7 @@ export function StudyForm() {
   const [validation, setValidation] = useState<StudyValidation | null>(null);
   const [validating, setValidating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const presetSeen = useRef<string | null>(null);
 
   const schema = useMemo(() => studyFormSchema(registry ?? []), [registry]);
   const form = useForm<StudyFormValues>({
@@ -171,6 +186,13 @@ export function StudyForm() {
         shouldValidate: formState.isSubmitted,
         shouldDirty: true,
       });
+      const key = result?.preset === "sister-team" ? parsedKey(result) : null;
+      if (key !== presetSeen.current) {
+        presetSeen.current = key;
+        setValue("assembly_confirmed", key === null, {
+          shouldValidate: formState.isSubmitted,
+        });
+      }
     },
     [formState.isSubmitted, setValue],
   );
@@ -403,7 +425,12 @@ export function StudyForm() {
                       className="border-input bg-background h-9 rounded-md border px-3 text-sm"
                       value={field.value}
                       onBlur={field.onBlur}
-                      onChange={(event) => field.onChange(event.target.value)}
+                      onChange={(event) => {
+                        field.onChange(event.target.value);
+                        setValue("assembly_confirmed", true, {
+                          shouldValidate: formState.isSubmitted,
+                        });
+                      }}
                       aria-invalid={!!formState.errors.assembly || undefined}
                     >
                       {(species?.assemblies ?? [{ id: field.value }]).map(
@@ -415,6 +442,9 @@ export function StudyForm() {
                             {item.id}
                             {"canonical" in item && item.canonical
                               ? " (canonical)"
+                              : ""}
+                            {"lift_to" in item && item.lift_to
+                              ? ` (lifted to ${item.lift_to})`
                               : ""}
                           </option>
                         ),
@@ -484,6 +514,20 @@ export function StudyForm() {
                 onParsed={onParsed}
                 invalid={!!formState.errors.snps}
               />
+              {parsed?.preset === "sister-team" && species && (
+                <SisterTeamAssembly
+                  species={species}
+                  rows={parsed.rows}
+                  value={values.assembly}
+                  confirmed={values.assembly_confirmed}
+                  onChoose={(id) => {
+                    setValue("assembly", id, { shouldValidate: true });
+                    setValue("assembly_confirmed", true, {
+                      shouldValidate: true,
+                    });
+                  }}
+                />
+              )}
               <FieldError
                 id={`${ids}-snps-error`}
                 message={formState.errors.snps?.message}

@@ -1,0 +1,105 @@
+{
+  "id": "Lee.gnm2",
+  "chromosomes": [
+    {
+      "name": "Gm01",
+      "length": 59188048,
+      "aliases": []
+    },
+    {
+      "name": "Gm02",
+      "length": 54574089,
+      "aliases": []
+    },
+    {
+      "name": "Gm03",
+      "length": 49399840,
+      "aliases": []
+    },
+    {
+      "name": "Gm04",
+      "length": 54962134,
+      "aliases": []
+    },
+    {
+      "name": "Gm05",
+      "length": 44917289,
+      "aliases": []
+    },
+    {
+      "name": "Gm06",
+      "length": 52842820,
+      "aliases": []
+    },
+    {
+      "name": "Gm07",
+      "length": 48538069,
+      "aliases": []
+    },
+    {
+      "name": "Gm08",
+      "length": 50495932,
+      "aliases": []
+    },
+    {
+      "name": "Gm09",
+      "length": 51531123,
+      "aliases": []
+    },
+    {
+      "name": "Gm10",
+      "length": 55084560,
+      "aliases": []
+    },
+    {
+      "name": "Gm11",
+      "length": 40872309,
+      "aliases": []
+    },
+    {
+      "name": "Gm12",
+      "length": 43649404,
+      "aliases": []
+    },
+    {
+      "name": "Gm13",
+      "length": 47408777,
+      "aliases": []
+    },
+    {
+      "name": "Gm14",
+      "length": 53143324,
+      "aliases": []
+    },
+    {
+      "name": "Gm15",
+      "length": 54862980,
+      "aliases": []
+    },
+    {
+      "name": "Gm16",
+      "length": 39085136,
+      "aliases": []
+    },
+    {
+      "name": "Gm17",
+      "length": 43090730,
+      "aliases": []
+    },
+    {
+      "name": "Gm18",
+      "length": 61352712,
+      "aliases": []
+    },
+    {
+      "name": "Gm19",
+      "length": 53311394,
+      "aliases": []
+    },
+    {
+      "name": "Gm20",
+      "length": 50292855,
+      "aliases": []
+    }
+  ]
+}

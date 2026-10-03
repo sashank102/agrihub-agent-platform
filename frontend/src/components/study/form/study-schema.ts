@@ -77,6 +77,8 @@ const base = z.object({
   specialists_enabled: z
     .array(z.enum(SPECIALISTS))
     .min(1, "Enable at least one specialist"),
+  /** False while a sister-team file waits for the user to say which assembly its positions are on. */
+  assembly_confirmed: z.boolean(),
 });
 
 export function studyFormSchema(registry: SpeciesInfo[]) {
@@ -105,6 +107,13 @@ export function studyFormSchema(registry: SpeciesInfo[]) {
           message: `${value.species} is not a registered species`,
         });
         return;
+      }
+      if (!value.assembly_confirmed) {
+        context.addIssue({
+          code: "custom",
+          path: ["assembly"],
+          message: "Choose the assembly the sister-team positions are on",
+        });
       }
       if (!species.assemblies.some((item) => item.id === value.assembly)) {
         context.addIssue({

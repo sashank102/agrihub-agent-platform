@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   MAX_INPUT_BYTES,
+  OUT_OF_BOUNDS_WARN_SHARE,
+  assemblyFit,
   chromosomeNormalizer,
   mergeValidation,
   parseSnpText,
@@ -267,6 +269,36 @@ describe("tables", () => {
           ).not.toContain("position_mismatch");
         }
       }
+    },
+  );
+
+  it.skipIf(!fs.existsSync(sisterTeamDir))(
+    "finds the sister-team positions past Wm82.a2 ends and all within Lee.gnm2",
+    () => {
+      const text = fs
+        .readdirSync(sisterTeamDir)
+        .filter((name) => name.endsWith(".csv"))
+        .map((name, index) => {
+          const body = fs.readFileSync(path.join(sisterTeamDir, name), "utf8");
+          return index === 0 ? body : body.split("\n").slice(1).join("\n");
+        })
+        .join("\n");
+      const result = parseSnpText(text, options);
+      const leeGnm2 = JSON.parse(
+        fs.readFileSync(
+          path.join(here, "__fixtures__", "soybean-lee-gnm2.json"),
+          "utf8",
+        ),
+      );
+      const [wm82, lee] = assemblyFit(
+        result.rows,
+        [soybean, leeGnm2],
+        soybean.prefixes,
+      );
+      expect(wm82.checked).toBe(600);
+      expect(wm82.beyond).toBe(64);
+      expect(wm82.share).toBeGreaterThan(OUT_OF_BOUNDS_WARN_SHARE);
+      expect(lee).toMatchObject({ assembly: "Lee.gnm2", beyond: 0, share: 0 });
     },
   );
 });

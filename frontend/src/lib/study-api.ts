@@ -23,6 +23,8 @@ export type Assembly = {
   aliases: string[];
   description: string;
   canonical: boolean;
+  /** Positions on this assembly are lifted to ``lift_to`` before loci are built. */
+  lift_to?: string | null;
   chromosomes: Chromosome[];
 };
 
@@ -52,6 +54,17 @@ export type SnpInput = {
   score?: number | null;
   p_value?: number | null;
   method?: string | null;
+  score_type?: string | null;
+  model_id?: string | null;
+  lifted_from?: {
+    assembly: string;
+    chrom: string;
+    pos: number;
+    method: string;
+    confidence: "high" | "medium" | "low";
+    detail?: string;
+    anchors?: string[];
+  } | null;
 };
 
 type StudyBase = {

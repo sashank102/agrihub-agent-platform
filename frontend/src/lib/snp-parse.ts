@@ -17,6 +17,8 @@ export type ParsedSnp = {
   score: number | null;
   pValue: number | null;
   method: string | null;
+  /** The chromosome and position as given, before they are checked against the assembly. */
+  given: { chrom: string; pos: number } | null;
   issues: SnpIssue[];
   duplicateOf: number | null;
   input: SnpInput | null;
@@ -187,6 +189,7 @@ function emptyRow(line: number, raw: string, extras: Extras): ParsedSnp {
     score: extras.score ?? null,
     pValue: extras.pValue ?? null,
     method: extras.method ?? null,
+    given: null,
     issues: [],
     duplicateOf: null,
     input: null,
@@ -206,6 +209,7 @@ function placeRow(
   pos: number,
   normalizer: Normalizer,
 ): ParsedSnp {
+  row.given = { chrom: chromToken.trim(), pos };
   const chrom = normalizer.chrom(chromToken);
   if (!chrom) {
     return invalid(
@@ -568,6 +572,47 @@ export function parseSnpText(
   return parseList(lines, normalizer);
 }
 
+/** Above this share of rows past chromosome ends, the positions are probably on another assembly. */
+export const OUT_OF_BOUNDS_WARN_SHARE = 0.02;
+
+export type AssemblyFit = {
+  assembly: string;
+  checked: number;
+  beyond: number;
+  share: number;
+};
+
+/** Count the given positions that fall past chromosome ends on each assembly. */
+export function assemblyFit(
+  rows: ParsedSnp[],
+  assemblies: AssemblyInfo[],
+  prefixes: string[] = [],
+): AssemblyFit[] {
+  const given = rows.flatMap((row) => (row.given ? [row.given] : []));
+  return assemblies.map((assembly) => {
+    const normalizer = chromosomeNormalizer(assembly, prefixes);
+    let checked = 0;
+    let beyond = 0;
+    for (const item of given) {
+      const chrom = normalizer.chrom(item.chrom);
+      const length = chrom ? normalizer.length(chrom) : null;
+      if (length === null) {
+        continue;
+      }
+      checked += 1;
+      if (item.pos > length) {
+        beyond += 1;
+      }
+    }
+    return {
+      assembly: assembly.id,
+      checked,
+      beyond,
+      share: checked ? beyond / checked : 0,
+    };
+  });
+}
+
 export function submittableSnps(rows: ParsedSnp[]): SnpInput[] {
   return rows.flatMap((row) => (row.input ? [row.input] : []));
 }
@@ -640,13 +685,21 @@ export function mergeValidation(
     }
     const hit = placed.get(row.raw);
     if (hit) {
+      const lifted = hit.lifted_from
+        ? [
+            {
+              code: "lifted",
+              message: `lifted from ${hit.lifted_from.assembly} ${hit.lifted_from.chrom}:${hit.lifted_from.pos.toLocaleString("en-US")} (${hit.lifted_from.confidence} confidence)`,
+            },
+          ]
+        : [];
       return {
         ...row,
         chrom: hit.chrom ?? row.chrom,
         pos: hit.pos ?? row.pos,
         status:
           rowWarnings.length || row.status === "warning" ? "warning" : "ok",
-        issues: [...issues, ...rowWarnings],
+        issues: [...issues, ...lifted, ...rowWarnings],
         server: "placed",
       };
     }

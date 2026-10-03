@@ -46,6 +46,7 @@ const values: StudyFormValues = {
   ld_r2: 0.3,
   top_k_per_locus: 5,
   specialists_enabled: ["locus_variant"],
+  assembly_confirmed: true,
   snps: [{ raw: "S18_9263941", chrom: "18", pos: 9_263_941 }],
 };
 
@@ -97,5 +98,20 @@ describe("LD window mode", () => {
       soybean({ available: true, panels: ["Song_Hyten_2015"], reason: null }),
     ]).safeParse(values);
     expect(allowed.success).toBe(true);
+  });
+});
+
+describe("sister-team files", () => {
+  it("cannot start until the assembly of the positions is chosen", () => {
+    const schema = studyFormSchema([
+      soybean({ available: true, panels: ["Song_Hyten_2015"], reason: null }),
+    ]);
+    const waiting = schema.safeParse({ ...values, assembly_confirmed: false });
+    expect(waiting.success).toBe(false);
+    expect(waiting.error?.issues[0]).toMatchObject({
+      path: ["assembly"],
+      message: "Choose the assembly the sister-team positions are on",
+    });
+    expect(toStudyRequest(values)).not.toHaveProperty("assembly_confirmed");
   });
 });
