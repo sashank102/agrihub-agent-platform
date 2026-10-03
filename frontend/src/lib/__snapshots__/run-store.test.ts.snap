@@ -135,6 +135,6 @@ exports[`the golden poster run > rebuilds the finished study 1`] = `
     },
   },
   "plan": 8,
-  "sources": 31,
+  "sources": 33,
 }
 `;
