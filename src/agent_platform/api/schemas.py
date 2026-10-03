@@ -22,6 +22,8 @@ class AssemblyResponse(BaseModel):
     aliases: list[str]
     description: str
     canonical: bool
+    lift_to: str | None = None
+    """Positions on this assembly are lifted to ``lift_to`` before loci are built."""
     chromosomes: list[ChromosomeResponse]
 
 
