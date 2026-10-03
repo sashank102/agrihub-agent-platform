@@ -13,6 +13,7 @@ from agrihub_data import external
 from agrihub_data.bundle import open_bundle
 from agrihub_data.query import duplication, ld, variants
 from agrihub_data.query.loci import define_locus
+from agrihub_data.registry import load_species
 
 PLINK2 = external.plink2_path()
 VEP_TAB = """## ENSEMBL VARIANT EFFECT PREDICTOR v116.2
@@ -96,7 +97,7 @@ def test_annotate_variants_without_alleles_or_vep_reports_the_gap(bundle):
 
 
 def test_vep_and_snpeff_outputs_are_parsed_most_severe_first():
-    parsed = variants.parse_vep_tab(VEP_TAB)
+    parsed = variants.parse_vep_tab(VEP_TAB, load_species("soybean"))
     lead = parsed["S18_9263941"]
     assert [(item.gene_id, item.terms, item.impact) for item in lead] == [
         ("Glyma.18G092200", ["missense_variant"], "MODERATE"),
@@ -104,7 +105,7 @@ def test_vep_and_snpeff_outputs_are_parsed_most_severe_first():
     ]
     assert lead[0].amino_acids == "A/T" and parsed["S18_9300000"][0].gene_id is None
     snpeff = "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n18\t9263941\tS18_9263941\tA\tG\t.\t.\tANN=G|intron_variant|MODIFIER|Glyma.18G092200|GLYMA_18G092200|transcript|KRG98706|protein_coding|2/3|c.100+5A>G||,G|stop_gained|HIGH|Glyma.18G092200|GLYMA_18G092200|transcript|KRG98705|protein_coding|3/4|c.300A>G|p.Lys100*|\n"
-    parsed_snpeff = variants.parse_snpeff_vcf(snpeff)["S18_9263941"]
+    parsed_snpeff = variants.parse_snpeff_vcf(snpeff, load_species("soybean"))["S18_9263941"]
     assert [(item.terms, item.impact) for item in parsed_snpeff] == [(["stop_gained"], "HIGH"), (["intron_variant"], "MODIFIER")]
     assert variants.most_severe_impact(parsed_snpeff) == "HIGH"
 

@@ -302,6 +302,15 @@ def _parse_gene_id(registry: SpeciesRegistry, query: str, default: str) -> tuple
     old = _GLYMA1.match(query)
     if old:
         return f"Glyma{old.group('chrom')}g{old.group('num')}", _namespace_assembly(registry, "glyma1")
+    for namespace in registry.id_namespaces:
+        if namespace.kind not in {"gene", "transcript"} or namespace.canonical is None:
+            continue
+        found = namespace.match(query, ignore_case=False)
+        if found is not None:
+            return found.expand(namespace.canonical), _namespace_assembly(registry, namespace.id) or default
+    for namespace in registry.id_namespaces:
+        if namespace.kind == "gene" and namespace.assembly and namespace.match(query, ignore_case=False):
+            return query, registry.assembly(namespace.assembly).id
     return _strip_transcript(query), default
 
 
@@ -338,7 +347,7 @@ def _map_one(
 
     if assembly is None:
         return [mapping(None, "unmapped")]
-    if assembly == target:
+    if assembly == target and _exists(bundle, gene, target):
         return [mapping(gene, "identical")]
     synonyms = bundle.rows_raw(
         "SELECT DISTINCT to_id FROM id_map WHERE relation = 'synonym' AND assembly = ? "
@@ -347,6 +356,8 @@ def _map_one(
     )
     if synonyms:
         return [mapping(str(row[0]), "synonym") for row in synonyms]
+    if assembly == target:
+        return [mapping(gene, "identical")]
     chain = _ancestor_chain(bundle, gene, assembly, target, registry)
     if chain:
         return [mapping(to_id, "ancestor") for to_id in chain]

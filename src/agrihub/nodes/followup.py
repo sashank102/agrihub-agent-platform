@@ -34,7 +34,6 @@ ArtifactReader = Callable[..., Awaitable[dict[str, Any] | None]]
 Called as ``reader(config, kind=..., artifact_id=...)``; returns its content or ``None``.
 """
 
-_GENE = re.compile(r"Glyma\.\d+G\d+")
 _RERUN = re.compile(r"new window|another trait|re-?run|different trait|new snp", re.IGNORECASE)
 MAX_STEPS = 4
 
@@ -173,8 +172,8 @@ def _grounded_answer(question: str, report: dict[str, Any], store: EvidenceStore
     if _RERUN.search(question):
         return "That needs a new study. Follow-up questions cannot change the window, the trait or the SNP set."
     rows = [RankedCandidate.model_validate(raw) for raw in report.get("candidates_full") or report.get("candidates") or []]
-    gene_id = _GENE.search(question)
-    gene = next((row for row in rows if gene_id and row.gene_id == gene_id.group(0)), rows[0] if rows else None)
+    asked = question.casefold()
+    gene = next((row for row in rows if row.gene_id.casefold() in asked), rows[0] if rows else None)
     if gene is None:
         return "The report has no ranked candidates to cite."
     aliases = _aliases(store, gene.evidence_ids)

@@ -25,6 +25,7 @@ import json
 import re
 import time
 from collections.abc import Callable, Sequence
+from functools import cache
 from typing import Any
 
 from langchain_core.callbacks import CallbackManagerForLLMRun
@@ -41,6 +42,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from pydantic import ConfigDict
 
 from agrihub.prompts import UNAVAILABLE_HEADING
+from agrihub_data.registry import load_species, species_names
 
 PREFIX = "agrihub-fake:"
 Script = Callable[[list[BaseMessage], tuple[str, ...]], AIMessage]
@@ -248,7 +250,7 @@ _PHASES: dict[str, tuple[str, ...]] = {
 }
 _TSPEC = re.compile(r"tau=([\d.]+)")
 _P_VALUE = re.compile(r" p=([\d.]+)")
-_R2 = re.compile(r"(Glyma\.\S+) r2=([\d.]+) with (\S+)")
+_R2 = re.compile(r"(\S+) r2=([\d.]+) with (\S+)")
 
 
 def _phase_calls(phase: str, task: dict[str, Any], tools: tuple[str, ...]) -> list[tuple[str, dict[str, Any]]]:
@@ -422,7 +424,7 @@ def _qa(messages: list[BaseMessage], tools: tuple[str, ...]) -> AIMessage:
     text = human_text(messages)
     if re.search(r"new window|another trait|re-?run|different trait", text, re.IGNORECASE):
         return AIMessage(content="That needs a new study. Follow-up questions cannot change the window, the trait or the SNP set.")
-    gene = re.search(r"Glyma\.\d+G\d+", text)
+    gene = _gene_ids().search(text)
     if step == 0 and gene and "explain_score" in tools:
         return reply(call("explain_score", {"gene_id": gene.group(0)}, "qa-explain"))
     if step == 0 and "search_report" in tools:
@@ -433,6 +435,12 @@ def _qa(messages: list[BaseMessage], tools: tuple[str, ...]) -> AIMessage:
     if not cited:
         return AIMessage(content=f"{subject} is in the finished report. The study was not modified.")
     return AIMessage(content=f"{subject} is a candidate because of the stored evidence {cited}. The study was not modified.")
+
+
+@cache
+def _gene_ids() -> re.Pattern[str]:
+    """Return a regex for gene ids of every registered species."""
+    return re.compile("|".join(f"(?:{load_species(name).gene_id_pattern().pattern})" for name in species_names()))
 
 
 def unavailable_domains(messages: list[BaseMessage]) -> list[str]:

@@ -23,7 +23,7 @@ from agrihub_data import external
 from agrihub_data.availability import VEP_CACHE_KIND, resource_paths
 from agrihub_data.bundle import Bundle
 from agrihub_data.query.common import registry_of, source_version
-from agrihub_data.registry import load_species, normalize_chrom
+from agrihub_data.registry import SpeciesRegistry, load_species, normalize_chrom
 
 UPSTREAM_BP = 2_000
 DOWNSTREAM_BP = 500
@@ -191,7 +191,7 @@ def annotate_variants(bundle: Bundle, variants: list[VariantInput], assembly: st
     if runner is not None and caches:
         try:
             output = run_vep(with_alleles, runner, caches[0], registry.species)
-            return _attach(locations, parse_vep_tab(output), "vep", source_version(bundle, "ensembl_vep_cache")), notes
+            return _attach(locations, parse_vep_tab(output, registry), "vep", source_version(bundle, "ensembl_vep_cache")), notes
         except (OSError, subprocess.SubprocessError, ValueError) as exc:
             notes.append(f"VEP failed ({type(exc).__name__}: {str(exc)[:160]}); trying SnpEff")
     elif runner is None:
@@ -202,7 +202,7 @@ def annotate_variants(bundle: Bundle, variants: list[VariantInput], assembly: st
     if snpeff is not None:
         try:
             output = run_snpeff(with_alleles, snpeff, registry.species)
-            return _attach(locations, parse_snpeff_vcf(output), "snpeff", "SnpEff Glycine_max"), notes
+            return _attach(locations, parse_snpeff_vcf(output, registry), "snpeff", "SnpEff Glycine_max"), notes
         except (OSError, subprocess.SubprocessError, ValueError) as exc:
             notes.append(f"SnpEff failed ({type(exc).__name__}: {str(exc)[:160]})")
     else:
@@ -268,8 +268,11 @@ def run_snpeff(variants: list[VariantInput], snpeff: Path, species: str) -> str:
     return completed.stdout
 
 
-def parse_vep_tab(text: str) -> dict[str, list[Consequence]]:
-    """Return consequences per uploaded variant id from VEP ``--tab`` output, most severe first."""
+def parse_vep_tab(text: str, registry: SpeciesRegistry) -> dict[str, list[Consequence]]:
+    """Return consequences per uploaded variant id from VEP ``--tab`` output, most severe first.
+
+    Ensembl gene ids become canonical ids through the registry's gene namespaces.
+    """
     header: list[str] = []
     found: dict[str, list[Consequence]] = defaultdict(list)
     for line in text.splitlines():
@@ -282,7 +285,7 @@ def parse_vep_tab(text: str) -> dict[str, list[Consequence]]:
         gene = _blank(row.get("Gene"))
         found[row.get("Uploaded_variation", "")].append(
             Consequence(
-                gene_id=_glyma(gene),
+                gene_id=_canonical_gene(gene, registry),
                 transcript_id=_blank(row.get("Feature")),
                 terms=[term for term in (row.get("Consequence") or "").split(",") if term],
                 impact=(row.get("IMPACT") or "MODIFIER").upper(),
@@ -296,7 +299,7 @@ def parse_vep_tab(text: str) -> dict[str, list[Consequence]]:
     return dict(found)
 
 
-def parse_snpeff_vcf(text: str) -> dict[str, list[Consequence]]:
+def parse_snpeff_vcf(text: str, registry: SpeciesRegistry) -> dict[str, list[Consequence]]:
     """Return consequences per variant id from the ``ANN`` field of a SnpEff VCF."""
     found: dict[str, list[Consequence]] = defaultdict(list)
     for line in text.splitlines():
@@ -312,7 +315,7 @@ def parse_snpeff_vcf(text: str) -> dict[str, list[Consequence]]:
                 continue
             found[fields[2]].append(
                 Consequence(
-                    gene_id=_glyma(parts[4]) or _blank(parts[4]),
+                    gene_id=_canonical_gene(_blank(parts[4]), registry) or _blank(parts[4]),
                     transcript_id=_blank(parts[6]),
                     terms=[term for term in parts[1].split("&") if term],
                     impact=parts[2].upper() or "MODIFIER",
@@ -378,8 +381,6 @@ def _blank(value: str | None) -> str | None:
     return None if value in {None, "", "-"} else value
 
 
-def _glyma(value: str | None) -> str | None:
-    if value and value.upper().startswith("GLYMA_"):
-        return "Glyma." + value[6:]
-    return None
+def _canonical_gene(value: str | None, registry: SpeciesRegistry) -> str | None:
+    return registry.canonical_gene_id(value) if value else None
 

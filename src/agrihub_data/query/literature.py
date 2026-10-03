@@ -331,18 +331,27 @@ def gene_aliases(bundle: Bundle, gene_ids: list[str]) -> list[GeneAliases]:
         _add(found[gene], gene, "gene_id", "registry", True)
         if not ncbi:
             found[gene].notes.append("bundle has no NCBI Gene tables; rebuild with the ncbi_gene source")
-    for namespace in registry.id_namespaces:
-        if namespace.id == "ensembl":
+    for namespace in registry.gene_namespaces():
+        if namespace.canonical and namespace.id == "ensembl":
             for gene in wanted:
-                match = re.match(r"^Glyma\.(\d{2}G\d{6})$", gene)
-                if match:
-                    _add(found[gene], f"GLYMA_{match.group(1)}", "gene_id", "Ensembl Plants", True)
-    for gene, legacy in bundle.rows_raw(
-        f"SELECT from_id, to_id FROM id_map WHERE assembly = ? AND from_id IN ({marks}) "
-        "AND relation IN ('ancestor', 'synonym') AND to_assembly = 'Wm82.a1.v1'",
-        [canonical, *wanted],
+                spelled = _ensembl_spelling(namespace.pattern, namespace.canonical, gene)
+                if spelled:
+                    _add(found[gene], spelled, "gene_id", "Ensembl Plants", True)
+    legacy_assemblies = [assembly.id for assembly in registry.assemblies if assembly.embedded_in_marker_names]
+    if legacy_assemblies:
+        for gene, legacy in bundle.rows_raw(
+            f"SELECT from_id, to_id FROM id_map WHERE assembly = ? AND from_id IN ({marks}) "
+            f"AND relation IN ('ancestor', 'synonym') AND to_assembly IN ({', '.join('?' for _ in legacy_assemblies)})",
+            [canonical, *wanted, *legacy_assemblies],
+        ):
+            _add(found[str(gene)], str(legacy), "legacy_id", "LIS", True)
+    skipped = legacy_assemblies or ["none"]
+    for legacy, gene, source_db in bundle.rows_raw(
+        f"SELECT DISTINCT from_id, to_id, source_db FROM id_map WHERE relation = 'synonym' AND to_assembly = ? "
+        f"AND assembly NOT IN ({', '.join('?' for _ in skipped)}) AND to_id IN ({marks}) AND from_id NOT IN ({marks}) ORDER BY 1",
+        [canonical, *skipped, *wanted, *wanted],
     ):
-        _add(found[str(gene)], str(legacy), "legacy_id", "LIS", True)
+        _add(found[str(gene)], str(legacy), "legacy_id", str(source_db), True)
     for gene, symbols in bundle.rows_raw(
         f"SELECT gene_id, symbols FROM known_genes WHERE assembly = ? AND gene_id IN ({marks})",
         [canonical, *wanted],
@@ -1042,6 +1051,15 @@ def _add(entry: GeneAliases, text: str, kind: AliasKind, source: str, specific: 
     entry.aliases.append(
         Alias(text=text, kind=kind, source=source, specific=specific and kind in _SPECIFIC_KINDS, searchable=searchable and kind not in _UNSEARCHABLE_KINDS)
     )
+
+
+def _ensembl_spelling(pattern: str, canonical: str, gene: str) -> str | None:
+    """Spell a canonical id in a namespace whose pattern is a literal prefix plus one group (``GLYMA_(...)``)."""
+    canonical_prefix, _, _ = canonical.partition("\\1")
+    namespace_prefix = pattern.removeprefix("^").split("(", 1)[0]
+    if not gene.startswith(canonical_prefix) or re.search(r"[\[\]{}*+?|]", namespace_prefix.replace("\\.", "")):
+        return None
+    return namespace_prefix.replace("\\", "") + gene[len(canonical_prefix) :]
 
 
 def _prefixed(symbol: str, prefixes: list[str]) -> bool:

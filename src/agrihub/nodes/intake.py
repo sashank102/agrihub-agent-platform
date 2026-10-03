@@ -84,11 +84,15 @@ def check_study(raw: Any) -> StudyCheck:
         loc: list[str | int] = ["species"] if isinstance(exc, UnknownSpeciesError) else ["assembly"]
         return StudyCheck(errors=[StudyInputIssue(loc=loc, message=message)], detail=message)
     assembly = requested.lift_to or requested.id
+    window = study.window
+    if "window" not in study.model_fields_set or "flank_bp" not in window.model_fields_set:
+        window = window.model_copy(update={"flank_bp": registry.default_window.flank_bp})
     study = study.model_copy(
         update={
             "species": registry.species,
             "assembly": assembly,
             "lifted_from_assembly": requested.id if requested.lift_to else None,
+            "window": window,
         }
     )
     warnings = window_warnings(registry, study)

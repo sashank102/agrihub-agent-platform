@@ -11,6 +11,8 @@ import math
 import re
 import threading
 from collections import Counter, defaultdict
+from collections.abc import Iterator
+from contextlib import contextmanager
 from functools import cache
 from importlib import resources
 from typing import Any, Literal
@@ -24,11 +26,13 @@ from agrihub_data.bundle import Bundle
 OLS_URL = "https://www.ebi.ac.uk/ols4/api/search"
 TFIDF_MIN_SCORE = 0.55
 TFIDF_PER_ONTOLOGY = 3
-TRAIT_ONTOLOGIES = ("TO", "SOY", "CO_336", "PPTO", "GO", "PO")
+TRAIT_ONTOLOGIES = ("TO", "SOY", "CO_", "PPTO", "GO", "PO")
+"""Ontologies TF-IDF matches are drawn from, in report order; ``CO_`` stands for the species' Crop Ontology."""
 _TOKEN = re.compile(r"[a-z0-9]+")
 _STOPWORDS = frozenset({"a", "an", "and", "of", "the", "in", "to", "for", "or", "on", "by", "with", "trait"})
 
 TermOrigin = Literal["curated", "tfidf", "ols"]
+_priors_off = False
 
 
 class TraitTerm(BaseModel):
@@ -112,6 +116,9 @@ def map_trait(
         profile.terms.append(TraitTerm(term_id=term_id, name=name, ontology=ontology, score=1.0, origin="curated"))
     if bundle is not None and curated is None:
         profile.terms.extend(_index(bundle).search(normalized))
+    if _priors_disabled():
+        profile.keywords = [normalized] if normalized else []
+        profile.seed_families = []
     if use_ols and not profile.terms:
         profile.terms.extend(_ols(normalized, client))
     if bundle is not None:
@@ -122,6 +129,29 @@ def map_trait(
             if phrase and phrase not in profile.keywords and len(phrase) > 3:
                 profile.keywords.append(phrase)
     return profile
+
+
+def _ontology_group(ontology: str) -> str:
+    return "CO_" if ontology.startswith("CO_") else ontology
+
+
+@contextmanager
+def without_priors() -> Iterator[None]:
+    """Map traits without curated keywords or seed families (benchmark ablation), process-wide.
+
+    Ontology terms stay; the keywords shrink to the trait text itself. The
+    benchmark runs one study at a time, so a process flag is enough.
+    """
+    global _priors_off
+    previous, _priors_off = _priors_off, True
+    try:
+        yield
+    finally:
+        _priors_off = previous
+
+
+def _priors_disabled() -> bool:
+    return _priors_off
 
 
 def _normalize(text: str) -> str:
@@ -205,12 +235,12 @@ class _TermIndex:
         by_ontology: dict[str, list[tuple[float, int]]] = defaultdict(list)
         for index, score in scores.items():
             if score >= TFIDF_MIN_SCORE:
-                by_ontology[self.terms[index][2]].append((score, index))
+                by_ontology[_ontology_group(self.terms[index][2])].append((score, index))
         found: list[TraitTerm] = []
-        for ontology in TRAIT_ONTOLOGIES:
-            ranked = sorted(by_ontology.get(ontology, []), key=lambda item: (-item[0], self.terms[item[1]][0]))
+        for group in TRAIT_ONTOLOGIES:
+            ranked = sorted(by_ontology.get(group, []), key=lambda item: (-item[0], self.terms[item[1]][0]))
             for score, index in ranked[:TFIDF_PER_ONTOLOGY]:
-                term_id, name, _ = self.terms[index]
+                term_id, name, ontology = self.terms[index]
                 found.append(
                     TraitTerm(term_id=term_id, name=name, ontology=ontology, score=round(min(score, 1.0), 3), origin="tfidf")
                 )
@@ -235,7 +265,7 @@ def _index(bundle: Bundle) -> _TermIndex:
                 "SELECT term_id, name, ontology, synonyms FROM ontology_terms "
                 "WHERE NOT is_obsolete AND ("
                 "(ontology = 'GO' AND namespace = 'biological_process') "
-                "OR (ontology = 'CO_336' AND namespace = 'trait') "
+                "OR (ontology LIKE 'CO\\_%' ESCAPE '\\' AND namespace = 'trait') "
                 "OR ontology IN ('TO', 'SOY', 'PPTO', 'PO')) ORDER BY term_id"
             )
             _indexes[key] = _TermIndex(
