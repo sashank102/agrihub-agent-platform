@@ -78,7 +78,34 @@ type StudyBase = {
 
 export type StudyRequest =
   | (StudyBase & { mode: "snps"; snps: SnpInput[] })
-  | (StudyBase & { mode: "trait" });
+  | (StudyBase & { mode: "trait"; model_preferences?: string[] });
+
+export type ModelCandidate = {
+  model_id: string;
+  name: string;
+  adapter: string;
+  status: "active" | "planned";
+  score_type: string;
+  label: string;
+  assembly: string;
+  applicability: {
+    ok: boolean;
+    reasons: string[];
+    datasets: string[];
+    trait: string | null;
+  };
+  benchmarks: {
+    name: string;
+    reference?: string | null;
+    metrics?: Record<string, number>;
+  }[];
+};
+
+export type ModelCatalog = {
+  models: ModelCandidate[];
+  applicable: number;
+  detail: string;
+};
 
 export type StudyValidation = {
   study_normalized: Record<string, unknown> | null;
@@ -219,6 +246,18 @@ export function useStudyApi() {
     () => ({
       apiKey,
       species: () => call<SpeciesInfo[]>("/registry/species"),
+      models: (
+        query: { species: string; trait: string; assembly?: string },
+        signal?: AbortSignal,
+      ) =>
+        call<ModelCatalog>(
+          `/registry/models?${new URLSearchParams(
+            Object.entries(query).filter((entry): entry is [string, string] =>
+              Boolean(entry[1]),
+            ),
+          ).toString()}`,
+          { signal },
+        ),
       validate: (study: unknown, signal?: AbortSignal) =>
         call<StudyValidation>("/studies/validate", {
           method: "POST",

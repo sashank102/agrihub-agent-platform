@@ -43,6 +43,7 @@ import {
 import {
   STUDY_ASSISTANT_ID,
   useStudyApi,
+  type ModelCatalog,
   type SpeciesInfo,
   type StudyMetadata,
   type StudyValidation,
@@ -51,6 +52,7 @@ import { cn } from "@/lib/utils";
 import { useStreamContext } from "@/providers/Stream";
 import { useStudySession } from "@/providers/StudyStream";
 import { SnpInput } from "./snp-input";
+import { ModelPanel } from "./model-panel";
 import { SisterTeamAssembly } from "./sister-team-assembly";
 import { ServerPreview, SnpPreview } from "./snp-preview";
 import {
@@ -59,6 +61,7 @@ import {
   defaultWindowKb,
   ldAvailable,
   ldWarningKb,
+  modelQueryKey,
   studyFormSchema,
   studySummary,
   toStudyRequest,
@@ -113,6 +116,14 @@ export function StudyForm() {
   const [validating, setValidating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const presetSeen = useRef<string | null>(null);
+  const [loadedModels, setLoadedModels] = useState<{
+    key: string;
+    catalog: ModelCatalog;
+  } | null>(null);
+  const onModels = useCallback(
+    (key: string, catalog: ModelCatalog) => setLoadedModels({ key, catalog }),
+    [],
+  );
 
   const schema = useMemo(() => studyFormSchema(registry ?? []), [registry]);
   const form = useForm<StudyFormValues>({
@@ -251,7 +262,19 @@ export function StudyForm() {
     values.window_kb > ldLimit;
   const suggestions = TRAIT_SUGGESTIONS[values.species] ?? [];
 
+  const models =
+    loadedModels?.key ===
+    modelQueryKey(values.species, values.trait_text ?? "", values.assembly)
+      ? loadedModels.catalog
+      : null;
+  const noModel = values.mode === "trait" && models?.applicable === 0;
   const onSubmit = form.handleSubmit((submitted) => {
+    if (submitted.mode === "trait" && models?.applicable === 0) {
+      toast.error("No applicable model is registered for this trait.", {
+        description: models.detail,
+      });
+      return;
+    }
     const study = toStudyRequest(submitted);
     const metadata: StudyMetadata = {
       kind: "study",
@@ -536,15 +559,33 @@ export function StudyForm() {
           </Card>
         ) : (
           <Card>
-            <CardContent className="flex items-start gap-3 text-sm">
-              <Info className="mt-0.5 size-4 shrink-0 text-sky-700" />
-              <p>
-                <span className="font-medium">Model step.</span> No trained
-                model or precomputed association results are registered for{" "}
-                {species?.common_name ?? values.species} yet. The model agent is
-                a stub that proposes placeholder SNPs, and the report marks them
-                as such.
-              </p>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Info className="size-4 text-sky-700" />
+                Model step
+              </CardTitle>
+              <CardDescription>
+                The model agent proposes SNPs from a registered model or
+                precomputed result set for{" "}
+                {values.trait_text?.trim() || "the trait"}; each keeps its own
+                score type.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Controller
+                control={control}
+                name="model_preferences"
+                render={({ field }) => (
+                  <ModelPanel
+                    species={values.species}
+                    trait={values.trait_text ?? ""}
+                    assembly={values.assembly}
+                    value={field.value ?? []}
+                    onChange={field.onChange}
+                    onCatalog={onModels}
+                  />
+                )}
+              />
             </CardContent>
           </Card>
         )}
@@ -805,7 +846,7 @@ export function StudyForm() {
             type="submit"
             size="lg"
             variant="brand"
-            disabled={submitting}
+            disabled={submitting || noModel}
           >
             {submitting ? <Loader2 className="animate-spin" /> : <Play />}
             {submitting ? "Starting" : "Start study"}
@@ -827,7 +868,8 @@ export function StudyForm() {
           />
         ) : (
           <p className="text-muted-foreground text-sm">
-            Trait studies have no SNPs to preview until the model step runs.
+            Trait studies have no SNPs to preview until the model step runs;
+            positions from another assembly are lifted then.
           </p>
         )}
       </aside>

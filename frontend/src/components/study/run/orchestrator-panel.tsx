@@ -242,7 +242,11 @@ function DecisionItem({ decision }: { decision: DecisionState }) {
               : "outline"
           }
         >
-          {decision.kind === "followup" ? "follow-up" : decision.kind}
+          {decision.kind === "followup"
+            ? "follow-up"
+            : decision.kind === "select_model"
+              ? "model choice"
+              : decision.kind}
         </Badge>
         {decision.round > 1 && (
           <span className="text-muted-foreground text-xs">
@@ -285,12 +289,32 @@ function DecisionItem({ decision }: { decision: DecisionState }) {
           ))}
         </ul>
       )}
+      {decision.selected && decision.selected.length > 0 && (
+        <ul
+          className="flex flex-col gap-1 text-xs"
+          aria-label="Chosen models"
+        >
+          {decision.selected.map((item) => (
+            <li
+              key={`${item.model_id}:${item.dataset ?? ""}`}
+              className="flex flex-wrap items-center gap-1.5"
+            >
+              <span className="font-medium">{item.name}</span>
+              {item.dataset && <Badge variant="info">{item.dataset}</Badge>}
+              <Badge variant="outline">{item.score_type}</Badge>
+              <span className="text-muted-foreground">{item.label}</span>
+            </li>
+          ))}
+        </ul>
+      )}
       {decision.rejected.length > 0 && (
         <ul className="text-muted-foreground text-xs">
           {decision.rejected.map((item) => (
             <li key={item.specialist}>
-              Not dispatched: {item.specialist.replace(/_/g, " ")} (
-              {item.reason})
+              {decision.kind === "select_model"
+                ? "Not applicable"
+                : "Not dispatched"}
+              : {item.specialist.replace(/_/g, " ")} ({item.reason})
             </li>
           ))}
         </ul>

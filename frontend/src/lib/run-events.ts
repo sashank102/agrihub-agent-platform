@@ -22,7 +22,8 @@ export const AGENT_KINDS = [
   "model",
 ] as const;
 export type AgentKind = (typeof AGENT_KINDS)[number];
-export type DecisionKind = "dispatch" | "reflect" | "followup" | "finish";
+export type DecisionKind =
+  "dispatch" | "reflect" | "followup" | "finish" | "select_model";
 export type CauseType = "toolCall" | "send" | "edge";
 
 export const SPECIALISTS = [
@@ -85,12 +86,23 @@ export type Rejection = {
   reason: string;
 };
 
+export type ModelSelection = {
+  model_id: string;
+  name: string;
+  label: string;
+  score_type: string;
+  dataset: string | null;
+  assembly: string;
+};
+
 export type OrchestratorDecisionData = {
   kind: DecisionKind;
   round: number;
   rationale: string;
   dispatched: Dispatch[];
   rejected: Rejection[];
+  /** The models a ``select_model`` decision chose. */
+  selected?: ModelSelection[];
 };
 
 export type AgentFocus = {

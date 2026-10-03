@@ -93,6 +93,7 @@ export function studyFormSchema(registry: SpeciesInfo[]) {
       base.extend({
         mode: z.literal("trait"),
         snps: z.array(snpInput).optional(),
+        model_preferences: z.array(z.string()).optional(),
       }),
     ])
     .superRefine((value, context) => {
@@ -166,7 +167,13 @@ export function toStudyRequest(values: StudyFormValues): StudyRequest {
   if (values.mode === "snps") {
     return { ...common, mode: "snps", snps: values.snps };
   }
-  return { ...common, mode: "trait" };
+  return {
+    ...common,
+    mode: "trait",
+    ...(values.model_preferences?.length
+      ? { model_preferences: values.model_preferences }
+      : {}),
+  };
 }
 
 export function studySummary(study: StudyRequest): string {
@@ -179,4 +186,13 @@ export function studySummary(study: StudyRequest): string {
       ? `LD windows (r² ≥ ${study.window.r2}, fixed ±${study.window.flank_bp / 1000} kb fallback)`
       : `±${study.window.flank_bp / 1000} kb windows`;
   return `Study: ${study.trait_text} in ${study.species} (${study.assembly}), ${snps}, ${windows}.`;
+}
+
+/** Identifies one model lookup; a stored catalog is used only while its key matches. */
+export function modelQueryKey(
+  species: string,
+  trait: string,
+  assembly: string,
+): string {
+  return `${species}|${trait.trim()}|${assembly}`;
 }
