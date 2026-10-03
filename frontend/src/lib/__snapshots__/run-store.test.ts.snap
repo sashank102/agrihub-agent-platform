@@ -106,7 +106,7 @@ exports[`the golden poster run > rebuilds the finished study 1`] = `
   "phase": "reporting",
   "phases": {
     "harvest": {
-      "detail": "2561 evidence items for 123 genes; triage brief ~1404 tokens",
+      "detail": "2561 evidence items for 123 genes; triage brief ~1406 tokens",
       "status": "completed",
     },
     "intake": {

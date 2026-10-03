@@ -1,7 +1,7 @@
 """Minimal GFF3 reading for gene models and marker sets."""
 
 import re
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import unquote
@@ -27,26 +27,31 @@ class Feature:
 def features(path: Path, types: set[str] | None = None) -> Iterator[Feature]:
     """Yield features of the given types; attribute values are URL-decoded."""
     with open_text(path) as handle:
-        for line in handle:
-            if not line.strip() or line.startswith("#"):
-                continue
-            fields = line.rstrip("\n\r").split("\t")
-            if len(fields) < 9 or (types is not None and fields[2] not in types):
-                continue
-            attributes: dict[str, str] = {}
-            for part in fields[8].split(";"):
-                key, separator, value = part.partition("=")
-                if separator and key.strip():
-                    attributes[key.strip()] = unquote(value.strip())
-            yield Feature(
-                seqid=fields[0],
-                source=fields[1],
-                type=fields[2],
-                start=int(fields[3]),
-                end=int(fields[4]),
-                strand=fields[6] if fields[6] in {"+", "-"} else ".",
-                attributes=attributes,
-            )
+        yield from parse_features(handle, types)
+
+
+def parse_features(lines: Iterable[str], types: set[str] | None = None) -> Iterator[Feature]:
+    """Yield features of the given types from GFF3 lines."""
+    for line in lines:
+        if not line.strip() or line.startswith("#"):
+            continue
+        fields = line.rstrip("\n\r").split("\t")
+        if len(fields) < 9 or (types is not None and fields[2] not in types):
+            continue
+        attributes: dict[str, str] = {}
+        for part in fields[8].split(";"):
+            key, separator, value = part.partition("=")
+            if separator and key.strip():
+                attributes[key.strip()] = unquote(value.strip())
+        yield Feature(
+            seqid=fields[0],
+            source=fields[1],
+            type=fields[2],
+            start=int(fields[3]),
+            end=int(fields[4]),
+            strand=fields[6] if fields[6] in {"+", "-"} else ".",
+            attributes=attributes,
+        )
 
 
 def strip_id_prefix(identifier: str) -> str:

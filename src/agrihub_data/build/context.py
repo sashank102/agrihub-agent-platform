@@ -4,13 +4,14 @@ import fnmatch
 import gzip
 import io
 import json
+import tarfile
 import uuid
 import zipfile
 from collections import Counter
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import IO, Any
+from typing import IO, Any, cast
 
 import duckdb
 
@@ -184,6 +185,41 @@ def open_text(path: Path) -> IO[str]:
             raise BuildError(f"{path.name}: expected one file in the zip archive, found {len(members)}")
         return io.TextIOWrapper(archive.open(members[0]), encoding="utf-8", errors="replace")
     return path.open("r", encoding="utf-8", errors="replace")
+
+
+def open_tar_member(path: Path, member: str) -> IO[str]:
+    """Open the one member of a (gzip) tar archive whose name ends with ``/member`` or equals it."""
+    archive = tarfile.open(path, "r:*")
+    names = [info for info in archive.getmembers() if info.isfile() and (info.name == member or info.name.endswith(f"/{member}"))]
+    if len(names) != 1:
+        archive.close()
+        raise BuildError(f"{path.name}: expected one {member} in the archive, found {len(names)}")
+    handle = archive.extractfile(names[0])
+    if handle is None:
+        archive.close()
+        raise BuildError(f"{path.name}: cannot read {member}")
+    return io.TextIOWrapper(handle, encoding="utf-8", errors="replace")
+
+
+def decode_text(path: Path, fallbacks: tuple[str, ...] = ("cp932",)) -> tuple[str, str]:
+    """Return ``(text, encoding)``: strict UTF-8 first, then each fallback (Shift-JIS as cp932)."""
+    with open_text_bytes(path) as handle:
+        raw = handle.read()
+    for encoding in ("utf-8", *fallbacks):
+        try:
+            return raw.decode(encoding), encoding
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("utf-8", errors="replace"), "utf-8 (replaced)"
+
+
+def open_text_bytes(path: Path) -> IO[bytes]:
+    """Open a plain or gzip file as bytes, sniffing the magic bytes."""
+    with path.open("rb") as handle:
+        magic = handle.read(2)
+    if magic == b"\x1f\x8b":
+        return cast(IO[bytes], gzip.open(path, "rb"))
+    return path.open("rb")
 
 
 def tsv_rows(path: Path, *, skip_comments: bool = True) -> Iterator[list[str]]:

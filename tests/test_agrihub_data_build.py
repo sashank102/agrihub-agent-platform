@@ -10,7 +10,13 @@ import duckdb
 import pytest
 from agrihub_fixtures import DataServer, FixtureBundle, packaged_soybean
 
-from agrihub_data.build import PARSERS, BuildError, build
+from agrihub_data.build import (
+    GENE_MODEL_PARSERS,
+    GENE_MODELS,
+    PARSERS,
+    BuildError,
+    build,
+)
 from agrihub_data.build.context import open_text
 from agrihub_data.bundle import tables_for
 from agrihub_data.fetch import fetch
@@ -132,7 +138,9 @@ def test_fixture_fetch_resolves_collections_and_optional_files(fixture_bundle: F
 def test_parsers_run_in_dependency_order():
     seen: set[str] = set()
     for parser in PARSERS:
-        assert set(parser.after) <= seen, parser.name
+        assert set(parser.after) - {GENE_MODELS} <= seen, parser.name
+        if GENE_MODELS in parser.after:
+            assert GENE_MODEL_PARSERS <= seen, parser.name
         seen.add(parser.name)
 
 

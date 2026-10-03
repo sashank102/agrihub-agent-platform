@@ -1,12 +1,13 @@
 """LIS genome layer: gene models, functional annotation, id maps and markers."""
 
 import re
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
 from agrihub_data.build.context import BuildContext, BuildError, split_list, tsv_rows
 from agrihub_data.build.gff import features, load_marker_gff, strip_id_prefix
+from agrihub_data.build.resolve import GeneResolver
 from agrihub_data.registry import Source, UnknownAssemblyError
 
 GENE_PARTS = ("CDS", "five_prime_UTR", "three_prime_UTR")
@@ -227,12 +228,31 @@ def _parse_ancestor(ctx: BuildContext, value: str) -> tuple[str | None, str]:
     return None, ""
 
 
+def build_phytozome_annotation_info(ctx: BuildContext, source: Source) -> None:
+    """Load a Phytozome ``annotation_info.txt`` (Pfam, PANTHER, KOG, GO, Arabidopsis and rice best hits).
+
+    The file needs a JGI login, so it is a manual download; without it the
+    source contributes nothing. ``locusName`` ids (``Sobic.001G000100``) are
+    resolved to canonical genes through the registry's gene namespaces.
+    """
+    path = ctx.optional_file(source, "*annotation_info*")
+    if path is None:
+        ctx.count(source.id, "manual_download_not_provided")
+        return
+    resolver = GeneResolver.load(ctx)
+    assembly = ctx.registry.canonical_assembly
+    _load_info_annot(ctx, source, assembly, path, set(resolver.genes.values()), resolve=resolver.get, source_db="Phytozome")
+
+
 def _load_info_annot(
     ctx: BuildContext,
     source: Source,
     assembly: str,
     path: Path,
     known: set[str],
+    *,
+    resolve: Callable[[str], str | None] | None = None,
+    source_db: str = "LIS",
 ) -> None:
     rows = tsv_rows(path, skip_comments=False)
     header = [name.lstrip("#").strip() for name in next(rows)]
@@ -250,6 +270,8 @@ def _load_info_annot(
 
     for fields in rows:
         gene_id = cell(fields, "locusName")
+        if resolve is not None:
+            gene_id = resolve(gene_id) or ""
         if gene_id not in known:
             continue
         for kind, names in _INFO_COLUMNS.items():
@@ -276,7 +298,7 @@ def _load_info_annot(
         ctx.insert(
             "annotation",
             (
-                {**base, "gene_id": gene_id, "kind": kind, "value": value, "label": label, "source_db": "LIS"}
+                {**base, "gene_id": gene_id, "kind": kind, "value": value, "label": label, "source_db": source_db}
                 for (gene_id, kind, value), label in sorted(annotations.items())
             ),
         ),
@@ -294,7 +316,7 @@ def _load_info_annot(
                     "evidence_code": "IEA",
                     "qualifier": None,
                     "reference": source.version,
-                    "source_db": "LIS",
+                    "source_db": source_db,
                 }
                 for gene_id, go_id in sorted(go_terms)
             ),
@@ -317,7 +339,7 @@ def _load_info_annot(
                     "relation": None,
                     "identity": None,
                     "high_confidence": None,
-                    "source_db": "LIS",
+                    "source_db": source_db,
                 }
                 for gene_id, target in sorted(best_hits)
             ),

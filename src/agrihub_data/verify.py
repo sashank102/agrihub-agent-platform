@@ -6,13 +6,13 @@ from pathlib import Path
 
 import duckdb
 
+from agrihub_data.build import required_tables
 from agrihub_data.bundle import (
     DATA_TABLES,
     EXTRA_ASSEMBLY_COLUMNS,
     NON_GENOMIC_TABLES,
     POSITIONAL_TABLES,
     SCHEMA_VERSION,
-    tables_for,
 )
 from agrihub_data.fetch import Manifest, sha256_file
 from agrihub_data.paths import species_paths
@@ -47,7 +47,7 @@ def verify(
     """Verify a species bundle.
 
     Checks that the bundle has the current schema version, every data table
-    of its tier and below is non-empty, every row carries species,
+    a registered source of its tier and below always fills is non-empty, every row carries species,
     source_version and a registered assembly (``none`` only in non-genomic
     tables), positional rows use canonical chromosome names within the
     registered length, heavy resources are unpacked where the bundle says,
@@ -69,7 +69,7 @@ def verify(
             report.problems.append(f"schema_version is {info.get('schema_version')!r}, expected {SCHEMA_VERSION}; rebuild the bundle")
             return report
         tier = info.get("tier") if info.get("tier") in TIERS else "core"
-        required = set(tables_for(tier))  # type: ignore[arg-type]
+        required = required_tables(registry, tier)  # type: ignore[arg-type]
         for table in (*DATA_TABLES, "sources"):
             count = int(connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0])  # type: ignore[index]
             report.counts[table] = count

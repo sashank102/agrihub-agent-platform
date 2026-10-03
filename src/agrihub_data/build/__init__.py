@@ -22,7 +22,14 @@ from typing import Any
 import duckdb
 
 from agrihub_data.build.context import BuildContext, BuildError
+from agrihub_data.build.curated_genes import (
+    build_curated_genes,
+    build_funricegenes,
+    build_maizegdb_classical_genes,
+    build_oryzabase_genes,
+)
 from agrihub_data.build.expression import build_lis_expression
+from agrihub_data.build.gene_models import build_gff_gene_models
 from agrihub_data.build.gwas import build_gwas_atlas, build_soybase_gwas
 from agrihub_data.build.liftover import build_lis_lift_anchors
 from agrihub_data.build.lis_evidence import (
@@ -34,12 +41,24 @@ from agrihub_data.build.lis_genome import (
     build_lis_annotation,
     build_lis_markers,
     build_lis_pangenes,
+    build_phytozome_annotation_info,
+)
+from agrihub_data.build.maizegdb import (
+    build_maizegdb_annotation,
+    build_maizegdb_wallace_gwas,
+    build_maizegdb_xref,
 )
 from agrihub_data.build.ncbi_gene import build_ncbi_gene
 from agrihub_data.build.networks import build_atted, build_string
 from agrihub_data.build.ontology import build_ontology
 from agrihub_data.build.orthology import build_ensembl_compara, build_plaza_orthology
 from agrihub_data.build.pathways import build_plant_reactome, build_pmn_pathways
+from agrihub_data.build.qtl_tables import build_gramene_qtl, build_sorghum_qtl_atlas
+from agrihub_data.build.rapdb import (
+    build_rapdb_annotation,
+    build_rapdb_curated_genes,
+    build_rapdb_msu,
+)
 from agrihub_data.build.regulation import build_plantregmap, build_planttfdb
 from agrihub_data.build.tair import build_tair
 from agrihub_data.build.variation import (
@@ -59,7 +78,7 @@ from agrihub_data.registry import (
     load_species,
 )
 
-__all__ = ["BuildError", "BuildReport", "PARSERS", "Parser", "build"]
+__all__ = ["BuildError", "BuildReport", "PARSERS", "Parser", "build", "required_tables"]
 
 
 @dataclass(frozen=True)
@@ -69,35 +88,70 @@ class Parser:
     name: str
     run: Callable[[BuildContext, Source], None]
     after: tuple[str, ...] = ()
+    fills: tuple[str, ...] = ()
+    """Tables the plugin always writes rows to; ``verify`` requires them non-empty."""
 
+
+GENE_MODELS = "gene_models"
+"""Pseudo-plugin in ``after``: any plugin that loads canonical gene models."""
+GENE_MODEL_PARSERS = frozenset({"lis_annotation", "gff_gene_models"})
 
 PARSERS: tuple[Parser, ...] = (
-    Parser("ontology", build_ontology),
-    Parser("lis_annotation", build_lis_annotation),
-    Parser("lis_pangenes", build_lis_pangenes),
-    Parser("lis_markers", build_lis_markers),
-    Parser("lis_lift_anchors", build_lis_lift_anchors, after=("lis_annotation", "lis_pangenes")),
-    Parser("lis_qtl", build_lis_qtl, after=("lis_annotation", "lis_markers")),
-    Parser("lis_gwas", build_lis_gwas, after=("lis_markers",)),
-    Parser("soybase_gwas", build_soybase_gwas),
-    Parser("gwas_atlas", build_gwas_atlas),
-    Parser("lis_gene_functions", build_lis_gene_functions, after=("lis_annotation", "lis_pangenes")),
-    Parser("ensembl_compara", build_ensembl_compara, after=("lis_annotation",)),
-    Parser("plaza_orthology", build_plaza_orthology, after=("lis_annotation", "lis_pangenes")),
-    Parser("tair", build_tair),
-    Parser("ncbi_gene", build_ncbi_gene, after=("lis_annotation",)),
-    Parser("lis_expression", build_lis_expression, after=("lis_annotation", "lis_pangenes")),
-    Parser("string", build_string, after=("lis_annotation",)),
-    Parser("atted", build_atted, after=("lis_annotation", "lis_pangenes")),
-    Parser("planttfdb", build_planttfdb, after=("lis_annotation",)),
-    Parser("plantregmap", build_plantregmap, after=("lis_annotation",)),
-    Parser("pmn_pathways", build_pmn_pathways, after=("lis_annotation",)),
-    Parser("plant_reactome", build_plant_reactome, after=("lis_annotation",)),
-    Parser("lis_synteny", build_lis_synteny, after=("lis_annotation",)),
-    Parser("vep_cache", build_vep_cache),
-    Parser("ld_panel", build_ld_panel),
-    Parser("gmhapmap", build_gmhapmap, after=("lis_annotation",)),
+    Parser("ontology", build_ontology, fills=("ontology_terms",)),
+    Parser("lis_annotation", build_lis_annotation, fills=("genes", "gene_parts", "annotation", "go_annot")),
+    Parser("gff_gene_models", build_gff_gene_models, fills=("genes", "gene_parts")),
+    Parser("lis_pangenes", build_lis_pangenes, fills=("id_map",)),
+    Parser("lis_markers", build_lis_markers, fills=("markers",)),
+    Parser("lis_lift_anchors", build_lis_lift_anchors, after=("lis_annotation", "lis_pangenes"), fills=("lift_anchors",)),
+    Parser("rapdb_msu", build_rapdb_msu, after=(GENE_MODELS,), fills=("id_map",)),
+    Parser("maizegdb_xref", build_maizegdb_xref, after=(GENE_MODELS,), fills=("id_map",)),
+    Parser("rapdb_annotation", build_rapdb_annotation, after=(GENE_MODELS,), fills=("annotation",)),
+    Parser("maizegdb_annotation", build_maizegdb_annotation, after=(GENE_MODELS,), fills=("annotation", "go_annot")),
+    Parser("phytozome_annotation_info", build_phytozome_annotation_info, after=(GENE_MODELS,), fills=()),
+    Parser("lis_qtl", build_lis_qtl, after=("lis_annotation", "lis_markers"), fills=("qtl", "trait_map")),
+    Parser("lis_gwas", build_lis_gwas, after=("lis_markers",), fills=("gwas_hits",)),
+    Parser("soybase_gwas", build_soybase_gwas, fills=("gwas_hits",)),
+    Parser("gramene_qtl", build_gramene_qtl, fills=("qtl", "trait_map")),
+    Parser("gwas_atlas", build_gwas_atlas, fills=("gwas_hits", "trait_map")),
+    Parser("maizegdb_wallace_gwas", build_maizegdb_wallace_gwas, fills=("gwas_hits",)),
+    Parser("lis_gene_functions", build_lis_gene_functions, after=("lis_annotation", "lis_pangenes"), fills=("known_genes",)),
+    Parser("rapdb_curated_genes", build_rapdb_curated_genes, after=(GENE_MODELS,), fills=("known_genes",)),
+    Parser("oryzabase_genes", build_oryzabase_genes, after=(GENE_MODELS, "rapdb_msu"), fills=("known_genes",)),
+    Parser("funricegenes", build_funricegenes, after=(GENE_MODELS, "rapdb_msu"), fills=("known_genes",)),
+    Parser("maizegdb_classical_genes", build_maizegdb_classical_genes, after=(GENE_MODELS,), fills=("known_genes",)),
+    Parser("curated_genes", build_curated_genes, fills=("known_genes",)),
+    Parser("sorghum_qtl_atlas", build_sorghum_qtl_atlas, after=(GENE_MODELS,), fills=()),
+    Parser("ensembl_compara", build_ensembl_compara, after=(GENE_MODELS,), fills=("orthologs",)),
+    Parser("plaza_orthology", build_plaza_orthology, after=(GENE_MODELS,), fills=("orthologs",)),
+    Parser("tair", build_tair, fills=("annotation", "phenotypes", "gene_publications")),
+    Parser("ncbi_gene", build_ncbi_gene, after=(GENE_MODELS,), fills=("ncbi_genes", "ncbi_gene_pubmed", "ncbi_gene_go")),
+    Parser("lis_expression", build_lis_expression, after=("lis_annotation", "lis_pangenes"), fills=("samples", "expression")),
+    Parser("string", build_string, after=(GENE_MODELS,), fills=("edges",)),
+    Parser("atted", build_atted, after=("lis_annotation", "lis_pangenes"), fills=("edges",)),
+    Parser("planttfdb", build_planttfdb, after=(GENE_MODELS,), fills=("tf",)),
+    Parser("plantregmap", build_plantregmap, after=(GENE_MODELS,), fills=("regulation", "regulatory_regions")),
+    Parser("pmn_pathways", build_pmn_pathways, after=(GENE_MODELS,), fills=("pathways",)),
+    Parser("plant_reactome", build_plant_reactome, after=(GENE_MODELS,), fills=("pathways",)),
+    Parser("lis_synteny", build_lis_synteny, after=(GENE_MODELS,), fills=("homeologs",)),
+    Parser("vep_cache", build_vep_cache, fills=("resources",)),
+    Parser("ld_panel", build_ld_panel, fills=("resources", "variants")),
+    Parser("gmhapmap", build_gmhapmap, after=(GENE_MODELS,), fills=("gene_haplotypes", "variants")),
 )
+
+
+def required_tables(registry: SpeciesRegistry, tier: Tier) -> set[str]:
+    """Return the tables a ``tier`` bundle must fill: those some registered source's parser always writes.
+
+    Manual-only sources count only once their file is fetched, which build
+    and verify see in the manifest; here they never make a table required.
+    """
+    by_name = {parser.name: parser for parser in PARSERS}
+    return {
+        table
+        for source in registry.sources_for(tier)
+        if source.parser in by_name and not source.manual_only
+        for table in by_name[str(source.parser)].fills
+    }
 
 
 @dataclass
@@ -125,10 +179,10 @@ def build(
     manifest = Manifest(paths.manifest, registry.species)
     sources = registry.sources_for(tier)
     names = {parser.name for parser in PARSERS}
-    unknown = sorted({str(source.parser) for source in sources} - names)
+    unknown = sorted({str(source.parser) for source in sources if source.parser} - names)
     if unknown:
         raise BuildError(f"sources name unknown parsers: {', '.join(unknown)}")
-    missing = [source.id for source in sources if not manifest.source_files(source.id)]
+    missing = [source.id for source in sources if not source.manual_only and not manifest.source_files(source.id)]
     pruned = sorted({str(entry.get("source_id")) for entry in manifest.files.values() if entry.get("status") == "pruned"})
     if missing and pruned:
         raise BuildError(
@@ -137,10 +191,14 @@ def build(
         )
     if missing:
         raise BuildError(f"not fetched: {', '.join(missing)}; run agrihub-data fetch first")
-    present = {str(source.parser) for source in sources}
+    present = {str(source.parser) for source in sources if source.parser}
     for parser in PARSERS:
         if parser.name in present:
-            absent = [name for name in parser.after if name not in present]
+            absent = [
+                name
+                for name in parser.after
+                if name not in present and not (name == GENE_MODELS and present & GENE_MODEL_PARSERS)
+            ]
             if absent:
                 raise BuildError(f"{parser.name} needs {', '.join(absent)} in the {tier} tier")
 

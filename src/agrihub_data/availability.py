@@ -45,15 +45,22 @@ class Domain:
 
 DOMAINS: tuple[Domain, ...] = (
     Domain(
+        "qtl",
+        "QTL intervals overlapping the locus (qtl_overlap)",
+        ("qtl_overlap",),
+        "core",
+        tables=("qtl",),
+    ),
+    Domain(
         "expression",
-        "expression in trait-relevant tissues and tissue specificity (JGI gene atlas, Libault 2010)",
+        "expression in trait-relevant tissues and tissue specificity",
         ("trait_relevant_tissues", "expression_profile", "tissue_specificity"),
         "extended",
         tables=("expression", "samples"),
     ),
     Domain(
         "coexpression",
-        "co-expression neighbours (ATTED-II)",
+        "co-expression neighbours",
         ("coexpression_neighbors",),
         "extended",
         tables=("edges",),
@@ -61,7 +68,7 @@ DOMAINS: tuple[Domain, ...] = (
     ),
     Domain(
         "network",
-        "network neighbours and seed propagation from known trait genes (STRING)",
+        "network neighbours and seed propagation from known trait genes",
         ("network_neighbors", "seed_propagation"),
         "extended",
         tables=("edges",),
@@ -69,21 +76,21 @@ DOMAINS: tuple[Domain, ...] = (
     ),
     Domain(
         "regulation",
-        "transcription-factor status, regulators and targets (PlantTFDB/PlantRegMap)",
+        "transcription-factor status, regulators and targets",
         ("get_regulation",),
         "extended",
         tables=("tf", "regulation"),
     ),
     Domain(
         "tfbs_cns",
-        "SNPs in promoter TF binding sites or conserved non-coding elements (PlantRegMap)",
+        "SNPs in promoter TF binding sites or conserved non-coding elements",
         ("snp_in_tfbs_or_cns",),
         "extended",
         tables=("regulatory_regions",),
     ),
     Domain(
         "pathways",
-        "metabolic and signalling pathways (PMN SoyCyc, Plant Reactome)",
+        "metabolic and signalling pathways",
         ("get_pathways",),
         "extended",
         tables=("pathways",),
@@ -105,7 +112,7 @@ DOMAINS: tuple[Domain, ...] = (
     ),
     Domain(
         "ld",
-        "LD with the lead SNP and LD-based locus windows, define_locus(mode=ld) (PLINK2 on the SoySNP50K panel or a study VCF)",
+        "LD with the lead SNP and LD-based locus windows, define_locus(mode=ld) (PLINK2 on a reference panel or a study VCF)",
         ("ld_with_lead",),
         "heavy",
         resources=(LD_PANEL_KIND,),
@@ -113,14 +120,14 @@ DOMAINS: tuple[Domain, ...] = (
     ),
     Domain(
         "homeologs",
-        "homeolog pairs from recent-duplication synteny (LIS HXNY)",
+        "homeolog pairs from recent-duplication synteny",
         ("homeologs",),
         "heavy",
         tables=("homeologs",),
     ),
     Domain(
         "haplotypes",
-        "gene haplotypes and non-synonymous SNPs (GmHapMap)",
+        "gene haplotypes and non-synonymous SNPs",
         ("gene_haplotypes",),
         "heavy",
         tables=("gene_haplotypes",),
@@ -133,12 +140,12 @@ DOMAINS: tuple[Domain, ...] = (
     ),
     Domain("protein_records", "UniProt protein records (get_protein)", ("get_protein",), None),
     Domain("gene_family", "gene-family trees beyond PANTHER/Pfam labels (gene_family)", ("gene_family",), None),
-    Domain("rice_orthologs", "rice orthologs (not in the soybean bundle yet)", (), None),
+    Domain("rice_orthologs", "rice orthologs (no bundle loads cross-crop orthologs yet)", (), None),
 )
 DOMAIN_KEYS = tuple(domain.key for domain in DOMAINS)
 SPECIALIST_DOMAINS: dict[str, tuple[str, ...]] = {
     "locus_variant": ("variant_location", "variant_consequence", "tfbs_cns", "ld", "homeologs", "haplotypes"),
-    "qtl_gwas": ("cross_species_convergence",),
+    "qtl_gwas": ("qtl", "cross_species_convergence"),
     "function_orthology": ("pathways", "protein_records", "gene_family", "rice_orthologs"),
     "expression_network": ("expression", "coexpression", "network", "regulation"),
     "literature": (),
@@ -255,6 +262,35 @@ def clear_cache() -> None:
     external.reset_probes()
 
 
+def known_gap(species: str, tables: Iterable[str], resources: Iterable[str] = ()) -> str | None:
+    """Return why no tier of the species can fill ``tables`` or ``resources``, or ``None`` when a registered source can.
+
+    The registry decides: a table is a gap when no active source's parser
+    writes it, a resource kind when no active source uses the parser of that
+    name (``ld_panel``, ``vep_cache``). Planned sources that would fill a
+    missing table are named with their notes.
+    """
+    from agrihub_data.build import required_tables
+
+    wanted = list(tables)
+    kinds = list(resources)
+    if not wanted and not kinds:
+        return None
+    registry = load_species(species)
+    fillable = required_tables(registry, "heavy")
+    parsers = {source.parser for source in registry.sources if source.status == "active"}
+    missing = [table for table in wanted if table not in fillable] + [kind.replace("_", " ") for kind in kinds if kind not in parsers]
+    if not missing:
+        return None
+    planned = [
+        f"{source.name}{f' ({source.notes.strip()})' if source.notes else ''}"
+        for source in registry.sources
+        if source.status == "planned" and set(source.provides) & set(missing)
+    ]
+    reason = f"known gap: no registered {species} source provides {', '.join(missing)}"
+    return f"{reason}; candidates: {'; '.join(planned)}" if planned else reason
+
+
 def _read_facts(path: Path) -> BundleFacts:
     connection = duckdb.connect(str(path), read_only=True)
     try:
@@ -279,6 +315,9 @@ def _status(domain: Domain, species: str, facts: BundleFacts, root: Path) -> Dom
 
     if domain.tier is None:
         return status("no tool for this domain in this build")
+    gap = known_gap(species, domain.tables, domain.resources)
+    if gap is not None:
+        return status(gap)
     if not facts.built:
         return status(f"no {species} bundle is built")
     built_tier = facts.tier if facts.tier in TIERS else "core"
