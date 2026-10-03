@@ -106,6 +106,7 @@ lint.ignore = [
 "src/agent_platform/cli.py" = ["T201"]
 "src/agrihub_data/cli.py" = ["T201"]
 "src/agent_platform/__main__.py" = ["T201"]
+"eval/*.py" = ["T201"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

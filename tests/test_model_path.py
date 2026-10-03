@@ -157,7 +157,7 @@ def test_a_pick_that_places_no_snps_falls_back_to_the_next_applicable_model(fixt
         {"mode": "trait", "species": "soybean", "assembly": "Wm82.a2.v1", "trait_text": "plant height", "model_preferences": [f"{PRECOMPUTED}:PH_2020"]}
     )
     assert values["run_status"] == "completed", received[-1]
-    assert [(run["model_id"], run["placed"]) for run in values["model_result"]["runs"]] == [(PRECOMPUTED, 0), ("gwas_atlas_top_hits", 1)]
+    assert [(run["model_id"], run["placed"]) for run in values["model_result"]["runs"]] == [(PRECOMPUTED, 0), ("gwas_atlas_top_hits", 2)]
     assert "placed no SNPs, so GWAS Atlas top hits for the trait was used next" in values["model_result"]["rationale"]
     assert values["model_result"]["score_types"] == ["gnnexplainer", "p_value"]
 
