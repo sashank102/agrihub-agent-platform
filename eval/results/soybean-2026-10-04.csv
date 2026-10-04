@@ -27,19 +27,19 @@ flowering time,agents,Glyma.03G106900,GmMRF2,flowering_time:Wm82.a2:3_30524003,1
 flowering time,agents,Glyma.03G224300,GmSWN,flowering_time:Wm82.a2:3_42551193,105449,L7,63,True,35,30,T3
 flowering time,agents,Glyma.03G261800,GmLHY2b,flowering_time:Wm82.a2:3_45375176,126924,L8,66,True,2,38,T3
 maturity,rubric_only,Glyma.12G073900,"GmTof12, GmPRR3b",maturity:Wm82.a2:12_5502184,6181,L1,38,True,1,3,T3
-maturity,rubric_only,Glyma.13G218200,GmGA2OX5,maturity:GWASAtlas|86917,49114,L2,52,True,12,10,T4
+maturity,rubric_only,Glyma.13G218200,GmGA2OX5,maturity:GWASAtlas|ST2035|86917,49114,L2,52,True,12,10,T4
 maturity,rubric_only,Glyma.16G150700,GmFT2a,maturity:Wm82.a2:16_31208131,93168,L3,54,True,3,17,T3
 maturity,rubric_only,Glyma.18G273600,GmDT2,maturity:Wm82.a2:18_55784646,138099,L4,70,True,13,39,T4
 maturity,rubric_only,Glyma.19G224200,GmphyA3,maturity:Wm82.a2:19_47632093,966,L5,54,True,1,1,T4
 maturity,rubric_only,Glyma.20G186200,GmTEM1a,maturity:Wm82.a1:20_41339093,26714,L6,45,True,7,6,T4
 maturity,rubric_no_priors,Glyma.12G073900,"GmTof12, GmPRR3b",maturity:Wm82.a2:12_5502184,6181,L1,38,True,4,3,T4
-maturity,rubric_no_priors,Glyma.13G218200,GmGA2OX5,maturity:GWASAtlas|86917,49114,L2,52,True,12,10,T4
+maturity,rubric_no_priors,Glyma.13G218200,GmGA2OX5,maturity:GWASAtlas|ST2035|86917,49114,L2,52,True,12,10,T4
 maturity,rubric_no_priors,Glyma.16G150700,GmFT2a,maturity:Wm82.a2:16_31208131,93168,L3,54,True,7,17,T4
 maturity,rubric_no_priors,Glyma.18G273600,GmDT2,maturity:Wm82.a2:18_55784646,138099,L4,70,True,12,39,T4
 maturity,rubric_no_priors,Glyma.19G224200,GmphyA3,maturity:Wm82.a2:19_47632093,966,L5,54,True,1,1,T4
 maturity,rubric_no_priors,Glyma.20G186200,GmTEM1a,maturity:Wm82.a1:20_41339093,26714,L6,45,True,7,6,T4
 maturity,agents,Glyma.12G073900,"GmTof12, GmPRR3b",maturity:Wm82.a2:12_5502184,6181,L1,38,True,1,3,T3
-maturity,agents,Glyma.13G218200,GmGA2OX5,maturity:GWASAtlas|86917,49114,L2,52,True,12,10,T4
+maturity,agents,Glyma.13G218200,GmGA2OX5,maturity:GWASAtlas|ST2035|86917,49114,L2,52,True,12,10,T4
 maturity,agents,Glyma.16G150700,GmFT2a,maturity:Wm82.a2:16_31208131,93168,L3,54,True,3,17,T3
 maturity,agents,Glyma.18G273600,GmDT2,maturity:Wm82.a2:18_55784646,138099,L4,70,True,13,39,T4
 maturity,agents,Glyma.19G224200,GmphyA3,maturity:Wm82.a2:19_47632093,966,L5,54,True,1,1,T4
@@ -54,8 +54,11 @@ seed oil content,rubric_no_priors,Glyma.20G111000,GmFAD2-1B,seed_oil_content:Wm8
 seed oil content,agents,Glyma.05G243800,GmMFT,seed_oil_content:Wm82.a2:5_38425844,85328,L1,69,True,20,28,T4
 seed oil content,agents,Glyma.20G111000,GmFAD2-1B,seed_oil_content:Wm82.a2:20_35165928,149702,L2,56,True,1,35,T3
 seed weight,rubric_only,Glyma.01G156000,GmDGAT2D,seed_weight:Wm82.a1:1_48619590,144247,L1,45,True,29,25,T4
-seed weight,rubric_only,Glyma.20G005900,GmSop20,seed_weight:Wm82.a1:20_545852,32080,L2,57,True,14,7,T4
+seed weight,rubric_only,Glyma.14G195000,GmAS2b,seed_weight:Wm82.a1:14_46657324,56434,L2,47,True,5,12,T4
+seed weight,rubric_only,Glyma.20G005900,GmSop20,seed_weight:Wm82.a1:20_545852,32080,L3,57,True,14,7,T4
 seed weight,rubric_no_priors,Glyma.01G156000,GmDGAT2D,seed_weight:Wm82.a1:1_48619590,144247,L1,45,True,29,25,T4
-seed weight,rubric_no_priors,Glyma.20G005900,GmSop20,seed_weight:Wm82.a1:20_545852,32080,L2,57,True,14,7,T4
+seed weight,rubric_no_priors,Glyma.14G195000,GmAS2b,seed_weight:Wm82.a1:14_46657324,56434,L2,47,True,5,12,T4
+seed weight,rubric_no_priors,Glyma.20G005900,GmSop20,seed_weight:Wm82.a1:20_545852,32080,L3,57,True,14,7,T4
 seed weight,agents,Glyma.01G156000,GmDGAT2D,seed_weight:Wm82.a1:1_48619590,144247,L1,45,True,29,25,T4
-seed weight,agents,Glyma.20G005900,GmSop20,seed_weight:Wm82.a1:20_545852,32080,L2,57,True,14,7,T4
+seed weight,agents,Glyma.14G195000,GmAS2b,seed_weight:Wm82.a1:14_46657324,56434,L2,47,True,5,12,T4
+seed weight,agents,Glyma.20G005900,GmSop20,seed_weight:Wm82.a1:20_545852,32080,L3,57,True,14,7,T4
