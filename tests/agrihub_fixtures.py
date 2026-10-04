@@ -19,6 +19,23 @@ from agrihub_data.registry import Source, SpeciesRegistry
 
 DATA = Path(__file__).parent / "data"
 BUNDLE_DATA = DATA / "bundle"
+HEARTBEAT_P95_SECONDS = float(os.environ.get("AGRIHUB_TEST_HEARTBEAT_P95", "0.1"))
+HEARTBEAT_MAX_SECONDS = float(os.environ.get("AGRIHUB_TEST_HEARTBEAT_MAX", "1.0"))
+
+
+def assert_event_loop_responsive(ticks: list[float], elapsed: float) -> None:
+    """Assert a 10 ms heartbeat kept ticking while a tool ran for ``elapsed`` seconds.
+
+    A blocked loop shows as missing ticks. A single garbage-collection pause
+    in a long suite may exceed the 95th percentile, so the worst gap only has
+    a loose bound. Both limits are overridable for slow machines.
+    """
+    gaps = sorted(later - earlier for earlier, later in zip(ticks, ticks[1:], strict=False))
+    assert gaps, "the heartbeat never ticked"
+    assert len(ticks) >= elapsed / 0.05, (len(ticks), elapsed)
+    p95 = gaps[min(len(gaps) - 1, int(0.95 * len(gaps)))]
+    assert p95 < HEARTBEAT_P95_SECONDS, (p95, elapsed)
+    assert gaps[-1] < HEARTBEAT_MAX_SECONDS, (gaps[-1], elapsed)
 
 
 class DataServer(ThreadingHTTPServer):

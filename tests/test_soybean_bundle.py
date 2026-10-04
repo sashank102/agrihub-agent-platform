@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from agrihub_fixtures import assert_event_loop_responsive
 
 from agent_platform.core.settings import get_data_paths
 from agrihub.tools import bundle_tools
@@ -150,6 +151,4 @@ def test_whole_chromosome_query_keeps_the_event_loop_responsive(tmp_path: Path, 
 
     elapsed, ticks, artifact = asyncio.run(scenario())
     assert artifact["total"] > 3_000 and artifact["truncated"]
-    gaps = [later - earlier for earlier, later in zip(ticks, ticks[1:], strict=False)]
-    assert gaps and max(gaps) < 0.25, (elapsed, max(gaps))
-    assert len(ticks) >= elapsed / 0.05
+    assert_event_loop_responsive(ticks, elapsed)

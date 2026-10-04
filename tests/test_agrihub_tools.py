@@ -8,7 +8,7 @@ from typing import Any
 
 import duckdb
 import pytest
-from agrihub_fixtures import FixtureBundle
+from agrihub_fixtures import FixtureBundle, assert_event_loop_responsive
 
 from agrihub.evidence_store import EvidenceStore
 from agrihub.state import OrthologRef
@@ -464,6 +464,4 @@ def test_large_bundle_query_does_not_block_the_event_loop(tmp_path: Path, monkey
         close_bundles()
     assert artifact["total"] == 12_000 and artifact["truncated"]
     assert elapsed > 0.2
-    gaps = [later - earlier for earlier, later in zip(ticks, ticks[1:], strict=False)]
-    assert len(ticks) >= elapsed / 0.05, (len(ticks), elapsed)
-    assert max(gaps) < 0.25, max(gaps)
+    assert_event_loop_responsive(ticks, elapsed)
