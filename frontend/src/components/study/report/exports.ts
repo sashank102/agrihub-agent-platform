@@ -29,6 +29,13 @@ export function unresolvedCitations(
   return orphans;
 }
 
+export const CITATION_HREF = "#cite-";
+
+/** Rewrite `[E12]` citation markers as `#cite-E12` links so Markdown renders them inline. */
+export function linkCitations(markdown: string): string {
+  return markdown.replace(/\[(E\d+)\](?!\()/g, `[$1](${CITATION_HREF}$1)`);
+}
+
 export function reportJson(report: StudyReport): string {
   return JSON.stringify(
     {

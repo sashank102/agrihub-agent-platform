@@ -4,9 +4,22 @@ import {
   candidatesCsv,
   citationIndex,
   evidenceCsv,
+  linkCitations,
   reportJson,
   unresolvedCitations,
 } from "./exports";
+
+describe("linkCitations", () => {
+  it("turns citation markers into cite links and leaves real links alone", () => {
+    expect(
+      linkCitations(
+        "| L2 | supports [E12] [E3] |\nSee [E7](#cite-E7) and [docs](https://x.org).",
+      ),
+    ).toBe(
+      "| L2 | supports [E12](#cite-E12) [E3](#cite-E3) |\nSee [E7](#cite-E7) and [docs](https://x.org).",
+    );
+  });
+});
 
 const report: StudyReport = {
   title: "plant height candidate genes in soybean",

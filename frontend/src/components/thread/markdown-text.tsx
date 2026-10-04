@@ -243,13 +243,21 @@ const defaultComponents: any = {
   },
 };
 
-const MarkdownTextImpl: FC<{ children: string }> = ({ children }) => {
+const MarkdownTextImpl: FC<{
+  children: string;
+  /** Element overrides merged over the defaults (e.g. a custom `a`). */
+  components?: Record<string, unknown>;
+}> = ({ children, components }) => {
   return (
     <div className="markdown-content">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex]}
-        components={defaultComponents}
+        components={
+          components
+            ? { ...defaultComponents, ...components }
+            : defaultComponents
+        }
       >
         {children}
       </ReactMarkdown>

@@ -10,7 +10,8 @@ import {
   useReactTable,
   type ColumnFiltersState,
 } from "@tanstack/react-table";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useMemo, useState, type ReactNode } from "react";
+import { MarkdownText } from "@/components/thread/markdown-text";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,9 +26,11 @@ import type { ReportCitation, StudyReport } from "@/lib/study-api";
 import { useRunStore } from "@/lib/run-store";
 import { CandidatesTable } from "../run/candidates-table";
 import {
+  CITATION_HREF,
   candidatesCsv,
   citationIndex,
   evidenceCsv,
+  linkCitations,
   reportCandidates,
   reportJson,
   reportMarkdown,
@@ -73,6 +76,42 @@ function download(filename: string, contents: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
+function Citation({
+  alias,
+  citation,
+  onOpen,
+}: {
+  alias: string;
+  citation: ReportCitation | undefined;
+  onOpen: (alias: string) => void;
+}) {
+  return (
+    <HoverCard>
+      <HoverCardTrigger asChild>
+        <button
+          type="button"
+          className="text-primary font-mono underline-offset-2 hover:underline"
+          onClick={() => onOpen(alias)}
+        >
+          [{alias}]
+        </button>
+      </HoverCardTrigger>
+      <HoverCardContent className="w-80 space-y-1 text-left text-xs">
+        <p className="font-medium">{citation?.source_db ?? "Unknown source"}</p>
+        <p className="text-muted-foreground">
+          {citation
+            ? `${citation.category} · ${citation.subtype}`
+            : "This citation does not resolve."}
+        </p>
+        <p>{citation?.quote || "No verbatim quote was stored."}</p>
+        <p className="text-muted-foreground">
+          Verifier: {citation?.verifier_status ?? "unchecked"}
+        </p>
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
+
 function CitationText({
   markdown,
   citations,
@@ -82,44 +121,37 @@ function CitationText({
   citations: Map<string, ReportCitation>;
   onOpen: (alias: string) => void;
 }) {
-  const parts = markdown.split(/(\[E\d+\])/g);
-  return (
-    <div className="max-w-3xl space-y-3 text-sm leading-6 whitespace-pre-wrap">
-      {parts.map((part, index) => {
-        const match = /^\[(E\d+)\]$/.exec(part);
-        if (!match?.[1]) {
-          return <Fragment key={index}>{part}</Fragment>;
+  const linked = useMemo(() => linkCitations(markdown), [markdown]);
+  const components = useMemo(
+    () => ({
+      a: ({ href, children }: { href?: string; children?: ReactNode }) => {
+        if (href?.startsWith(CITATION_HREF)) {
+          const alias = href.slice(CITATION_HREF.length);
+          return (
+            <Citation
+              alias={alias}
+              citation={citations.get(alias)}
+              onOpen={onOpen}
+            />
+          );
         }
-        const alias = match[1];
-        const citation = citations.get(alias);
         return (
-          <HoverCard key={`${alias}-${index}`}>
-            <HoverCardTrigger asChild>
-              <button
-                type="button"
-                className="text-primary font-mono underline-offset-2 hover:underline"
-                onClick={() => onOpen(alias)}
-              >
-                [{alias}]
-              </button>
-            </HoverCardTrigger>
-            <HoverCardContent className="w-80 space-y-1 text-left text-xs">
-              <p className="font-medium">
-                {citation?.source_db ?? "Unknown source"}
-              </p>
-              <p className="text-muted-foreground">
-                {citation
-                  ? `${citation.category} · ${citation.subtype}`
-                  : "This citation does not resolve."}
-              </p>
-              <p>{citation?.quote || "No verbatim quote was stored."}</p>
-              <p className="text-muted-foreground">
-                Verifier: {citation?.verifier_status ?? "unchecked"}
-              </p>
-            </HoverCardContent>
-          </HoverCard>
+          <a
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary font-medium underline underline-offset-4"
+          >
+            {children}
+          </a>
         );
-      })}
+      },
+    }),
+    [citations, onOpen],
+  );
+  return (
+    <div className="max-w-4xl text-sm">
+      <MarkdownText components={components}>{linked}</MarkdownText>
     </div>
   );
 }
