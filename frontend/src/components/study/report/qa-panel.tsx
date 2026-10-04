@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -45,9 +45,12 @@ function suggestions(report: StudyReport | null | undefined): string[] {
 export function QAPanel({
   report,
   onOpenEvidence,
+  trigger,
 }: {
   report: StudyReport | null | undefined;
   onOpenEvidence: (alias: string) => void;
+  /** The element that opens the panel; it must forward refs and props (``asChild``). */
+  trigger?: ReactNode;
 }) {
   const stream = useStreamContext();
   const [question, setQuestion] = useState("");
@@ -69,13 +72,15 @@ export function QAPanel({
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          data-testid="open-qa"
-        >
-          Ask about this study
-        </Button>
+        {trigger ?? (
+          <Button
+            type="button"
+            variant="outline"
+            data-testid="open-qa"
+          >
+            Ask about this study
+          </Button>
+        )}
       </SheetTrigger>
       <SheetContent
         className="flex w-full flex-col gap-3 sm:max-w-md"

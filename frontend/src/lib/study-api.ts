@@ -7,6 +7,7 @@ import type {
   SpecialistName,
   StudyInputIssue,
   StudyWarning,
+  Tier,
 } from "./run-events";
 
 export const API_URL =
@@ -154,6 +155,29 @@ export type ClaimVerdict = {
   note: string;
 };
 
+export type Confidence =
+  "strong" | "moderate" | "suggestive" | "positional only";
+
+/** The executive summary written by the report writer, bottom line first. */
+export type ReportSummary = {
+  bottom_line: string;
+  key_findings: { statement: string; citations: string[] }[];
+  candidates: {
+    gene_id: string;
+    narrative: string;
+    citations: string[];
+    symbol?: string | null;
+    locus_id?: string | null;
+    tier?: Tier | null;
+    confidence?: Confidence | null;
+  }[];
+  loci: { locus_id: string; narrative: string; citations: string[] }[];
+  caveats: string[];
+  next_steps: string[];
+  /** The writer model's name, or ``template`` for the deterministic fallback. */
+  written_by: string;
+};
+
 export type StudyReport = {
   title: string;
   species: string;
@@ -176,7 +200,11 @@ export type StudyReport = {
   };
   evidence_count: number;
   finding_count: number;
+  summary?: ReportSummary | null;
+  /** The written summary as Markdown. */
   markdown?: string;
+  /** The full per-locus tables as Markdown. */
+  details_markdown?: string;
   provenance: Record<string, unknown>;
 };
 

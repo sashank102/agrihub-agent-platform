@@ -4,8 +4,10 @@ import {
   candidatesCsv,
   citationIndex,
   evidenceCsv,
+  geneLinks,
   linkCitations,
   reportJson,
+  reportMarkdown,
   unresolvedCitations,
 } from "./exports";
 
@@ -17,6 +19,12 @@ describe("linkCitations", () => {
       ),
     ).toBe(
       "| L2 | supports [E12](#cite-E12) [E3](#cite-E3) |\nSee [E7](#cite-E7) and [docs](https://x.org).",
+    );
+  });
+
+  it("links source citations too", () => {
+    expect(linkCitations("From [source:atted_soybean] and [E2].")).toBe(
+      "From [source:atted_soybean](#cite-source:atted_soybean) and [E2](#cite-E2).",
     );
   });
 });
@@ -103,6 +111,37 @@ describe("report exports", () => {
     expect(parsed.schema).toBe("agrihub.report/v1");
     expect(parsed.study.trait).toBe("plant height");
     expect(parsed.provenance.rubric_version).toBe(3);
+  });
+
+  it("exports the written summary followed by the detailed tables", () => {
+    const markdown = reportMarkdown({
+      ...report,
+      markdown: "# Title\n\n## Bottom line\n\nGene A leads [E1].",
+      details_markdown: "# Title\n\n| Locus | Region |\n| --- | --- |",
+    });
+    expect(markdown).toBe(
+      "# Title\n\n## Bottom line\n\nGene A leads [E1].\n\n## Detailed tables\n\n| Locus | Region |\n| --- | --- |\n",
+    );
+  });
+
+  it("builds gene links from the report's link-out templates", () => {
+    expect(
+      geneLinks(
+        {
+          ...report,
+          provenance: {
+            gene_linkouts: [
+              { name: "SoyBase", template: "https://soy.org/?q={gene_id}" },
+              { name: "broken" },
+            ],
+          },
+        },
+        "Glyma.18G092200",
+      ),
+    ).toEqual([
+      { name: "SoyBase", href: "https://soy.org/?q=Glyma.18G092200" },
+    ]);
+    expect(geneLinks(report, "Glyma.18G092200")).toEqual([]);
   });
 
   it("resolves citations that are in the report index", () => {

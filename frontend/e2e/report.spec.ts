@@ -43,9 +43,17 @@ test("runs a study into the report, exports it, and asks one question", async ({
 
   const report = page.getByTestId("report-view");
   await expect(report).toBeVisible();
+  await expect(page.getByTestId("report-header")).toBeVisible();
+  await expect(page.getByLabel("Study phases")).toHaveCount(0);
+  await expect(page.getByTestId("research-trace")).toHaveCount(0);
   fs.mkdirSync(shots, { recursive: true });
-  await report.getByRole("tab", { name: "Summary" }).click();
-  await expect(report).toContainText("candidate genes");
+  await expect(report.getByRole("tab", { name: "Summary" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(page.getByTestId("summary-bottom-line")).toBeVisible();
+  await expect(report).toContainText("Key findings at a glance");
+  await expect(report).toContainText("Top candidates");
   await page.screenshot({
     path: path.join(shots, "summary.png"),
     fullPage: true,
@@ -68,12 +76,29 @@ test("runs a study into the report, exports it, and asks one question", async ({
     fullPage: true,
   });
 
+  await report.getByRole("tab", { name: "Trace" }).click();
+  await expect(page.getByTestId("research-trace")).toBeVisible();
+
+  await page.getByTestId("open-downloads").click();
+  const formats = page.getByRole("list", { name: "Download formats" });
+  for (const name of [
+    "JSON",
+    "Candidates CSV",
+    "Evidence CSV",
+    "Markdown",
+    "Print PDF",
+  ]) {
+    await expect(formats.getByRole("button", { name })).toBeVisible();
+  }
   const downloadPromise = page.waitForEvent("download");
-  await report.getByRole("button", { name: "JSON" }).click();
+  await formats.getByRole("button", { name: /^JSON/ }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toContain(".json");
 
-  await page.getByTestId("open-qa").click();
+  await page
+    .getByTestId("report-header")
+    .getByRole("button", { name: "Ask about this study" })
+    .click();
   const panel = page.getByTestId("qa-panel");
   await panel
     .getByLabel("Follow-up question")

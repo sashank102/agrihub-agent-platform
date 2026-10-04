@@ -18,7 +18,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { clearApiKey, devMode } = useApiKey();
   return (
     <div className="bg-muted/30 flex min-h-screen flex-col">
-      <header className="bg-background sticky top-0 z-30 border-b">
+      <header className="bg-background sticky top-0 z-30 border-b print:hidden">
         <div className="mx-auto flex h-14 w-full max-w-[1600px] items-center gap-4 px-4">
           <Link
             href="/"

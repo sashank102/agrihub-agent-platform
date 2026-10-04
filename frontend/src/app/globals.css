@@ -206,7 +206,6 @@
 
 @media print {
   nav,
-  header,
   [data-slot="tabs-list"],
   .print\:hidden {
     display: none !important;
@@ -218,7 +217,16 @@
     background: white;
   }
 
-  .report-print table {
+  .report-print [data-print-panel] {
+    display: block !important;
+  }
+
+  .report-print table,
+  .report-print [data-summary-gene] {
     break-inside: avoid;
+  }
+
+  .report-print a {
+    color: inherit;
   }
 }

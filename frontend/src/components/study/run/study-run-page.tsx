@@ -32,13 +32,12 @@ import {
 } from "@/lib/study-api";
 import { useStreamContext } from "@/providers/Stream";
 import { AgentLanes } from "./agent-lanes";
-import { QAPanel } from "../report/qa-panel";
+import { ReportHeader } from "../report/report-header";
 import { ReportView } from "../report/report-view";
 import { HarvestLane } from "./harvest-lane";
 import { LiveSummary } from "./live-summary";
 import { OrchestratorPanel } from "./orchestrator-panel";
 import { PhaseStepper } from "./phase-stepper";
-import { ResearchTrace } from "./research-trace";
 import { RunHeader, type StudyChips } from "./run-header";
 
 const DelegationGraph = dynamic(
@@ -87,7 +86,6 @@ export function StudyRunPage({ threadId }: { threadId: string }) {
   const [missing, setMissing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [view, setView] = useState<"lanes" | "graph">("lanes");
-  const [traceOpen, setTraceOpen] = useState(false);
 
   const streamRef = useRef(stream);
   const following = useRef<string | null>(null);
@@ -271,6 +269,7 @@ export function StudyRunPage({ threadId }: { threadId: string }) {
     (stream.isLoading ? "running" : "pending");
   const collapsed = hasReport || terminal?.status === "completed";
   const report = stream.values?.report ?? null;
+  const chips = studyChips(stream.values, thread);
 
   const workspace = (
     <div className="flex flex-col gap-4">
@@ -305,16 +304,26 @@ export function StudyRunPage({ threadId }: { threadId: string }) {
         data-testid="run-view"
         data-collapsed={collapsed || undefined}
       >
-        <RunHeader
-          chips={studyChips(stream.values, thread)}
-          status={status}
-          start={latest?.created_at ?? null}
-          end={latest?.finished_at ?? (terminal ? lastTs : null)}
-          canCancel={running && !!runId}
-          cancelling={cancelling}
-          onCancel={() => void cancel()}
-        />
-        <PhaseStepper />
+        {collapsed ? (
+          <ReportHeader
+            report={report}
+            chips={chips}
+            status={status}
+          />
+        ) : (
+          <>
+            <RunHeader
+              chips={chips}
+              status={status}
+              start={latest?.created_at ?? null}
+              end={latest?.finished_at ?? (terminal ? lastTs : null)}
+              canCancel={running && !!runId}
+              cancelling={cancelling}
+              onCancel={() => void cancel()}
+            />
+            <PhaseStepper />
+          </>
+        )}
         <LiveSummary />
         {runs !== null && runs.length === 0 && !stream.isLoading && (
           <p className="text-muted-foreground text-sm">
@@ -329,21 +338,10 @@ export function StudyRunPage({ threadId }: { threadId: string }) {
             {collapsed ? (
               <motion.div
                 key="report"
-                className="flex flex-col gap-6"
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.35 }}
               >
-                <div className="flex flex-wrap items-center gap-2">
-                  <QAPanel
-                    report={report}
-                    onOpenEvidence={() => undefined}
-                  />
-                </div>
-                <ResearchTrace
-                  open={traceOpen}
-                  onOpenChange={setTraceOpen}
-                />
                 <ReportView
                   report={report}
                   fallbackRows={fallbackRows}

@@ -197,6 +197,7 @@ export type CandidateRow = {
   locus_id: string;
   symbol?: string | null;
   rank_in_locus?: number | null;
+  share_of_locus?: number | null;
   score: number;
   tier: Tier;
   stability?: string | null;

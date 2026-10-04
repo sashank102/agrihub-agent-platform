@@ -10,31 +10,25 @@ import {
   useReactTable,
   type ColumnFiltersState,
 } from "@tanstack/react-table";
-import { Fragment, useMemo, useState, type ReactNode } from "react";
-import { MarkdownText } from "@/components/thread/markdown-text";
+import { useCallback, useEffect, useMemo, useState, Fragment } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from "@/components/ui/hover-card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { CandidateRow, LocusRow, Tier } from "@/lib/run-events";
-import type { ReportCitation, StudyReport } from "@/lib/study-api";
-import { useRunStore } from "@/lib/run-store";
+import type { CandidateRow, LocusRow } from "@/lib/run-events";
+import type { StudyReport } from "@/lib/study-api";
+import { cn } from "@/lib/utils";
 import { CandidatesTable } from "../run/candidates-table";
+import { ResearchTrace } from "../run/research-trace";
+import { CitationProvider, type CitationHandlers } from "./citation-text";
 import {
-  CITATION_HREF,
-  candidatesCsv,
+  TIER_VARIANT,
   citationIndex,
-  evidenceCsv,
-  linkCitations,
+  geneLinks,
   reportCandidates,
-  reportJson,
-  reportMarkdown,
+  sourceIndex,
 } from "./exports";
+import { SummaryView } from "./summary-view";
 
 const CATEGORY_MAX: Record<string, number> = {
   A: 20,
@@ -47,114 +41,17 @@ const CATEGORY_MAX: Record<string, number> = {
 };
 const CATEGORIES = Object.keys(CATEGORY_MAX);
 
-const SOY_LINKS = [
-  {
-    name: "Ensembl Plants",
-    template: "https://plants.ensembl.org/Glycine_max/Gene/Summary?g={gene_id}",
-  },
-  {
-    name: "SoyBase",
-    template:
-      "https://legacy.soybase.org/sbt/search/search_results.php?category=FeatureName&search_term={gene_id}",
-  },
-];
+const TABS = [
+  ["summary", "Summary"],
+  ["candidates", "Candidates"],
+  ["loci", "Loci"],
+  ["matrix", "Evidence"],
+  ["sources", "Sources"],
+  ["methods", "Methods"],
+  ["trace", "Trace"],
+] as const;
 
-const TIER_VARIANT: Record<Tier, "success" | "info" | "warning" | "outline"> = {
-  T1: "success",
-  T2: "info",
-  T3: "warning",
-  T4: "outline",
-};
-
-function download(filename: string, contents: string, type: string) {
-  const blob = new Blob([contents], { type });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-function Citation({
-  alias,
-  citation,
-  onOpen,
-}: {
-  alias: string;
-  citation: ReportCitation | undefined;
-  onOpen: (alias: string) => void;
-}) {
-  return (
-    <HoverCard>
-      <HoverCardTrigger asChild>
-        <button
-          type="button"
-          className="text-primary font-mono underline-offset-2 hover:underline"
-          onClick={() => onOpen(alias)}
-        >
-          [{alias}]
-        </button>
-      </HoverCardTrigger>
-      <HoverCardContent className="w-80 space-y-1 text-left text-xs">
-        <p className="font-medium">{citation?.source_db ?? "Unknown source"}</p>
-        <p className="text-muted-foreground">
-          {citation
-            ? `${citation.category} · ${citation.subtype}`
-            : "This citation does not resolve."}
-        </p>
-        <p>{citation?.quote || "No verbatim quote was stored."}</p>
-        <p className="text-muted-foreground">
-          Verifier: {citation?.verifier_status ?? "unchecked"}
-        </p>
-      </HoverCardContent>
-    </HoverCard>
-  );
-}
-
-function CitationText({
-  markdown,
-  citations,
-  onOpen,
-}: {
-  markdown: string;
-  citations: Map<string, ReportCitation>;
-  onOpen: (alias: string) => void;
-}) {
-  const linked = useMemo(() => linkCitations(markdown), [markdown]);
-  const components = useMemo(
-    () => ({
-      a: ({ href, children }: { href?: string; children?: ReactNode }) => {
-        if (href?.startsWith(CITATION_HREF)) {
-          const alias = href.slice(CITATION_HREF.length);
-          return (
-            <Citation
-              alias={alias}
-              citation={citations.get(alias)}
-              onOpen={onOpen}
-            />
-          );
-        }
-        return (
-          <a
-            href={href}
-            target="_blank"
-            rel="noreferrer"
-            className="text-primary font-medium underline underline-offset-4"
-          >
-            {children}
-          </a>
-        );
-      },
-    }),
-    [citations, onOpen],
-  );
-  return (
-    <div className="max-w-4xl text-sm">
-      <MarkdownText components={components}>{linked}</MarkdownText>
-    </div>
-  );
-}
+type TabValue = (typeof TABS)[number][0];
 
 const column = createColumnHelper<CandidateRow>();
 
@@ -203,6 +100,7 @@ function FullCandidates({
         onChange={(event) => setFilter(event.target.value)}
         placeholder="Filter genes, loci, tiers"
         aria-label="Filter candidates"
+        className="print:hidden"
       />
       <div className="overflow-x-auto rounded-xl border">
         <table className="w-full text-sm">
@@ -290,7 +188,7 @@ function FullCandidates({
           </tbody>
         </table>
       </div>
-      <div className="flex items-center gap-2 text-sm">
+      <div className="flex items-center gap-2 text-sm print:hidden">
         <Button
           type="button"
           variant="outline"
@@ -393,216 +291,221 @@ export function ReportView({
   report: StudyReport | null | undefined;
   fallbackRows: CandidateRow[] | null;
 }) {
+  const [tab, setTab] = useState<TabValue>("summary");
   const [focus, setFocus] = useState<string | null>(null);
+  const [sourceFocus, setSourceFocus] = useState<string | null>(null);
+  const [traceOpen, setTraceOpen] = useState(false);
+  const citations = useMemo(
+    () => (report ? citationIndex(report) : new Map()),
+    [report],
+  );
+  const sources = useMemo(
+    () => (report ? sourceIndex(report) : new Map()),
+    [report],
+  );
+  const openSource = useCallback((sourceId: string) => {
+    setSourceFocus(sourceId);
+    setTab("sources");
+  }, []);
+  const handlers = useMemo<CitationHandlers>(
+    () => ({
+      citations,
+      sources,
+      onOpenEvidence: setFocus,
+      onOpenSource: openSource,
+    }),
+    [citations, sources, openSource],
+  );
+  useEffect(() => {
+    if (tab === "sources" && sourceFocus) {
+      document
+        .getElementById(`source-${sourceFocus}`)
+        ?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  }, [tab, sourceFocus]);
   if (!report && !fallbackRows?.length) {
     return null;
   }
-  const citations = report ? citationIndex(report) : new Map();
   const focused = focus ? citations.get(focus) : undefined;
   const rows = report ? reportCandidates(report) : (fallbackRows ?? []);
-  const slug = (report?.trait || "study").replaceAll(/\s+/g, "-");
   return (
-    <section
-      className="report-print space-y-4"
-      data-testid="report-view"
-    >
-      <div className="flex flex-wrap gap-2 print:hidden">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            report &&
-            download(`${slug}.json`, reportJson(report), "application/json")
-          }
-          disabled={!report}
+    <CitationProvider value={handlers}>
+      <section
+        className="report-print"
+        data-testid="report-view"
+      >
+        <Tabs
+          value={tab}
+          onValueChange={(value) => setTab(value as TabValue)}
+          className="gap-5"
         >
-          JSON
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            report &&
-            download(
-              `${slug}-candidates.csv`,
-              candidatesCsv(report),
-              "text/csv",
-            )
-          }
-          disabled={!report}
-        >
-          Candidates CSV
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            report &&
-            download(`${slug}-evidence.csv`, evidenceCsv(report), "text/csv")
-          }
-          disabled={!report}
-        >
-          Evidence CSV
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            report &&
-            download(`${slug}.md`, reportMarkdown(report), "text/markdown")
-          }
-          disabled={!report}
-        >
-          Markdown
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => window.print()}
-        >
-          Print PDF
-        </Button>
-      </div>
-      <Tabs defaultValue="candidates">
-        <TabsList className="flex h-auto flex-wrap print:hidden">
-          {(
-            [
-              ["summary", "Summary"],
-              ["candidates", "Candidates"],
-              ["loci", "Loci"],
-              ["matrix", "Evidence"],
-              ["sources", "Sources"],
-              ["methods", "Methods"],
-              ["trace", "Trace"],
-            ] as const
-          ).map(([value, label]) => (
-            <TabsTrigger
-              key={value}
-              value={value}
-            >
-              {label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-        <TabsContent value="summary">
-          <CitationText
-            markdown={report?.markdown || report?.title || ""}
-            citations={citations}
-            onOpen={setFocus}
-          />
+          <div className="bg-muted/30 sticky top-14 z-20 -mx-4 border-b px-4 py-2 backdrop-blur print:hidden">
+            <TabsList className="flex h-auto flex-wrap">
+              {TABS.map(([value, label]) => (
+                <TabsTrigger
+                  key={value}
+                  value={value}
+                >
+                  {label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
           {focused ? (
-            <p
-              className="mt-3 rounded-md border p-3 text-sm"
+            <div
+              className="bg-background flex items-start gap-3 rounded-md border p-3 text-sm print:hidden"
               data-testid="evidence-focus"
             >
-              {focused.alias}: {focused.quote || focused.subtype} (
-              {focused.source_db})
-            </p>
-          ) : null}
-        </TabsContent>
-        <TabsContent
-          value="candidates"
-          className="space-y-6"
-        >
-          <CandidatesTable
-            report={report}
-            fallbackRows={fallbackRows}
-          />
-          {report ? (
-            <FullCandidates
-              rows={rows}
-              onOpen={setFocus}
-            />
-          ) : null}
-        </TabsContent>
-        <TabsContent value="loci">
-          <LociTab
-            loci={report?.loci ?? []}
-            rows={rows}
-          />
-        </TabsContent>
-        <TabsContent value="matrix">
-          <Matrix rows={rows.slice(0, 40)} />
-        </TabsContent>
-        <TabsContent value="sources">
-          <ul className="space-y-2 text-sm">
-            {(report?.sources ?? []).map((source) => (
-              <li
-                key={source.source_id}
-                className="rounded-md border p-3"
+              <p className="min-w-0 flex-1">
+                <span className="font-mono font-medium">{focused.alias}</span> ·{" "}
+                {focused.source_db} · {focused.category}:{" "}
+                {focused.quote || focused.subtype}
+              </p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setFocus(null)}
               >
-                <span className="font-medium">{source.name}</span>
-                <span className="text-muted-foreground">
-                  {" "}
-                  {source.version}
-                  {source.retrieved_at
-                    ? ` · retrieved ${source.retrieved_at}`
-                    : ""}
-                </span>
-                <p>{source.license || "license not stated"}</p>
-              </li>
-            ))}
-          </ul>
-        </TabsContent>
-        <TabsContent
-          value="methods"
-          className="space-y-2 text-sm"
-        >
-          <p>
-            {report?.species} {report?.assembly}, trait {report?.trait}, mode{" "}
-            {report?.mode}.
-          </p>
-          <p>
-            Rubric version {String(report?.provenance.rubric_version ?? "")}.
-            Window sensitivity flanks{" "}
-            {(report?.stability?.flanks_bp ?? []).join(", ") || "50/100/250 kb"}
-            .
-          </p>
-          <ul className="list-disc pl-5">
-            {(report?.suggested_validations ?? []).map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-          <ul className="text-muted-foreground list-disc pl-5">
-            {(report?.limitations ?? []).map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        </TabsContent>
-        <TabsContent value="trace">
-          <TraceList />
-        </TabsContent>
-      </Tabs>
-    </section>
+                Close
+              </Button>
+            </div>
+          ) : null}
+          <TabsContent
+            value="summary"
+            forceMount
+            data-print-panel
+            className="data-[state=inactive]:hidden"
+          >
+            {report ? (
+              <SummaryView report={report} />
+            ) : (
+              <p className="text-muted-foreground text-sm">
+                The written summary appears when the report is ready.
+              </p>
+            )}
+          </TabsContent>
+          <TabsContent
+            value="candidates"
+            forceMount
+            data-print-panel
+            className="space-y-6 data-[state=inactive]:hidden print:mt-8"
+          >
+            <CandidatesTable
+              report={report}
+              fallbackRows={fallbackRows}
+            />
+            {report ? (
+              <FullCandidates
+                rows={rows}
+                onOpen={setFocus}
+              />
+            ) : null}
+          </TabsContent>
+          <TabsContent value="loci">
+            <LociTab
+              report={report}
+              loci={report?.loci ?? []}
+              rows={rows}
+            />
+          </TabsContent>
+          <TabsContent value="matrix">
+            <Matrix rows={rows.slice(0, 40)} />
+          </TabsContent>
+          <TabsContent value="sources">
+            <ul className="space-y-2 text-sm">
+              {(report?.sources ?? []).map((source) => (
+                <li
+                  key={source.source_id}
+                  id={`source-${source.source_id}`}
+                  className={cn(
+                    "bg-background rounded-md border p-3 transition-colors",
+                    sourceFocus === source.source_id &&
+                      "border-primary ring-primary/30 ring-2",
+                  )}
+                >
+                  <span className="font-medium">{source.name}</span>
+                  <span className="text-muted-foreground">
+                    {" "}
+                    {source.version}
+                    {source.retrieved_at
+                      ? ` · retrieved ${source.retrieved_at}`
+                      : ""}
+                  </span>
+                  <p>{source.license || "license not stated"}</p>
+                  {source.url ? (
+                    <a
+                      href={source.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-primary text-xs break-all underline-offset-4 hover:underline"
+                    >
+                      {source.url}
+                    </a>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </TabsContent>
+          <TabsContent
+            value="methods"
+            className="space-y-2 text-sm"
+          >
+            <p>
+              {report?.species} {report?.assembly}, trait {report?.trait}, mode{" "}
+              {report?.mode}.
+            </p>
+            <p>
+              Rubric version {String(report?.provenance.rubric_version ?? "")}.
+              Window sensitivity flanks{" "}
+              {(report?.stability?.flanks_bp ?? []).join(", ") ||
+                "50/100/250 kb"}
+              .
+            </p>
+            <ul className="list-disc pl-5">
+              {(report?.suggested_validations ?? []).map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+            <ul className="text-muted-foreground list-disc pl-5">
+              {(report?.limitations ?? []).map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </TabsContent>
+          <TabsContent value="trace">
+            <ResearchTrace
+              open={traceOpen}
+              onOpenChange={setTraceOpen}
+            />
+          </TabsContent>
+        </Tabs>
+      </section>
+    </CitationProvider>
   );
 }
 
-function TraceList() {
-  const order = useRunStore((state) => state.agentOrder);
-  const agents = useRunStore((state) => state.agents);
-  return (
-    <ul className="space-y-1 text-sm">
-      {order.map((id) => (
-        <li key={id}>
-          {agents[id]?.name} · {agents[id]?.status}
-          {agents[id]?.summary ? ` · ${agents[id]?.summary}` : ""}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function LociTab({ loci, rows }: { loci: LocusRow[]; rows: CandidateRow[] }) {
+function LociTab({
+  report,
+  loci,
+  rows,
+}: {
+  report: StudyReport | null | undefined;
+  loci: LocusRow[];
+  rows: CandidateRow[];
+}) {
   return (
     <div className="space-y-3">
       {loci.map((locus) => {
-        const genes = rows.filter((row) => row.locus_id === locus.locus_id);
-        const lead = genes.find((row) => row.overlaps_snp) ?? genes[0];
+        const genes = rows
+          .filter((row) => row.locus_id === locus.locus_id)
+          .sort(
+            (left, right) =>
+              (left.rank_in_locus ?? Infinity) -
+              (right.rank_in_locus ?? Infinity),
+          );
+        const lead = genes[0];
+        const links = report && lead ? geneLinks(report, lead.gene_id) : [];
         return (
           <article
             key={locus.locus_id}
@@ -619,16 +522,20 @@ function LociTab({ loci, rows }: { loci: LocusRow[]; rows: CandidateRow[] }) {
                 : ""}
             </p>
             {lead ? (
-              <p className="mt-2 flex flex-wrap gap-2">
-                {SOY_LINKS.map((link) => (
+              <p className="mt-2 flex flex-wrap items-center gap-2">
+                <span>
+                  Leader <span className="font-mono">{lead.gene_id}</span>
+                  {lead.symbol ? ` (${lead.symbol})` : ""}
+                </span>
+                {links.map((link) => (
                   <a
                     key={link.name}
                     className="text-primary underline"
-                    href={link.template.replace("{gene_id}", lead.gene_id)}
+                    href={link.href}
                     target="_blank"
                     rel="noreferrer"
                   >
-                    {link.name}: {lead.gene_id}
+                    {link.name}
                   </a>
                 ))}
               </p>

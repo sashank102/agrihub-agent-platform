@@ -1,7 +1,25 @@
-import type { CandidateRow } from "@/lib/run-events";
-import type { ReportCitation, StudyReport } from "@/lib/study-api";
+import type { CandidateRow, Tier } from "@/lib/run-events";
+import type {
+  ReportCitation,
+  ReportSource,
+  StudyReport,
+} from "@/lib/study-api";
 
 const CATEGORIES = ["A", "B", "C", "D", "E", "F", "G"] as const;
+
+export const TIER_VARIANT: Record<
+  Tier,
+  "success" | "info" | "warning" | "outline"
+> = {
+  T1: "success",
+  T2: "info",
+  T3: "warning",
+  T4: "outline",
+};
+
+export function sourceIndex(report: StudyReport): Map<string, ReportSource> {
+  return new Map((report.sources ?? []).map((item) => [item.source_id, item]));
+}
 
 export function reportCandidates(report: StudyReport): CandidateRow[] {
   return report.candidates_full?.length
@@ -30,10 +48,50 @@ export function unresolvedCitations(
 }
 
 export const CITATION_HREF = "#cite-";
+export const SOURCE_PREFIX = "source:";
 
-/** Rewrite `[E12]` citation markers as `#cite-E12` links so Markdown renders them inline. */
+/**
+ * Rewrite `[E12]` and `[source:atted]` citation markers as `#cite-…` links so
+ * Markdown renders them inline.
+ */
 export function linkCitations(markdown: string): string {
-  return markdown.replace(/\[(E\d+)\](?!\()/g, `[$1](${CITATION_HREF}$1)`);
+  return markdown.replace(
+    /\[(E\d+|source:[A-Za-z0-9_.-]+)\](?!\()/g,
+    `[$1](${CITATION_HREF}$1)`,
+  );
+}
+
+export type GeneLink = { name: string; href: string };
+
+/** Return the species' gene pages for one gene, from the report's link-out templates. */
+export function geneLinks(report: StudyReport, geneId: string): GeneLink[] {
+  const templates = report.provenance.gene_linkouts;
+  if (!Array.isArray(templates)) {
+    return [];
+  }
+  return templates.flatMap((item: { name?: unknown; template?: unknown }) =>
+    typeof item?.name === "string" && typeof item.template === "string"
+      ? [
+          {
+            name: item.name,
+            href: item.template.replaceAll(
+              "{gene_id}",
+              encodeURIComponent(geneId),
+            ),
+          },
+        ]
+      : [],
+  );
+}
+
+export function download(filename: string, contents: string, type: string) {
+  const blob = new Blob([contents], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 export function reportJson(report: StudyReport): string {
@@ -126,8 +184,18 @@ export function evidenceCsv(report: StudyReport): string {
   return csv([header, ...body]);
 }
 
+/** Return the written summary followed by the full per-locus tables. */
 export function reportMarkdown(report: StudyReport): string {
-  return report.markdown?.trim()
-    ? report.markdown
-    : `# ${report.title}\n\n${report.limitations.map((item) => `- ${item}`).join("\n")}\n`;
+  const summary = report.markdown?.trim() ?? "";
+  const details = (report.details_markdown?.trim() ?? "").replace(
+    /^# .*\n?/,
+    "",
+  );
+  if (!summary && !details) {
+    return `# ${report.title}\n\n${report.limitations.map((item) => `- ${item}`).join("\n")}\n`;
+  }
+  if (!details) {
+    return `${summary}\n`;
+  }
+  return `${summary || `# ${report.title}`}\n\n## Detailed tables\n\n${details.trim()}\n`;
 }
