@@ -137,6 +137,15 @@ After `prune-raw --keep core`, rebuilding the extended or heavy tier of any
 species needs `fetch --tier extended` (or `heavy`) first: `build` refuses to
 run while pruned files are missing and says which sources to re-fetch.
 
+To reload a few sources without a full rebuild, pass `--source` (repeatable).
+Only the rows those sources wrote are replaced, matched by `source_db`; every
+other source's rows stay, so pruned raw files of other sources are not needed:
+
+```bash
+./.tools/bin/uv run agrihub-data build --species soybean --source lis_gwas --source soybase_gwas --source gwas_atlas
+./.tools/bin/uv run agrihub-data verify --species soybean
+```
+
 Domains whose data or binaries are missing are reported to the agents and in
 the report as "not available in this build"; `/registry/species` lists them.
 
@@ -163,6 +172,51 @@ cd frontend && pnpm build
 
 PostgreSQL integration tests require `TEST_DATABASE_URI`; the persistence docs
 contain the complete command.
+
+## Open questions and next steps
+
+Questions for the team that produced the SNP lists in `Results/2_Sep/Lee/`:
+
+- Which reference are their positions on? They fit cultivar Lee assembly 2
+  (`Lee.gnm2`): 0 of 600 rows fall past a chromosome end, against 64 on
+  Wm82.a2. The form makes the user choose the assembly for these files and
+  lifts Lee positions to Wm82.a2 at intake.
+- Were the poster's BLINK SNPs called on the same panel? If so,
+  `S18_9263941` lifts to Wm82.a2 Gm18:9,565,994, about 300 kb from
+  Glyma.18G092200 rather than inside it.
+- What do the CT and NN trait codes mean? PH is plant height; GY is assumed to
+  be grain yield.
+
+The agents have only run on the scripted model (`agrihub-fake:poster`). For
+the first real-model run:
+
+1. Set `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`, and `MODEL` or the per-role
+   models (`ORCHESTRATOR_MODEL`, `SPECIALIST_MODEL`, `VERIFIER_MODEL`,
+   `WRITER_MODEL`, `QA_MODEL`).
+2. Run the poster study from the form and ask one follow-up question.
+3. Run `uv run python eval/benchmark.py --species <soybean|rice|maize|sorghum>`
+   and `uv run python eval/smoke_studies.py`.
+4. Compare the agents rows with the rubric-only rows in `eval/results/`; until
+   then the agents rows only repeat the rubric.
+
+Benchmark caveats:
+
+- Maize windows (±50 kb) hold so few genes that distance alone already finds
+  every target in the top 3, so the maize scorecard cannot separate methods.
+- Sorghum has 5 targets, so its intervals span most of the range.
+- In rice, held-out targets often lose to curated neighbours that stay visible
+  (Hd3a beside RFT1, Gn1a beside D2).
+- Seed families and keywords in the trait profiles are textbook priors; the
+  "without priors" row shows how much of the rubric's lead depends on them.
+
+Not loaded yet: rice MSU r7 files and RiceNet; maize MaizeMine, PANNZER, the
+Walley atlas and ATTED-II; the sorghum v5.1 models; the cereal VEP caches and
+LD panels. The Sorghum QTL Atlas export and the Phytozome sorghum annotation
+are manual downloads (see "Species data bundles").
+
+Local cleanup: plan 8B's API smoke runs left a "Plan 8B smoke" user and API key
+in the development database; revoke it with `python -m agent_platform
+revoke-key` or delete the user.
 
 ## License and attribution
 
