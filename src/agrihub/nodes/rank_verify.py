@@ -176,6 +176,7 @@ async def _verifier_lane(summary: dict[str, Any], config: RunnableConfig) -> Non
             [get_evidence],
             max_tokens=settings.model_max_tokens,
             max_retries=settings.model_max_retries,
+            prompt_caching=settings.prompt_caching,
         )
         preview = [{"claim_id": item.get("claim_id"), "status": item.get("status"), "gene_id": item.get("gene_id")} for item in verdicts[:12]]
         response = await model.ainvoke(
@@ -191,6 +192,7 @@ async def _verifier_lane(summary: dict[str, Any], config: RunnableConfig) -> Non
             model=settings.verifier_model,
             input_tokens=int(metadata.get("input_tokens") or 0),
             output_tokens=int(metadata.get("output_tokens") or 0),
+            cached_input_tokens=models.cached_input_tokens(response),
         )
     except Exception as exc:  # noqa: BLE001
         events.agent_completed(

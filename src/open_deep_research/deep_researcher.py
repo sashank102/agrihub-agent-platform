@@ -41,13 +41,14 @@ from open_deep_research.utils import (
     get_today_str,
     is_token_limit_exceeded,
     openai_websearch_called,
+    prompt_cache_kwargs,
     remove_up_to_last_ai_message,
     think_tool,
 )
 
 # Initialize a configurable model that we will use throughout the agent
 configurable_model = init_chat_model(
-    configurable_fields=("model", "max_tokens", "api_key"),
+    configurable_fields=("model", "max_tokens", "api_key", "model_kwargs"),
 )
 
 async def clarify_with_user(
@@ -80,7 +81,8 @@ async def clarify_with_user(
         "model": configurable.research_model,
         "max_tokens": configurable.research_model_max_tokens,
         "api_key": get_api_key_for_model(configurable.research_model, config),
-        "tags": ["langsmith:nostream"]
+        "tags": ["langsmith:nostream"],
+        **prompt_cache_kwargs(configurable.research_model, configurable.prompt_caching),
     }
     
     # Configure model with structured output and retry logic
@@ -138,7 +140,8 @@ async def write_research_brief(
         "model": configurable.research_model,
         "max_tokens": configurable.research_model_max_tokens,
         "api_key": get_api_key_for_model(configurable.research_model, config),
-        "tags": ["langsmith:nostream"]
+        "tags": ["langsmith:nostream"],
+        **prompt_cache_kwargs(configurable.research_model, configurable.prompt_caching),
     }
     
     # Configure model for structured research question generation
@@ -198,7 +201,8 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) -> Command[
         "model": configurable.research_model,
         "max_tokens": configurable.research_model_max_tokens,
         "api_key": get_api_key_for_model(configurable.research_model, config),
-        "tags": ["langsmith:nostream"]
+        "tags": ["langsmith:nostream"],
+        **prompt_cache_kwargs(configurable.research_model, configurable.prompt_caching),
     }
     
     # Available tools: research delegation, completion signaling, and strategic thinking
@@ -401,7 +405,8 @@ async def researcher(
         "model": configurable.research_model,
         "max_tokens": configurable.research_model_max_tokens,
         "api_key": get_api_key_for_model(configurable.research_model, config),
-        "tags": ["langsmith:nostream"]
+        "tags": ["langsmith:nostream"],
+        **prompt_cache_kwargs(configurable.research_model, configurable.prompt_caching),
     }
     
     # Prepare system prompt with MCP context if available
@@ -541,7 +546,8 @@ async def compress_research(
         "model": configurable.compression_model,
         "max_tokens": configurable.compression_model_max_tokens,
         "api_key": get_api_key_for_model(configurable.compression_model, config),
-        "tags": ["langsmith:nostream"]
+        "tags": ["langsmith:nostream"],
+        **prompt_cache_kwargs(configurable.compression_model, configurable.prompt_caching),
     })
     
     # Step 2: Prepare messages for compression
@@ -630,7 +636,8 @@ async def final_report_generation(
         "model": configurable.final_report_model,
         "max_tokens": configurable.final_report_model_max_tokens,
         "api_key": get_api_key_for_model(configurable.final_report_model, config),
-        "tags": ["langsmith:nostream"]
+        "tags": ["langsmith:nostream"],
+        **prompt_cache_kwargs(configurable.final_report_model, configurable.prompt_caching),
     }
     
     # Step 3: Attempt report generation with token limit retry logic

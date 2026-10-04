@@ -61,6 +61,7 @@ export type AgentState = {
   model: string | null;
   inputTokens: number;
   outputTokens: number;
+  cachedInputTokens: number;
   usageTs: string | null;
   toolIds: string[];
   dispatchEventId: string | null;
@@ -102,6 +103,7 @@ export type OrchestratorUsage = {
   model: string;
   inputTokens: number;
   outputTokens: number;
+  cachedInputTokens: number;
   ts: string;
 };
 
@@ -267,6 +269,7 @@ function ensureLane(
       model: null,
       inputTokens: 0,
       outputTokens: 0,
+      cachedInputTokens: 0,
       usageTs: null,
       toolIds: [],
       dispatchEventId: null,
@@ -446,6 +449,7 @@ function applyAgentEvent(draft: Draft<RunState>, event: RunEvent) {
         lane.model = event.data.model;
         lane.inputTokens = event.data.input_tokens;
         lane.outputTokens = event.data.output_tokens;
+        lane.cachedInputTokens = event.data.cached_input_tokens ?? 0;
         lane.usageTs = event.ts;
       }
       break;
@@ -521,6 +525,7 @@ function applyToDraft(draft: Draft<RunState>, event: RunEvent): void {
             model: event.data.model,
             inputTokens: event.data.input_tokens,
             outputTokens: event.data.output_tokens,
+            cachedInputTokens: event.data.cached_input_tokens ?? 0,
             ts: event.ts,
           };
         }
@@ -662,14 +667,17 @@ export function tokenTotals(
 ): {
   input: number;
   output: number;
+  cached: number;
 } {
   let input = state.orchestratorUsage?.inputTokens ?? 0;
   let output = state.orchestratorUsage?.outputTokens ?? 0;
+  let cached = state.orchestratorUsage?.cachedInputTokens ?? 0;
   for (const lane of Object.values(state.agents)) {
     input += lane.inputTokens;
     output += lane.outputTokens;
+    cached += lane.cachedInputTokens;
   }
-  return { input, output };
+  return { input, output, cached };
 }
 
 export function isRunFinished(state: RunState): boolean {

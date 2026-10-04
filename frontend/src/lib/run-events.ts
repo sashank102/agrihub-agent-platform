@@ -129,6 +129,8 @@ export type AgentUsageData = {
   model: string;
   input_tokens: number;
   output_tokens: number;
+  /** Input read from the provider's prompt cache; sent only when non-zero. */
+  cached_input_tokens?: number;
 };
 
 export type AgentCompletedData = {

@@ -239,14 +239,21 @@ async def _choose(
             )
         ),
     ]
-    usage = {"input_tokens": 0, "output_tokens": 0}
+    usage = {"input_tokens": 0, "output_tokens": 0, "cached_input_tokens": 0}
     try:
-        model = models.tool_model(settings.orchestrator_model, [select_models], max_tokens=settings.model_max_tokens, max_retries=settings.model_max_retries)
+        model = models.tool_model(
+            settings.orchestrator_model,
+            [select_models],
+            max_tokens=settings.model_max_tokens,
+            max_retries=settings.model_max_retries,
+            prompt_caching=settings.prompt_caching,
+        )
         for _ in range(MAX_STEPS):
             response = await model.ainvoke(messages, config)
             metadata = getattr(response, "usage_metadata", None) or {}
             usage["input_tokens"] += int(metadata.get("input_tokens") or 0)
             usage["output_tokens"] += int(metadata.get("output_tokens") or 0)
+            usage["cached_input_tokens"] += models.cached_input_tokens(response)
             events.agent_usage(events.MODEL, model=settings.orchestrator_model, **usage)
             messages.append(response)
             calls = list(getattr(response, "tool_calls", None) or [])

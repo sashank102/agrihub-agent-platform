@@ -250,6 +250,8 @@ export function AgentLaneCard({
         </span>
         <span title={lane.model ? `model ${lane.model}` : undefined}>
           {formatTokens(tokens)} tokens{lane.model === "stub" ? " (stub)" : ""}
+          {lane.cachedInputTokens > 0 &&
+            ` · ${formatTokens(lane.cachedInputTokens)} cached`}
         </span>
         <span className="flex items-center gap-1">
           <Wrench className="size-3" />

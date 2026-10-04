@@ -55,6 +55,8 @@ class StudyConfiguration(BaseModel):
     tool_output_chars: int = Field(default=6_000, ge=500)
     model_max_tokens: int = Field(default=4_096, ge=256)
     model_max_retries: int = Field(default=3, ge=0)
+    prompt_caching: bool = True
+    """Ask Anthropic models to cache the repeated prompt prefix (``PROMPT_CACHING=false`` turns it off)."""
     enable_web_fallback: bool = True
     data_dir: str = Field(default_factory=lambda: str(data_root()))
 

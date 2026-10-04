@@ -83,7 +83,8 @@ async def tavily_search(
         model=configurable.summarization_model,
         max_tokens=configurable.summarization_model_max_tokens,
         api_key=model_api_key,
-        tags=["langsmith:nostream"]
+        tags=["langsmith:nostream"],
+        **prompt_cache_kwargs(configurable.summarization_model, configurable.prompt_caching),
     ).with_structured_output(Summary).with_retry(
         stop_after_attempt=configurable.max_structured_output_retries
     )
@@ -712,6 +713,23 @@ def get_config_value(value):
         return value
     else:
         return value.value
+
+PROMPT_CACHE_CONTROL = {"type": "ephemeral"}
+
+
+def prompt_cache_kwargs(model_name: str | None, enabled: bool = True) -> dict[str, Any]:
+    """Return the ``model_kwargs`` that turn on Anthropic prompt caching for a model, or nothing.
+
+    The top-level ``cache_control`` request parameter caches the prompt prefix
+    (system prompt, tools and history) for the next call. Other providers
+    reject the parameter, so they get no extra kwargs.
+    """
+    name = str(model_name or "").lower()
+    is_anthropic = name.startswith("anthropic:") or (":" not in name and name.startswith("claude"))
+    if enabled and is_anthropic:
+        return {"model_kwargs": {"cache_control": dict(PROMPT_CACHE_CONTROL)}}
+    return {}
+
 
 def get_api_key_for_model(model_name: str, config: RunnableConfig):
     """Get a provider API key from the server environment."""

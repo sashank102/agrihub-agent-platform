@@ -221,6 +221,7 @@ async def agent(state: SpecialistRunState, config: RunnableConfig) -> dict[str, 
         spec.bound_tools(settings, _available(state)),
         max_tokens=settings.model_max_tokens,
         max_retries=settings.model_max_retries,
+        prompt_caching=settings.prompt_caching,
     )
     step = int(state.get("step") or 0) + 1
     max_steps = int(state.get("max_steps") or settings.max_specialist_steps)
@@ -245,8 +246,15 @@ async def agent(state: SpecialistRunState, config: RunnableConfig) -> dict[str, 
     usage = dict(state.get("usage") or {})
     usage["input_tokens"] = int(usage.get("input_tokens") or 0) + int(metadata.get("input_tokens") or 0)
     usage["output_tokens"] = int(usage.get("output_tokens") or 0) + int(metadata.get("output_tokens") or 0)
+    usage["cached_input_tokens"] = int(usage.get("cached_input_tokens") or 0) + models.cached_input_tokens(response)
     usage["model"] = model_name
-    events.agent_usage(lane, model=model_name, input_tokens=usage["input_tokens"], output_tokens=usage["output_tokens"])
+    events.agent_usage(
+        lane,
+        model=model_name,
+        input_tokens=usage["input_tokens"],
+        output_tokens=usage["output_tokens"],
+        cached_input_tokens=usage["cached_input_tokens"],
+    )
     update: dict[str, Any] = {"messages": [response], "step": step, "usage": usage}
     if not calls:
         update["done"] = True
@@ -409,6 +417,7 @@ async def specialist(task: SpecialistTask, config: RunnableConfig) -> dict[str, 
                 "model": usage.get("model") or spec.model or settings.specialist_model,
                 "input_tokens": int(usage.get("input_tokens") or 0),
                 "output_tokens": int(usage.get("output_tokens") or 0),
+                "cached_input_tokens": int(usage.get("cached_input_tokens") or 0),
                 "duration_ms": duration_ms,
                 "missing_specialist_done": not bool(result.get("closed_with_tool")),
             }

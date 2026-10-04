@@ -212,14 +212,30 @@ async def _decide(
     tools = _tools(view)
     by_name = {tool.name: tool for tool in tools}
     model_name = settings.orchestrator_model
-    usage: dict[str, Any] = {"model": model_name, "round": view.round, "input_tokens": 0, "output_tokens": 0, "calls": 0}
-    before = (sum(int(item.get("input_tokens") or 0) for item in prior), sum(int(item.get("output_tokens") or 0) for item in prior))
+    usage: dict[str, Any] = {
+        "model": model_name,
+        "round": view.round,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cached_input_tokens": 0,
+        "calls": 0,
+    }
+    before = {
+        key: sum(int(item.get(key) or 0) for item in prior)
+        for key in ("input_tokens", "output_tokens", "cached_input_tokens")
+    }
     messages: list[BaseMessage] = [
         SystemMessage(content=render(ORCHESTRATOR, _context(view, settings))),
         HumanMessage(content=_briefing(view)),
     ]
     try:
-        model = models.tool_model(model_name, tools, max_tokens=settings.model_max_tokens, max_retries=settings.model_max_retries)
+        model = models.tool_model(
+            model_name,
+            tools,
+            max_tokens=settings.model_max_tokens,
+            max_retries=settings.model_max_retries,
+            prompt_caching=settings.prompt_caching,
+        )
     except Exception as exc:  # noqa: BLE001
         return _fallback(view, f"model {model_name} unavailable: {_short(exc)}"), usage
     rejected_calls = 0
@@ -240,8 +256,9 @@ async def _decide(
         events.agent_usage(
             events.ORCHESTRATOR,
             model=model_name,
-            input_tokens=before[0] + usage["input_tokens"],
-            output_tokens=before[1] + usage["output_tokens"],
+            input_tokens=before["input_tokens"] + usage["input_tokens"],
+            output_tokens=before["output_tokens"] + usage["output_tokens"],
+            cached_input_tokens=before["cached_input_tokens"] + usage["cached_input_tokens"],
         )
         messages.append(response)
         calls = list(getattr(response, "tool_calls", None) or [])
@@ -539,6 +556,7 @@ def _add_usage(usage: dict[str, Any], response: AIMessage | Any) -> None:
     metadata = getattr(response, "usage_metadata", None) or {}
     usage["input_tokens"] += int(metadata.get("input_tokens") or 0)
     usage["output_tokens"] += int(metadata.get("output_tokens") or 0)
+    usage["cached_input_tokens"] += models.cached_input_tokens(response)
     usage["calls"] += 1
 
 

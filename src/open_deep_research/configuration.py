@@ -44,6 +44,7 @@ class Configuration(BaseModel):
     compression_model_max_tokens: int = 8192
     final_report_model: str = "anthropic:claude-sonnet-4-20250514"
     final_report_model_max_tokens: int = 10000
+    prompt_caching: bool = True
 
     mcp_config: MCPConfig | None = None
     mcp_prompt: str | None = None

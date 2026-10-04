@@ -124,7 +124,13 @@ async def _converse(
     settings = StudyConfiguration.from_runnable_config(config)
     report = state.get("report") or {}
     tools = [_search_report(report), _query_candidates(report), _explain_score(report), _get_evidence(store)]
-    model = models.tool_model(settings.qa_model, tools, max_tokens=settings.model_max_tokens, max_retries=settings.model_max_retries)
+    model = models.tool_model(
+        settings.qa_model,
+        tools,
+        max_tokens=settings.model_max_tokens,
+        max_retries=settings.model_max_retries,
+        prompt_caching=settings.prompt_caching,
+    )
     messages: list[Any] = [
         SystemMessage(
             content=(

@@ -113,11 +113,12 @@ export function RunHeader({
         </span>
         <span
           className="flex items-center gap-1.5"
-          title="Model tokens (input + output)"
+          title="Model tokens (input + output); cached input is read from the prompt cache"
         >
           <Coins className="size-4" />
           {formatTokens(tokens.input + tokens.output)} tokens
           {stub ? " (stub models)" : ""}
+          {tokens.cached > 0 && ` · ${formatTokens(tokens.cached)} cached`}
         </span>
         {canCancel && (
           <Button

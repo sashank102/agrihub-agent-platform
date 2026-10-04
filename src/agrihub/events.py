@@ -36,7 +36,8 @@ Event types and their ``data``:
   ``rationale``, ``round``) and ``max_steps``. ``agent.id`` is the lane key.
 - ``agent.step``: ``step``, ``max_steps`` and ``title``.
 - ``agent.usage``: ``model``, ``input_tokens`` and ``output_tokens``, cumulative
-  for the agent; the orchestrator reports its own usage too.
+  for the agent; the orchestrator reports its own usage too. Optional
+  ``cached_input_tokens`` counts input read from the prompt cache.
 - ``agent.completed``: ``status`` (completed, failed), ``summary``,
   ``findings`` and ``duration_ms``.
 - ``tool.started``: ``tool_call_id``, ``name`` and a truncated
@@ -248,17 +249,21 @@ def agent_usage(
     model: str,
     input_tokens: int,
     output_tokens: int,
+    cached_input_tokens: int = 0,
 ) -> RunEvent:
-    """Report cumulative model usage for an agent."""
-    return emit(
-        "agent.usage",
-        {
-            "model": model,
-            "input_tokens": input_tokens,
-            "output_tokens": output_tokens,
-        },
-        agent=agent,
-    )
+    """Report cumulative model usage for an agent.
+
+    ``cached_input_tokens`` (input read from the prompt cache, part of
+    ``input_tokens``) is only sent when the provider reported some.
+    """
+    data: dict[str, Any] = {
+        "model": model,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+    }
+    if cached_input_tokens:
+        data["cached_input_tokens"] = cached_input_tokens
+    return emit("agent.usage", data, agent=agent)
 
 
 def agent_completed(
