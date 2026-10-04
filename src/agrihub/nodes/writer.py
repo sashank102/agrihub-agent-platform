@@ -1,24 +1,31 @@
-"""Write the structured report, validate citations, and export the ledger.
+"""Write the structured report and its executive summary, validate citations, and export the ledger.
 
 The report is assembled from the study, the full ranking and the verifier
-marks. Prose may only cite evidence aliases and source ids that exist; a
-post-validation pass strips orphans into the limitations. The evidence
-snapshot and a compact run trace are stored beside the report.
+marks; its tables go to ``details_markdown``. The report writer agent then
+drafts the executive summary from a facts pack (:mod:`agrihub.summary`):
+only the study's genes, loci and existing citations survive validation, the
+confidence of each gene follows its tier, and a deterministic template
+writes the summary when no model is available or the draft is unusable.
+The evidence snapshot and a compact run trace are stored beside the report.
 """
 
 import asyncio
+import time
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
+from langchain_core.tools import StructuredTool
 
-from agrihub import citations, events
-from agrihub.configuration import run_id_from_config
+from agrihub import citations, events, models, summary
+from agrihub.configuration import StudyConfiguration, run_id_from_config
 from agrihub.evidence_store import EvidenceStore
 from agrihub.nodes.harvest import bundle_sources
+from agrihub.prompts import PromptContext, render
+from agrihub.prompts.writer import WRITER
 from agrihub.scoring import load_rubric
 from agrihub.state import (
     ClaimVerdict,
@@ -26,11 +33,20 @@ from agrihub.state import (
     Locus,
     RankedCandidate,
     Report,
+    ReportSummary,
     SourceRef,
     StudyState,
     StudyWarning,
 )
 from agrihub_data.bundle import BundleMissingError, open_bundle
+from agrihub_data.registry import UnknownSpeciesError, load_species
+
+WRITE_SUMMARY = StructuredTool.from_function(
+    func=lambda **_: "recorded",
+    name="write_summary",
+    description=summary.WriterDraft.__doc__ or "Write the executive summary.",
+    args_schema=summary.WriterDraft,
+)
 
 ArtifactSink = Callable[..., Awaitable[str | None]]
 """Persist one artifact and return its id.
@@ -46,7 +62,8 @@ def make_writer(artifact_sink: ArtifactSink | None = None) -> Callable[..., Any]
         events.phase("reporting")
         run_id = run_id_from_config(config)
         store = EvidenceStore.for_run(run_id)
-        report, snapshot, snapshot_path = await asyncio.to_thread(_prepare, state, store)
+        report, snapshot, snapshot_path, facts, known = await asyncio.to_thread(_prepare, state, store)
+        report = await _summarize(report, facts, known, config)
         trace = _run_trace(state, report)
         report_id = None
         snapshot_id = None
@@ -93,14 +110,92 @@ def make_writer(artifact_sink: ArtifactSink | None = None) -> Callable[..., Any]
     return writer
 
 
-def _prepare(state: StudyState, store: EvidenceStore) -> tuple[Report, dict[str, Any], Path]:
+def _prepare(
+    state: StudyState,
+    store: EvidenceStore,
+) -> tuple[Report, dict[str, Any], Path, dict[str, Any], set[str]]:
     study = state.get("study") or {}
     try:
         sources = [source for source, _ in bundle_sources(open_bundle(str(study.get("species") or "")))]
     except BundleMissingError:
         sources = []
     report = _report(state, store, sources)
-    return report, store.snapshot(), store.export()
+    stored = store.query()
+    alias_of = {str(item.evidence_id): str(item.alias) for item in stored if item.evidence_id and item.alias}
+    known = {str(item.alias) for item in stored if item.alias} | {source.source_id for source in report.sources}
+    facts = summary.build_facts(report, store.findings(), alias_of)
+    return report, store.snapshot(), store.export(), facts, known
+
+
+async def _summarize(report: Report, facts: dict[str, Any], known: set[str], config: RunnableConfig) -> Report:
+    """Have the writer model draft the summary; fall back to the template when the draft is unusable."""
+    settings = StudyConfiguration.from_runnable_config(config)
+    started = time.monotonic()
+    events.agent_started(
+        events.WRITER,
+        focus={"candidates": len(facts.get("candidates") or []), "instructions": "Write the executive summary, bottom line first."},
+        max_steps=1,
+    )
+    events.agent_step(events.WRITER, 1, 1, "Write the executive summary")
+    written: ReportSummary | None = None
+    orphans: list[str] = []
+    problem = ""
+    try:
+        model = models.tool_model(
+            settings.writer_model,
+            [WRITE_SUMMARY],
+            max_tokens=settings.model_max_tokens,
+            max_retries=settings.model_max_retries,
+            prompt_caching=settings.prompt_caching,
+        )
+        context = PromptContext(species=report.species, assembly=report.assembly, trait=report.trait, max_steps=1)
+        response = await model.ainvoke(
+            [SystemMessage(content=render(WRITER, context)), HumanMessage(content=summary.briefing(facts))],
+            config,
+        )
+        metadata = getattr(response, "usage_metadata", None) or {}
+        events.agent_usage(
+            events.WRITER,
+            model=settings.writer_model,
+            input_tokens=int(metadata.get("input_tokens") or 0),
+            output_tokens=int(metadata.get("output_tokens") or 0),
+            cached_input_tokens=models.cached_input_tokens(response),
+        )
+        call = next((item for item in getattr(response, "tool_calls", None) or [] if item["name"] == WRITE_SUMMARY.name), None)
+        if call is None:
+            problem = "the writer model did not call write_summary"
+        else:
+            draft = summary.WriterDraft.model_validate(call["args"])
+            written, orphans = summary.validate_draft(draft, report, known, settings.writer_model)
+            if written is None:
+                problem = "the writer's draft named no candidate of this study"
+    except Exception as exc:  # noqa: BLE001
+        problem = f"the writer model failed ({type(exc).__name__})"
+    limitations = list(report.limitations)
+    if written is None:
+        written, _ = summary.validate_draft(summary.template_draft(facts), report, known, "template")
+        limitations.append(f"The summary was written from the deterministic template because {problem}.")
+    if orphans:
+        limitations.append("Citations removed from the written summary because they do not resolve: " + ", ".join(orphans) + ".")
+    if written is None:
+        written = ReportSummary(bottom_line=f"No candidate genes were ranked for {report.trait}.", written_by="template")
+    events.agent_completed(
+        events.WRITER,
+        summary=f"Summary written by {written.written_by}: {len(written.key_findings)} key findings, {len(written.candidates)} candidates.",
+        findings=0,
+        duration_ms=int((time.monotonic() - started) * 1000),
+    )
+    drafted = report.model_copy(update={"limitations": limitations, "summary": written})
+    return drafted.model_copy(update={"markdown": summary.render_markdown(written, drafted)})
+
+
+def _gene_linkouts(species: str) -> list[dict[str, str]]:
+    """Return the species' gene page templates (``{gene_id}`` placeholders), or none for an unknown species."""
+    try:
+        registry = load_species(species)
+    except (UnknownSpeciesError, FileNotFoundError, ValueError):
+        return []
+    return [{"name": item.name, "template": item.template} for item in registry.linkouts if item.kind == "gene"]
 
 
 def _report(state: StudyState, store: EvidenceStore, sources: list[SourceRef]) -> Report:
@@ -133,6 +228,7 @@ def _report(state: StudyState, store: EvidenceStore, sources: list[SourceRef]) -
             "score_explanations_ref": scoring.get("explanations_ref"),
             "evidence_matrix_ref": (state.get("triage_brief") or {}).get("matrix_ref"),
             "tiers": scoring.get("tiers") or {},
+            "gene_linkouts": _gene_linkouts(str(study.get("species") or "")),
         },
         loci=loci,
         candidates=shortlist,
@@ -145,7 +241,6 @@ def _report(state: StudyState, store: EvidenceStore, sources: list[SourceRef]) -
         sources=_annotate_sources(sources),
         evidence_count=store.count(),
         finding_count=len(store.findings()),
-        markdown="",
     )
     stored = store.query()
     alias_of = {str(item.evidence_id): item.alias for item in stored if item.evidence_id and item.alias}
@@ -168,7 +263,7 @@ def _report(state: StudyState, store: EvidenceStore, sources: list[SourceRef]) -
     return report.model_copy(
         update={
             "limitations": limitations,
-            "markdown": markdown,
+            "details_markdown": markdown,
             "citations": _citation_index(stored, shortlist, verification),
         }
     )
@@ -298,7 +393,7 @@ def _markdown(
         )
         lines.extend(
             f"| {item.rank_in_locus} | {item.gene_id}{f' ({item.symbol})' if item.symbol else ''} | "
-            f"{_position(item)} | {_distance(item)} | {item.tier} | "
+            f"{summary.position_text(item)} | {summary.distance_text(item)} | {item.tier} | "
             f"{item.score:g} | {item.share_of_locus or 0:.2f} | {'; '.join(item.reasons[:3])} | {_findings(item)} | {item.stability or ''} |"
             for item in rows
         )
@@ -324,20 +419,6 @@ def _model_lines(model_result: dict[str, Any]) -> list[str]:
         )
     lines.extend(["", "Scores of different types are not compared or combined.", ""])
     return lines
-
-
-def _position(item: RankedCandidate) -> str:
-    if item.chrom is None or item.start is None or item.end is None:
-        return ""
-    return f"{item.chrom}:{item.start}-{item.end} ({item.strand})"
-
-
-def _distance(item: RankedCandidate) -> str:
-    if item.distance_bp is None:
-        return ""
-    if item.overlaps_snp:
-        return f"overlaps {item.nearest_snp or item.lead_snp or 'SNP'}"
-    return f"{item.distance_bp / 1000:.1f} kb to {item.nearest_snp or item.lead_snp or 'SNP'}"
 
 
 def _citation_index(

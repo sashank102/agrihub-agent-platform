@@ -146,7 +146,8 @@ def test_a_trait_study_runs_the_precomputed_results_through_the_pipeline(fixture
     assert values["model_result"]["score_types"] == ["gnnexplainer"]
     report = values["report"]
     assert report["mode"] == "trait" and report["loci"][0]["lead_snp"] == "S18_10263941"
-    assert "## Model step" in report["markdown"] and "Scores of different types are not compared or combined." in report["markdown"]
+    details = report["details_markdown"]
+    assert "## Model step" in details and "Scores of different types are not compared or combined." in details
     assert any(warning["code"] == "unlifted" for warning in report["warnings"])
 
 

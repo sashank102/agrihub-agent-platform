@@ -229,6 +229,11 @@ def test_study_run_streams_custom_events_and_stores_artifacts(postgres_database_
                 assert {item["tier"] for item in ranked} <= {"T1", "T2", "T3", "T4"}
                 assert "Glyma.18G092200" in {item["gene_id"] for item in ranked}
                 assert all(item["evidence_ids"] and item["category_points"] for item in ranked)
+                written = report["summary"]
+                assert written["bottom_line"] and written["candidates"]
+                assert {item["gene_id"] for item in written["candidates"]} <= {item["gene_id"] for item in report["candidates_full"]}
+                assert report["markdown"].startswith(f"# {report['title']}") and "## Bottom line" in report["markdown"]
+                assert "| Locus | Region | Lead SNP |" in report["details_markdown"]
 
                 species = await client.get("/registry/species")
                 assert species.status_code == 200

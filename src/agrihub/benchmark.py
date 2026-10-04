@@ -351,7 +351,7 @@ def claim_rates(report: dict[str, Any]) -> dict[str, Any]:
 
 def citation_check(report: dict[str, Any], run_id: str) -> dict[str, Any]:
     """Return how many aliases the report cites and how many resolve in the run's evidence store."""
-    cited = set(_ALIAS.findall(str(report.get("markdown") or "")))
+    cited = set(_ALIAS.findall("\n".join(str(report.get(key) or "") for key in ("markdown", "details_markdown"))))
     cited |= {str(item.get("alias")) for item in report.get("citations") or [] if item.get("alias")}
     store = EvidenceStore.for_run(run_id)
     try:

@@ -201,12 +201,12 @@ def _aliases(store: EvidenceStore, evidence_ids: list[str]) -> list[str]:
 def _search_report(report: dict[str, Any]):
     @tool
     def search_report(query: str) -> str:
-        """Search the finished report markdown and candidate list.
+        """Search the finished report (summary and tables) and candidate list.
 
         Args:
             query: Words to find in the report.
         """
-        text = str(report.get("markdown") or "")
+        text = "\n".join(str(report.get(key) or "") for key in ("markdown", "details_markdown"))
         needles = [part.casefold() for part in query.split() if len(part) > 2][:6]
         lines = [line for line in text.splitlines() if any(needle in line.casefold() for needle in needles)]
         genes = [row.get("gene_id") for row in report.get("candidates_full") or report.get("candidates") or []]

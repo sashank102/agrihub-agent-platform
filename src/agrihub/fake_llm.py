@@ -19,6 +19,8 @@ The ``poster`` script plays every role:
   unavailable in the bundle) are skipped, and the summary lists the gaps the
   system prompt names. The literature lane stays offline (aliases and
   gene2pubmed only), so recordings never depend on the network.
+- report writer: answers ``write_summary`` with the deterministic template
+  draft of the facts pack it was given.
 """
 
 import json
@@ -42,6 +44,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from pydantic import ConfigDict
 
 from agrihub.prompts import UNAVAILABLE_HEADING
+from agrihub.summary import FACTS_MARKER, template_draft
 from agrihub_data.registry import load_species, species_names
 
 PREFIX = "agrihub-fake:"
@@ -173,9 +176,12 @@ def _expand(ranges: str) -> list[str]:
 
 
 def poster_script(messages: list[BaseMessage], tools: tuple[str, ...]) -> AIMessage:
-    """Play the orchestrator, a specialist, the verifier or follow-up Q&A."""
+    """Play the model agent, the orchestrator, a specialist, the verifier, the writer or follow-up Q&A."""
     if "select_models" in tools:
         return _model_choice(messages)
+    if "write_summary" in tools:
+        facts = json_after(human_text(messages), FACTS_MARKER) or {}
+        return reply(call("write_summary", template_draft(facts).model_dump(), "writer-summary"))
     if "dispatch_specialists" in tools:
         return _orchestrator(messages)
     if "specialist_done" in tools:

@@ -296,6 +296,60 @@ class EvidenceRef(BaseModel):
     verifier_status: str | None = None
 
 
+Confidence = Literal["strong", "moderate", "suggestive", "positional only"]
+TIER_CONFIDENCE: dict[str, Confidence] = {
+    "T1": "strong",
+    "T2": "moderate",
+    "T3": "suggestive",
+    "T4": "positional only",
+}
+"""The confidence term the summary uses for a gene; fixed by its tier, never by the writer."""
+
+
+class SummaryFinding(BaseModel):
+    """One key finding: a complete sentence with inline ``[E12]`` citations."""
+
+    statement: str = Field(min_length=1)
+    citations: list[str] = Field(default_factory=list)
+
+
+class SummaryCandidate(BaseModel):
+    """A short evidence narrative for one top candidate."""
+
+    gene_id: str
+    narrative: str = Field(min_length=1)
+    citations: list[str] = Field(default_factory=list)
+    symbol: str | None = None
+    locus_id: str | None = None
+    tier: Tier | None = None
+    confidence: Confidence | None = None
+
+
+class SummaryLocus(BaseModel):
+    """One or two sentences on what leads a locus and how decisively."""
+
+    locus_id: str
+    narrative: str = Field(min_length=1)
+    citations: list[str] = Field(default_factory=list)
+
+
+class ReportSummary(BaseModel):
+    """The written executive summary, bottom line first.
+
+    Text fields carry inline citation markers. ``tier`` and ``confidence``
+    on candidates come from the rubric; ``written_by`` names the writer
+    model, or ``template`` when the deterministic fallback wrote it.
+    """
+
+    bottom_line: str = Field(min_length=1)
+    key_findings: list[SummaryFinding] = Field(default_factory=list)
+    candidates: list[SummaryCandidate] = Field(default_factory=list)
+    loci: list[SummaryLocus] = Field(default_factory=list)
+    caveats: list[str] = Field(default_factory=list)
+    next_steps: list[str] = Field(default_factory=list)
+    written_by: str = "template"
+
+
 class ClaimVerdict(BaseModel):
     """A verifier mark on one existing claim. The verifier never adds claims."""
 
@@ -333,7 +387,11 @@ class Report(BaseModel):
     sources: list[SourceRef] = Field(default_factory=list)
     evidence_count: int = 0
     finding_count: int = 0
+    summary: ReportSummary | None = None
     markdown: str = ""
+    """The written summary as Markdown, with inline citations."""
+    details_markdown: str = ""
+    """The full report: study, loci and per-locus candidate tables, warnings and limitations."""
 
 
 class StudyState(TypedDict, total=False):

@@ -102,7 +102,7 @@ describe("the golden poster run", () => {
   it("rebuilds the finished study", () => {
     const state = live(golden);
     const lanes = selectLanes(state);
-    expect(lanes).toHaveLength(7);
+    expect(lanes).toHaveLength(8);
     expect(lanes.every((lane) => lane.status === "completed")).toBe(true);
     const specialists = lanes.filter((lane) => lane.kind === "specialist");
     expect(specialists).toHaveLength(6);
@@ -111,6 +111,7 @@ describe("the golden poster run", () => {
       true,
     );
     expect(lanes.some((lane) => lane.kind === "verifier")).toBe(true);
+    expect(lanes.some((lane) => lane.kind === "writer")).toBe(true);
     expect(state.decisions.map((decision) => decision.kind)).toEqual([
       "dispatch",
       "followup",

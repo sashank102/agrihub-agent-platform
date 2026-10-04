@@ -181,7 +181,9 @@ def test_final_state_has_a_report_and_artifacts_follow_the_ledger():
         assert candidate.distance_bp is not None and candidate.overlaps_snp == (candidate.distance_bp == 0)
         assert candidate.nearest_snp in locus.snp_positions
     assert any(candidate.defline for candidate in report.candidates)
-    assert f"{report.candidates[0].chrom}:{report.candidates[0].start}-" in report.markdown
+    assert f"{report.candidates[0].chrom}:{report.candidates[0].start}-" in report.details_markdown
+    assert report.summary is not None and report.markdown.startswith(f"# {report.title}")
+    assert "## Bottom line" in report.markdown
     assert report.finding_count == len(values["findings"])
     assert isinstance(values["messages"][-1], AIMessage)
     assert values["messages"][-1].content == report.markdown
