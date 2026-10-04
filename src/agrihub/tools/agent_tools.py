@@ -71,7 +71,7 @@ async def record_finding(
         claim: One or two sentences stating what the cited evidence shows.
         stance: supports, conflicts or neutral with respect to the trait.
         strength: weak, moderate or strong.
-        evidence_ids: E<n> aliases or evidence_ids returned by tools in this run.
+        evidence_ids: At least one E<n> alias or evidence_id returned by tools in this run. Report missing evidence in specialist_done instead.
     """
     result = await store_tools.record_finding.ainvoke(
         {"target": target, "claim": claim, "stance": stance, "strength": strength, "evidence_ids": evidence_ids},

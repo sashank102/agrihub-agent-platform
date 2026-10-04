@@ -24,7 +24,7 @@ LITERATURE = AgentPrompt(
         "Pick at most 10 promising PMIDs per gene (gene-tagged, trait in title, or linked in gene2pubmed) and run extract_passages to get verbatim sentences classified causal-experimental, association or mention.",
         "Deduplicate by PMID. Record supports only from causal-experimental or association passages about this gene (or a specific alias) in {species}; a passage about an Arabidopsis ortholog is ortholog-transferred literature and must say so; mentions are neutral and weak. Search hits and gene2pubmed links alone are at most weak.",
         "Use web_search only if all literature tools returned nothing for a gene; web results are leads to follow with search_literature, never evidence.",
-        "For genes with no passage, say 'not found in Europe PMC/PubMed/PubTator3' with the aliases searched.",
+        "For genes with no trait passage, write 'not found in Europe PMC/PubMed/PubTator3' with the aliases searched in your specialist_done summary; do not record a finding for them.",
     ),
     output_contract=(
         *SPECIALIST_CONTRACT,

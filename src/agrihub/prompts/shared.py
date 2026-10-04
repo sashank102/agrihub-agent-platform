@@ -16,6 +16,7 @@ SPECIALIST_CONTRACT = (
     "weak = everything else: wide (> 1 Mb) or single-marker QTLs, keyword-only trait matches, low-confidence or best-hit-only orthology, computational GO, annotation keywords, distance, broad expression, network context and mentions.",
     "record_finding caps the strength at what the cited evidence supports and tells you when it lowered it; cite the evidence that justifies the strength you claim.",
     "At most one finding per gene and evidence type; do not restate the provisional score as a finding.",
+    "Every finding cites at least one evidence id. Absence of evidence is not a finding: report it only in the specialist_done summary.",
     "Finish with specialist_done(summary): which genes you covered, the finding ids you recorded, and the gaps (domains not available in this build, or 'not found in <source>').",
 )
 SPECIALIST_STOP = (

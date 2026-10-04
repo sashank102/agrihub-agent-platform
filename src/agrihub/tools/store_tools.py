@@ -65,6 +65,11 @@ def _record_finding(
         strength: weak, moderate, or strong.
         evidence_ids: evidence_ids or E<n> aliases returned by evidence tools.
     """
+    if not evidence_ids:
+        raise ToolException(
+            "Finding rejected. A finding must cite at least one evidence id; "
+            "report 'not found in <source>' in the specialist_done summary instead."
+        )
     store = store_for_config(config)
     try:
         allowed, note = capped(strength, store.get(evidence_ids))

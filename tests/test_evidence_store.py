@@ -174,6 +174,19 @@ def test_tools_read_the_run_store_and_reject_unknown_ids(store: EvidenceStore):
     assert rejected.startswith("Finding rejected. Unknown evidence ids: E9.")
     assert store.findings() == []
 
+    absent = record_finding.invoke(
+        {
+            "target": "g1",
+            "claim": "Not found in Europe PMC.",
+            "stance": "neutral",
+            "strength": "weak",
+            "evidence_ids": [],
+        },
+        _config(),
+    )
+    assert isinstance(absent, str) and "specialist_done summary" in absent
+    assert store.findings() == []
+
     recorded = record_finding.invoke(
         {
             "target": "L1",
