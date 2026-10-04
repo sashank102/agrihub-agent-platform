@@ -624,6 +624,7 @@ MODEL_TOKEN_LIMITS = {
     "anthropic:claude-3-7-sonnet": 200000,
     "anthropic:claude-3-5-sonnet": 200000,
     "anthropic:claude-3-5-haiku": 200000,
+    "anthropic:claude-haiku-4-5": 200000,
     "google:gemini-1.5-pro": 2097152,
     "google:gemini-1.5-flash": 1048576,
     "google:gemini-pro": 32768,
