@@ -20,7 +20,7 @@ fi
 export UV_PYTHON_INSTALL_DIR="$ROOT_DIR/.uv-python"
 export UV_PYTHON_BIN_DIR="$ROOT_DIR/.uv-python/bin"
 export UV_CACHE_DIR="$ROOT_DIR/.uv-cache"
-export DATABASE_URI="${DATABASE_URI:-postgresql://agent_platform:agent_platform@localhost:5432/agent_platform}"
+export DATABASE_URI="${DATABASE_URI:-postgresql://${POSTGRES_USER:-agent_platform}:${POSTGRES_PASSWORD:-agent_platform}@localhost:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-agent_platform}}"
 export AUTH_MODE="${AUTH_MODE:-api_key}"
 
 if [[ "$AUTH_MODE" == "api_key" ]]; then
@@ -45,17 +45,25 @@ import sys
 
 from sqlalchemy import create_engine, text
 
+from agent_platform.db.session import sqlalchemy_database_uri
+
 uri = os.environ.get("DATABASE_URI")
 if not uri:
     print("DATABASE_URI is required.", file=sys.stderr)
     sys.exit(1)
 try:
-    engine = create_engine(uri, pool_pre_ping=True)
+    engine = create_engine(sqlalchemy_database_uri(uri), pool_pre_ping=True)
     with engine.connect() as connection:
         connection.execute(text("SELECT 1"))
     engine.dispose()
-except Exception:
-    print("PostgreSQL is not ready. Start it with: docker compose up -d postgres", file=sys.stderr)
+except Exception as exc:
+    reason = str(exc).splitlines()[0] if str(exc) else type(exc).__name__
+    password = os.environ.get("POSTGRES_PASSWORD")
+    if password:
+        reason = reason.replace(password, "***")
+    print(f"PostgreSQL is not ready ({reason}).", file=sys.stderr)
+    print("Start it with: docker compose up -d postgres", file=sys.stderr)
+    print("DATABASE_URI defaults to POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_PORT and POSTGRES_DB from .env.", file=sys.stderr)
     sys.exit(1)
 PY
 
