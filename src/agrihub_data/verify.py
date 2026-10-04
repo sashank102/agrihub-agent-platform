@@ -51,7 +51,8 @@ def verify(
     source_version and a registered assembly (``none`` only in non-genomic
     tables), positional rows use canonical chromosome names within the
     registered length, heavy resources are unpacked where the bundle says,
-    and fetched files still match their manifest sha256.
+    every non-manual source of the tier has a ``sources`` row, and fetched
+    files still match their manifest sha256.
     """
     registry = load_species(species)
     paths = species_paths(registry.species, data_dir)
@@ -91,6 +92,14 @@ def verify(
         for resource_id, relative in connection.execute("SELECT resource_id, path FROM resources").fetchall():
             if not (paths.root / str(relative)).exists():
                 report.problems.append(f"resource {resource_id} is missing at {relative}; rebuild the heavy tier")
+        listed = {str(row[0]) for row in connection.execute("SELECT source_id FROM sources").fetchall()}
+        unlisted = sorted(
+            source.id
+            for source in registry.sources_for(tier)  # type: ignore[arg-type]
+            if not source.manual_only and source.id not in listed
+        )
+        if unlisted:
+            report.problems.append(f"sources has no row for {', '.join(unlisted)}; rebuild the bundle")
     finally:
         connection.close()
     if checksums:

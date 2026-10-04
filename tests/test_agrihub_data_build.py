@@ -16,6 +16,7 @@ from agrihub_data.build import (
     PARSERS,
     BuildError,
     build,
+    rebuild_sources,
 )
 from agrihub_data.build.context import open_text
 from agrihub_data.bundle import tables_for
@@ -265,6 +266,57 @@ def test_verify_notices_a_changed_download(fixture_bundle: FixtureBundle, tmp_pa
     finally:
         unregister_species("soybean")
     assert report.problems == ["sha256 changed since fetch: soybase_gwas/soybase_gwas_locations.tsv"]
+
+
+def _counts(bundle: Path) -> tuple[dict[str, int], dict[tuple[str, str], int]]:
+    with duckdb.connect(str(bundle), read_only=True) as connection:
+        tables = {
+            table: int(connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0])
+            for table in (*tables_for("heavy"), "sources")
+        }
+        by_source = {
+            (table, str(source_db)): int(count)
+            for table in ("gwas_hits", "trait_map")
+            for source_db, count in connection.execute(f"SELECT source_db, count(*) FROM {table} GROUP BY 1").fetchall()
+        }
+    return tables, by_source
+
+
+def test_rebuild_sources_replaces_only_the_named_sources_rows(fixture_bundle: FixtureBundle, tmp_path: Path):
+    shutil.copytree(species_paths("soybean", fixture_bundle.data_dir).root, tmp_path / "soybean")
+    bundle = species_paths("soybean", tmp_path).bundle
+    tables_before, sources_before = _counts(bundle)
+    with duckdb.connect(str(bundle)) as connection:
+        connection.execute(
+            "INSERT INTO gwas_hits SELECT * REPLACE ('stale-hit' AS hit_id) FROM gwas_hits WHERE source_db = 'GWAS Atlas' LIMIT 1"
+        )
+    register_species(fixture_bundle.registry)
+    try:
+        report = rebuild_sources("soybean", ["gwas_atlas"], data_dir=tmp_path)
+        checked = verify("soybean", data_dir=tmp_path, checksums=False)
+    finally:
+        unregister_species("soybean")
+    tables_after, sources_after = _counts(bundle)
+    assert checked.ok, checked.problems
+    assert list(report.timings) == ["gwas_atlas"]
+    assert tables_after == tables_before
+    assert sources_after == sources_before
+    with duckdb.connect(str(bundle), read_only=True) as connection:
+        assert connection.execute("SELECT count(*) FROM gwas_hits WHERE hit_id = 'stale-hit'").fetchone() == (0,)
+        assert connection.execute("SELECT count(*) FROM sources WHERE source_id = 'gwas_atlas'").fetchone() == (1,)
+        info = dict(connection.execute("SELECT key, value FROM bundle_info").fetchall())
+    assert json.loads(info["rebuilt_sources"]) == ["gwas_atlas"]
+    assert json.loads(info["table_counts"])["gwas_hits"] == tables_before["gwas_hits"]
+
+
+def test_rebuild_sources_refuses_an_unknown_source(fixture_bundle: FixtureBundle, tmp_path: Path):
+    shutil.copytree(species_paths("soybean", fixture_bundle.data_dir).root, tmp_path / "soybean")
+    register_species(fixture_bundle.registry)
+    try:
+        with pytest.raises(BuildError, match="not a .*-tier source"):
+            rebuild_sources("soybean", ["no_such_source"], data_dir=tmp_path)
+    finally:
+        unregister_species("soybean")
 
 
 def test_build_refuses_sources_that_were_not_fetched(tmp_path: Path):

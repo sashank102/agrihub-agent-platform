@@ -4,6 +4,10 @@ Each registry source names a ``parser``. Plugins run in the order of
 ``PARSERS``, which respects the tables each one reads (``after``). The bundle
 is written to ``bundle.duckdb.building`` and renamed into place only when
 every plugin succeeds, so tools never see a half-built bundle.
+
+``rebuild_sources`` reloads a few sources on a copy of the built bundle: the
+rows those sources wrote are replaced, matched by ``source_db``, and every
+other row is kept, so pruned raw files of other sources are not needed.
 """
 
 import fcntl
@@ -11,13 +15,13 @@ import hashlib
 import json
 import shutil
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from importlib import resources
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import duckdb
 
@@ -72,13 +76,14 @@ from agrihub_data.fetch import Manifest
 from agrihub_data.paths import SpeciesPaths, species_paths
 from agrihub_data.registry import (
     NON_GENOMIC_ASSEMBLY,
+    TIERS,
     Source,
     SpeciesRegistry,
     Tier,
     load_species,
 )
 
-__all__ = ["BuildError", "BuildReport", "PARSERS", "Parser", "build", "required_tables"]
+__all__ = ["BuildError", "BuildReport", "PARSERS", "Parser", "build", "rebuild_sources", "required_tables"]
 
 
 @dataclass(frozen=True)
@@ -261,6 +266,152 @@ def _build_locked(
             for table in DATA_TABLES
         }
         _write_info(context, tier, tables)
+        connection.execute("CHECKPOINT")
+    except BaseException:
+        connection.close()
+        building.unlink(missing_ok=True)
+        raise
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+    connection.close()
+    building.replace(target)
+    return BuildReport(
+        bundle=target,
+        seconds=round(time.monotonic() - started, 1),
+        bytes=target.stat().st_size,
+        tables=tables,
+        stats={name: dict(sorted(counter.items())) for name, counter in context.stats.items()},
+        timings=timings,
+    )
+
+
+@dataclass
+class _RebuildContext(BuildContext):
+    """A build context that sets a table's rows aside the first time a reloaded source writes to it."""
+
+    claimed: set[str] = field(default_factory=set)
+    claiming: bool = True
+
+    def claim(self, table: str) -> None:
+        """Move ``table``'s rows to a temporary table so the reloaded sources start from empty."""
+        if not self.claiming or table in self.claimed:
+            return
+        self.connection.execute(f"CREATE TEMP TABLE _kept_{table} AS SELECT * FROM {table}")
+        self.connection.execute(f"DELETE FROM {table}")
+        self.claimed.add(table)
+
+    def insert(self, table: str, rows: Iterable[dict[str, Any]]) -> int:
+        """Claim ``table`` before the first insert, then insert as usual."""
+        self.claim(table)
+        return super().insert(table, rows)
+
+
+def rebuild_sources(
+    species: str,
+    source_ids: list[str],
+    *,
+    data_dir: Path | str | None = None,
+) -> BuildReport:
+    """Reload only ``source_ids`` in the built bundle, keeping every other source's rows.
+
+    Each table a reloaded parser writes is emptied before its first write;
+    afterwards the earlier rows whose ``source_db`` the reload did not
+    produce are put back. The other sources' raw files are not read, so
+    tiers whose downloads were pruned stay intact.
+    """
+    started = time.monotonic()
+    registry = load_species(species)
+    paths = species_paths(registry.species, data_dir)
+    if not paths.bundle.exists():
+        raise BuildError(f"no {registry.species} bundle at {paths.bundle}; run agrihub-data build first")
+    manifest = Manifest(paths.manifest, registry.species)
+    with duckdb.connect(str(paths.bundle), read_only=True) as connection:
+        info = {str(key): str(value) for key, value in connection.execute("SELECT key, value FROM bundle_info").fetchall()}
+    if info.get("tier") not in TIERS:
+        raise BuildError(f"the {registry.species} bundle records no build tier; run agrihub-data build")
+    tier = cast(Tier, info["tier"])
+    in_tier = {source.id: source for source in registry.sources_for(tier)}
+    selected: list[Source] = []
+    for source_id in dict.fromkeys(source_ids):
+        source = in_tier.get(source_id)
+        if source is None:
+            raise BuildError(f"{source_id} is not a {tier}-tier source of {registry.species}")
+        if not source.parser:
+            raise BuildError(f"{source_id} has no parser")
+        if not manifest.source_files(source.id):
+            raise BuildError(f"not fetched: {source_id}; run agrihub-data fetch --source {source_id}")
+        selected.append(source)
+    if not selected:
+        raise BuildError("name at least one source to rebuild")
+    with _exclusive(paths.root / ".build.lock"):
+        return _rebuild_locked(registry, tier, paths, manifest, selected, info, started)
+
+
+def _rebuild_locked(
+    registry: SpeciesRegistry,
+    tier: Tier,
+    paths: SpeciesPaths,
+    manifest: Manifest,
+    selected: list[Source],
+    info: dict[str, str],
+    started: float,
+) -> BuildReport:
+    target = paths.bundle
+    building = target.with_name(target.name + ".building")
+    staging = paths.root / ".build-staging"
+    building.unlink(missing_ok=True)
+    shutil.rmtree(staging, ignore_errors=True)
+    staging.mkdir(parents=True)
+    shutil.copyfile(target, building)
+    connection = duckdb.connect(str(building))
+    connection.execute("SET enable_progress_bar = false")
+    context = _RebuildContext(
+        registry=registry,
+        tier=tier,
+        connection=connection,
+        paths=paths,
+        manifest=manifest,
+        staging_dir=staging,
+    )
+    by_name = {parser.name: parser for parser in PARSERS}
+    timings: dict[str, float] = {}
+    try:
+        for source in selected:
+            for table in by_name[str(source.parser)].fills:
+                context.claim(table)
+        for parser in PARSERS:
+            for source in selected:
+                if source.parser != parser.name:
+                    continue
+                step = time.monotonic()
+                parser.run(context, source)
+                timings[source.id] = round(time.monotonic() - step, 2)
+        context.claiming = False
+        for table in sorted(context.claimed):
+            connection.execute(
+                f"INSERT INTO {table} SELECT * FROM _kept_{table} "
+                f"WHERE source_db NOT IN (SELECT DISTINCT source_db FROM {table})"
+            )
+            connection.execute(f"DROP TABLE _kept_{table}")
+        connection.execute(
+            f"DELETE FROM sources WHERE source_id IN ({', '.join('?' for _ in selected)})",
+            [source.id for source in selected],
+        )
+        _write_sources(context, selected)
+        tables = {
+            table: int(connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0])  # type: ignore[index]
+            for table in DATA_TABLES
+        }
+        stats = json.loads(info.get("parser_stats") or "{}")
+        stats.update({name: dict(sorted(counter.items())) for name, counter in context.stats.items()})
+        updates = {
+            "built_at": datetime.now(UTC).replace(microsecond=0).isoformat(),
+            "table_counts": json.dumps(tables, sort_keys=True),
+            "parser_stats": json.dumps(dict(sorted(stats.items())), sort_keys=True),
+            "rebuilt_sources": json.dumps(sorted(source.id for source in selected)),
+        }
+        connection.execute(f"DELETE FROM bundle_info WHERE key IN ({', '.join('?' for _ in updates)})", list(updates))
+        connection.executemany("INSERT INTO bundle_info VALUES (?, ?)", sorted(updates.items()))
         connection.execute("CHECKPOINT")
     except BaseException:
         connection.close()

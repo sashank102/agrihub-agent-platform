@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from agrihub_data.build import BuildError, build
+from agrihub_data.build import BuildError, build, rebuild_sources
 from agrihub_data.catalog import bundle_status
 from agrihub_data.fetch import FetchError, Manifest, disk_budget, fetch
 from agrihub_data.paths import species_paths
@@ -45,6 +45,11 @@ def _parser() -> argparse.ArgumentParser:
     build_parser = commands.add_parser("build", help="build bundle.duckdb from fetched files")
     build_parser.add_argument("--species", required=True, choices=species_names())
     build_parser.add_argument("--tier", default="core", choices=TIERS)
+    build_parser.add_argument(
+        "--source",
+        action="append",
+        help="reload only this source's rows in the built bundle, keeping the other sources (repeatable; ignores --tier)",
+    )
     build_parser.set_defaults(handler=_build)
 
     verify_parser = commands.add_parser("verify", help="check a built bundle")
@@ -93,8 +98,12 @@ def _fetch(args: argparse.Namespace) -> int:
 
 
 def _build(args: argparse.Namespace) -> int:
-    report = build(args.species, args.tier, data_dir=args.data_dir)
-    print(f"built {report.bundle} ({report.bytes / 1e6:.1f} MB) in {report.seconds:.1f}s")
+    if args.source:
+        report = rebuild_sources(args.species, args.source, data_dir=args.data_dir)
+        print(f"rebuilt {', '.join(args.source)} in {report.bundle} ({report.bytes / 1e6:.1f} MB) in {report.seconds:.1f}s")
+    else:
+        report = build(args.species, args.tier, data_dir=args.data_dir)
+        print(f"built {report.bundle} ({report.bytes / 1e6:.1f} MB) in {report.seconds:.1f}s")
     for table, count in report.tables.items():
         print(f"  {table:18} {count:>10,}")
     for source_id, seconds in report.timings.items():
