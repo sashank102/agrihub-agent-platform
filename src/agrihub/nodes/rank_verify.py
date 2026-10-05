@@ -258,11 +258,24 @@ def _candidate(
     )
 
 
-def _known_gene_counts(context: HarvestContext) -> dict[str, int]:
-    registry = load_species(context.bundle.species)
+def _known_gene_counts(context: HarvestContext) -> dict[str, Any]:
+    """Count curated trait-gene records, the genes they cover and their sources, on the canonical assembly."""
+    assembly = load_species(context.bundle.species).canonical_assembly
     rows = context.bundle.rows_raw(
-        "SELECT count(*), count(*) FILTER (WHERE assembly = ?) FROM known_genes",
-        [registry.canonical_assembly],
+        "SELECT count(*), count(*) FILTER (WHERE assembly = ?), count(DISTINCT gene_id) FILTER (WHERE assembly = ?) FROM known_genes",
+        [assembly, assembly],
     )
-    total, canonical = rows[0] if rows else (0, 0)
-    return {"total": int(total), "canonical": int(canonical)}
+    total, canonical, genes = rows[0] if rows else (0, 0, 0)
+    sources = context.bundle.rows_raw(
+        "SELECT source_db FROM known_genes WHERE assembly = ? GROUP BY source_db ORDER BY count(*) DESC",
+        [assembly],
+    )
+    genome = context.bundle.rows_raw("SELECT count(*) FROM genes WHERE assembly = ?", [assembly])
+    return {
+        "total": int(total),
+        "canonical": int(canonical),
+        "genes": int(genes),
+        "genome_genes": int(genome[0][0]) if genome else 0,
+        "sources": [str(row[0]) for row in sources],
+        "assembly": assembly,
+    }

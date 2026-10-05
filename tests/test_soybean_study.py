@@ -91,7 +91,8 @@ def test_poster_study_ranks_real_loci_with_explanations_in_under_30_seconds():
     assert all(event["done"] == event["total"] == 123 for event in progress if event["done"] == event["total"])
     assert {event["agent"]["id"] for event in received if event["type"] == "agent.usage"}
     assert {event["data"]["model"] for event in received if event["type"] == "agent.usage"} == {"agrihub-fake:poster"}
-    assert any("Known-gene coverage is thin" in item for item in report["limitations"])
+    coverage = next(item for item in report["limitations"] if item.startswith("Curated trait-gene coverage is thin"))
+    assert "LIS gene_functions" in coverage and "Wm82.a2.v1" in coverage and "SoyBase" not in coverage
     store.close()
 
 

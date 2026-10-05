@@ -7,7 +7,7 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from agrihub import citations, models, summary
-from agrihub.nodes.writer import _summarize
+from agrihub.nodes.writer import _curated_coverage, _summarize
 from agrihub.state import EvidenceRef, Locus, RankedCandidate, Report, SourceRef
 from agrihub.summary import CandidateDraft, LocusDraft, WriterDraft
 
@@ -99,6 +99,19 @@ def _draft_call(draft: WriterDraft) -> AIMessage:
 def _write(report: Report, writer_model: str = "agrihub-fake:poster") -> Report:
     facts = summary.build_facts(report, [], ALIAS_OF)
     return asyncio.run(_summarize(report, facts, KNOWN, {"configurable": {"writer_model": writer_model}}))
+
+
+def test_the_t1_caveat_names_the_curated_sources_only_when_coverage_is_thin() -> None:
+    soybean = {"genes": 206, "genome_genes": 56_044, "sources": ["LIS gene_functions"], "assembly": "Wm82.a2.v1"}
+    assert _curated_coverage(soybean, "soybean") == (
+        "Curated trait-gene coverage is thin: the soybean bundle has curated records for 206 genes on Wm82.a2.v1 "
+        "(LIS gene_functions), 0.4% of its 56044 genes. Tier T1 needs such a record, so T1 is rare, and a gene "
+        "without one is not evidence against it."
+    )
+    rice = {"genes": 19_800, "genome_genes": 36_061, "sources": ["Oryzabase", "RAP-DB curated genes"], "assembly": "IRGSP-1.0"}
+    assert _curated_coverage(rice, "rice") is None
+    empty = {"genes": 0, "genome_genes": 34_027, "sources": [], "assembly": "Sorghum_bicolor_NCBIv3"}
+    assert "no gene can reach tier T1" in (_curated_coverage(empty, "sorghum") or "")
 
 
 def test_validation_keeps_study_genes_and_resolving_citations() -> None:

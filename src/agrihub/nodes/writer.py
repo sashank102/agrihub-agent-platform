@@ -48,6 +48,9 @@ WRITE_SUMMARY = StructuredTool.from_function(
     args_schema=summary.WriterDraft,
 )
 
+THIN_CURATED_SHARE = 0.01
+"""Below this share of genome genes with a curated trait-gene record, the report warns that T1 is rare."""
+
 ArtifactSink = Callable[..., Awaitable[str | None]]
 """Persist one artifact and return its id.
 
@@ -269,6 +272,28 @@ def _report(state: StudyState, store: EvidenceStore, sources: list[SourceRef]) -
     )
 
 
+def _curated_coverage(known: dict[str, Any], species: str) -> str | None:
+    """Return the T1 caveat when curated trait genes cover under ``THIN_CURATED_SHARE`` of the genome, else nothing."""
+    genes = int(known.get("genes") or 0)
+    genome = int(known.get("genome_genes") or 0)
+    if genome and genes / genome >= THIN_CURATED_SHARE:
+        return None
+    assembly = known.get("assembly") or "the canonical assembly"
+    if genes == 0:
+        return (
+            f"The {species} bundle has no curated trait-gene records on {assembly}, so no gene can reach tier T1. "
+            "A gene without such a record is not evidence against it."
+        )
+    sources = ", ".join(known.get("sources") or []) or "the curated sources"
+    ratio = genes / genome if genome else 0.0
+    share = f", {ratio:.1%} of its {genome} genes" if ratio >= 0.001 else f", {ratio:.2%} of its {genome} genes" if genome else ""
+    return (
+        f"Curated trait-gene coverage is thin: the {species} bundle has curated records for {genes} genes on "
+        f"{assembly} ({sources}){share}. Tier T1 needs such a record, so T1 is rare, and a gene without one is "
+        "not evidence against it."
+    )
+
+
 def _limitations(
     study: dict[str, Any],
     scoring: dict[str, Any],
@@ -282,14 +307,8 @@ def _limitations(
     unavailable = domains.get("unavailable") or {}
     missing = [f"{code} ({spec.name.lower()})" for code, spec in rubric.categories.items() if code not in categories and code != "A"]
     window = study.get("window") or {}
-    items = [
-        (
-            f"Known-gene coverage is thin: the bundle has {known.get('total', 0)} curated LIS trait genes "
-            f"({known.get('canonical', 0)} on the canonical assembly) because the SoyBase gene-symbol registry "
-            "could not be downloaded. Tier T1 needs such a record, so T1 is rare, and a gene without one is "
-            "not evidence against it."
-        ),
-    ]
+    coverage = _curated_coverage(known, str(study.get("species") or "this species"))
+    items = [coverage] if coverage else []
     if missing:
         items.append(
             f"Categories {', '.join(missing)} have no data in this bundle; they score 0 for every gene "
